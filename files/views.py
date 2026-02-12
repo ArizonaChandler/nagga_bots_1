@@ -1,5 +1,6 @@
 """Files Views - Кнопочный интерфейс с пагинацией"""
 import discord
+from datetime import datetime
 from files.core import file_manager
 
 class FilesView(discord.ui.View):
@@ -24,18 +25,31 @@ class FilesView(discord.ui.View):
                 custom_id=f"file_{file_id}"
             )
             
-            async def callback(interaction, fid=file_id, fname=name, fdesc=desc):
-                success, msg = await file_manager.send_file(interaction, fid)
-                if success:
-                    await interaction.response.send_message(
-                        f"✅ Файл **{fname}** отправлен в ЛС!" + (f"\n⚠️ {msg}" if msg else ""),
-                        ephemeral=True
-                    )
-                else:
-                    await interaction.response.send_message(f"❌ {msg}", ephemeral=True)
+            async def callback(interaction, fid=file_id, fname=name, fdesc=desc, fsize=size_str):
+                try:
+                    success, msg = await file_manager.send_file(interaction, fid)
+                    if success:
+                        embed = discord.Embed(
+                            title="✅ Файл отправлен!",
+                            description=f"**{fname}**\n{fdesc}",
+                            color=0x00ff00
+                        )
+                        embed.add_field(name="📦 Размер", value=fsize, inline=True)
+                        embed.add_field(name="📥 Статус", value="Успешно", inline=True)
+                        if msg:
+                            embed.add_field(name="⚠️", value=msg, inline=False)
+                        
+                        await interaction.response.send_message(embed=embed, ephemeral=True)
+                    else:
+                        await interaction.response.send_message(f"❌ {msg}", ephemeral=True)
+                except Exception as e:
+                    await interaction.response.send_message(f"❌ Ошибка: {str(e)[:100]}", ephemeral=True)
             
             btn.callback = callback
             self.add_item(btn)
+        
+        # Кнопки навигации
+        nav_frame = discord.ui.View()
         
         if self.page > 1:
             prev_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary)
