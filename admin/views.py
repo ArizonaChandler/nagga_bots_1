@@ -3,12 +3,13 @@ import discord
 from datetime import datetime
 from core.database import db
 from core.config import CONFIG
-from core.utils import format_mention, get_server_name, is_super_admin
+from core.utils import format_mention, get_server_name, is_super_admin, has_access
 from capt.modals import CaptModal
 from mcl.core import dual_mcl_core
 from mcl.modals import SetMclChannelModal, SetDualColorModal
 from admin.modals import *
-from files.views import FilesView
+from files.core import file_manager  # ✅ ВАЖНО!
+from files.views import FilesView   # ✅ ВАЖНО!
 
 class MainView(discord.ui.View):
     def __init__(self, user_id: str, guild):
@@ -43,6 +44,7 @@ class MainView(discord.ui.View):
             mcl_btn.callback = mcl_cb
             self.add_item(mcl_btn)
             
+            # 📁 Кнопка полезных файлов
             files_btn = discord.ui.Button(
                 label="📁 Полезные файлы",
                 style=discord.ButtonStyle.secondary,
@@ -71,6 +73,7 @@ class MainView(discord.ui.View):
             
             files_btn.callback = files_cb
             self.add_item(files_btn)
+
 
 class SettingsView(discord.ui.View):
     def __init__(self, user_id: str, guild):
@@ -121,6 +124,7 @@ class SettingsView(discord.ui.View):
         global_btn.callback = global_cb
         self.add_item(global_btn)
 
+
 class CaptSettingsView(discord.ui.View):
     def __init__(self, user_id: str, guild):
         super().__init__(timeout=120)
@@ -139,6 +143,7 @@ class CaptSettingsView(discord.ui.View):
         channel_btn.callback = channel_cb
         self.add_item(channel_btn)
 
+
 class MclSettingsView(discord.ui.View):
     def __init__(self, user_id: str, guild):
         super().__init__(timeout=120)
@@ -156,6 +161,7 @@ class MclSettingsView(discord.ui.View):
             await i.response.send_modal(SetDualColorModal())
         color_btn.callback = color_cb
         self.add_item(color_btn)
+
 
 class GlobalSettingsView(discord.ui.View):
     def __init__(self, user_id: str, guild):
@@ -177,17 +183,18 @@ class GlobalSettingsView(discord.ui.View):
         users_btn.callback = users_cb
         self.add_item(users_btn)
         
-        if await is_super_admin(user_id):
-            admin_btn = discord.ui.Button(label="👑 Управление админами", style=discord.ButtonStyle.secondary)
-            async def admin_cb(i):
-                if not await is_super_admin(str(i.user.id)):
-                    await i.response.send_message("❌ Только супер-администратор", ephemeral=True)
-                    return
-                view = AdminView(self.user_id, self.guild)
-                embed = discord.Embed(title="👑 **УПРАВЛЕНИЕ АДМИНИСТРАТОРАМИ**", color=0xffd700)
-                await i.response.send_message(embed=embed, view=view, ephemeral=True)
-            admin_btn.callback = admin_cb
-            self.add_item(admin_btn)
+        # 👑 Кнопка управления админами
+        admin_btn = discord.ui.Button(label="👑 Управление админами", style=discord.ButtonStyle.secondary)
+        async def admin_cb(i):
+            if not await is_super_admin(str(i.user.id)):
+                await i.response.send_message("❌ Только супер-администратор", ephemeral=True)
+                return
+            view = AdminView(self.user_id, self.guild)
+            embed = discord.Embed(title="👑 **УПРАВЛЕНИЕ АДМИНИСТРАТОРАМИ**", color=0xffd700)
+            await i.response.send_message(embed=embed, view=view, ephemeral=True)
+        admin_btn.callback = admin_cb
+        self.add_item(admin_btn)
+
 
 class AccessView(discord.ui.View):
     def __init__(self, user_id: str, guild):
@@ -245,6 +252,7 @@ class AccessView(discord.ui.View):
             await i.response.send_message(embed=embed, ephemeral=True)
         list_btn.callback = list_cb
         self.add_item(list_btn)
+
 
 class AdminView(discord.ui.View):
     def __init__(self, user_id: str, guild):
