@@ -44,6 +44,7 @@ class MainView(discord.ui.View):
             mcl_btn.callback = mcl_cb
             self.add_item(mcl_btn)
             
+            # 📁 Кнопка полезных файлов - ИСПРАВЛЕНО (было дублирование)
             files_btn = discord.ui.Button(
                 label="📁 Полезные файлы",
                 style=discord.ButtonStyle.secondary,
@@ -57,15 +58,25 @@ class MainView(discord.ui.View):
                 files, total = file_manager.get_files(page=1)
                 
                 if total == 0:
-                    await i.response.send_message("📁 Пока нет доступных файлов", ephemeral=True)
+                    await i.response.send_message("📁 **Пока нет доступных файлов**", ephemeral=True)
                     return
+                
+                # Создаём красивое описание файлов
+                description = f"**📊 Всего доступно файлов: {total}**\n\n"
+                
+                for idx, (file_id, name, desc, size, uploader, uploaded_at, downloads) in enumerate(files[:5], 1):
+                    size_str = f"{size / 1024:.1f} КБ" if size < 1024*1024 else f"{size / (1024*1024):.1f} МБ"
+                    date_str = uploaded_at[:10] if uploaded_at else "?"
+                    description += f"**{idx}. {name}**\n"
+                    description += f"   📝 {desc[:100]}{'...' if len(desc) > 100 else ''}\n"
+                    description += f"   📦 {size_str} | ⬇️ {downloads} | 📅 {date_str}\n\n"
                 
                 embed = discord.Embed(
                     title="📁 **ПОЛЕЗНЫЕ ФАЙЛЫ**",
-                    description=f"Всего доступно: **{total}** файлов\n"
-                               f"Выберите файл для скачивания:",
+                    description=description,
                     color=0x00ff00
                 )
+                embed.set_footer(text=f"Страница 1/{((total-1)//5)+1} • Нажмите кнопку для скачивания")
                 
                 view = FilesView(str(i.user.id), page=1)
                 await i.response.send_message(embed=embed, view=view, ephemeral=True)
