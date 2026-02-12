@@ -78,42 +78,45 @@ class FileManager:
             files = cursor.fetchall()
             return files, total
     
-    async def send_file(self, interaction, file_id: int):
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT filename, name, description, filesize
-                FROM useful_files WHERE id = ? AND is_active = 1
-            ''', (file_id,))
-            result = cursor.fetchone()
+        async def send_file(self, interaction, file_id: int):
+        """Отправляет файл пользователю"""
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT filename, name, description, filesize
+                    FROM useful_files WHERE id = ? AND is_active = 1
+                ''', (file_id,))
+                result = cursor.fetchone()
+                
+                if not result:
+                    return False, "Файл не найден"
+                
+                filename, name, description, filesize = result
+                file_path = self.storage_path / filename
+                
+                if not file_path.exists():
+                    return False, "Файл отсутствует на сервере"
+                
+                cursor.execute('UPDATE useful_files SET downloads = downloads + 1 WHERE id = ?', (file_id,))
+                conn.commit()
             
-            if not result:
-                return False, "Файл не найден"
-            
-            filename, name, description, filesize = result
-            file_path = self.storage_path / filename
-            
-            if not file_path.exists():
-                return False, "Файл отсутствует на сервере"
-            
-            cursor.execute('UPDATE useful_files SET downloads = downloads + 1 WHERE id = ?', (file_id,))
-            conn.commit()
-        
-        try:
-            await interaction.user.send(
-                content=f"📁 **{name}**\n{description}",
-                file=discord.File(file_path)
-            )
-            db.log_action(str(interaction.user.id), "FILE_DOWNLOAD", f"ID: {file_id}, Название: {name}")
-            return True, None
-        except discord.Forbidden:
-            await interaction.channel.send(
-                content=f"📁 **{name}**\n{description}",
-                file=discord.File(file_path)
-            )
-            return True, "ЛС закрыты, файл отправлен в чат"
-        except Exception as e:
-            return False, str(e)
+            try:
+                # ⚡ ПРОБУЕМ ЛС, ЕСЛИ НЕ ПОЛУЧИТСЯ - В ЧАТ
+                try:
+                    await interaction.user.send(
+                        content=f"📁 **{name}**\n{description}",
+                        file=discord.File(file_path)
+                    )
+                    return True, None
+                except discord.Forbidden:
+                    # Если ЛС закрыты - отправляем в текущий чат
+                    await interaction.channel.send(
+                        content=f"📁 **{name}**\n{description}\n⚠️ ЛС закрыты, файл в чате",
+                        file=discord.File(file_path)
+                    )
+                    return True, "ЛС закрыты, файл отправлен в чат"
+            except Exception as e:
+                return False, str(e)
     
     def delete_file(self, file_id: int, user_id: str) -> tuple[bool, str]:
         with db.get_connection() as conn:
