@@ -15,14 +15,51 @@ class MainView(discord.ui.View):
     def __init__(self, user_id: str, guild):
         super().__init__(timeout=120)
         
-        # Проверяем есть ли вообще доступ у пользователя
+        # ✅ 1. КНОПКА ФАЙЛОВ - ВИДНА ВСЕМ! (даже без доступа)
+        files_btn = discord.ui.Button(
+            label="📁 Полезные файлы",
+            style=discord.ButtonStyle.secondary,
+            emoji="📁",
+            row=0
+        )
+        async def files_cb(i):
+            files, total = file_manager.get_files(page=1)
+            
+            if total == 0:
+                await i.response.send_message("📁 **Пока нет доступных файлов**", ephemeral=True)
+                return
+            
+            # Создаём красивое описание файлов
+            description = f"**📊 Всего доступно файлов: {total}**\n\n"
+            
+            for idx, (file_id, name, desc, size, uploader, uploaded_at, downloads) in enumerate(files[:5], 1):
+                size_str = f"{size / 1024:.1f} КБ" if size < 1024*1024 else f"{size / (1024*1024):.1f} МБ"
+                date_str = uploaded_at[:10] if uploaded_at else "?"
+                description += f"**{idx}. {name}**\n"
+                description += f"   📝 {desc[:100]}{'...' if len(desc) > 100 else ''}\n"
+                description += f"   📦 {size_str} | ⬇️ {downloads} | 📅 {date_str}\n\n"
+            
+            embed = discord.Embed(
+                title="📁 **ПОЛЕЗНЫЕ ФАЙЛЫ**",
+                description=description,
+                color=0x00ff00
+            )
+            embed.set_footer(text=f"Страница 1/{((total-1)//5)+1} • Нажмите кнопку для скачивания")
+            
+            view = FilesView(str(i.user.id), page=1)
+            await i.response.send_message(embed=embed, view=view, ephemeral=True)
+        
+        files_btn.callback = files_cb
+        self.add_item(files_btn)  # ✅ Добавляем для ВСЕХ!
+        
+        # ✅ 2. КНОПКИ ДЛЯ ПОЛЬЗОВАТЕЛЕЙ С ДОСТУПОМ (есть в базе)
         if db.user_exists(user_id):
-            # Кнопка CAPT для всех с доступом
+            # CAPT
             capt_btn = discord.ui.Button(
                 label="🚨 CAPT",
                 style=discord.ButtonStyle.danger,
                 emoji="🚨",
-                row=0
+                row=1
             )
             async def capt_cb(i):
                 if await has_access(str(i.user.id)):
@@ -30,12 +67,12 @@ class MainView(discord.ui.View):
             capt_btn.callback = capt_cb
             self.add_item(capt_btn)
             
-            # Кнопка DUAL MCL для всех с доступом
+            # DUAL MCL
             mcl_btn = discord.ui.Button(
                 label="🎨 DUAL MCL",
                 style=discord.ButtonStyle.primary,
                 emoji="🎨",
-                row=0
+                row=1
             )
             async def mcl_cb(i):
                 if not await has_access(str(i.user.id)):
@@ -46,46 +83,25 @@ class MainView(discord.ui.View):
                 await dual_mcl_core.send_dual(i)
             mcl_btn.callback = mcl_cb
             self.add_item(mcl_btn)
-            
-            # 📁 Кнопка полезных файлов - ДЛЯ ВСЕХ С ДОСТУПОМ!
-            files_btn = discord.ui.Button(
-                label="📁 Полезные файлы",
+        
+        # ✅ 3. КНОПКИ ДЛЯ АДМИНИСТРАТОРОВ
+        if db.is_admin(user_id):
+            settings_btn = discord.ui.Button(
+                label="⚙️ Настройки",
                 style=discord.ButtonStyle.secondary,
-                emoji="📁",
-                row=1
+                emoji="⚙️",
+                row=2
             )
-            async def files_cb(i):
-                if not await has_access(str(i.user.id)):
-                    return
-                
-                files, total = file_manager.get_files(page=1)
-                
-                if total == 0:
-                    await i.response.send_message("📁 **Пока нет доступных файлов**", ephemeral=True)
-                    return
-                
-                # Создаём красивое описание файлов
-                description = f"**📊 Всего доступно файлов: {total}**\n\n"
-                
-                for idx, (file_id, name, desc, size, uploader, uploaded_at, downloads) in enumerate(files[:5], 1):
-                    size_str = f"{size / 1024:.1f} КБ" if size < 1024*1024 else f"{size / (1024*1024):.1f} МБ"
-                    date_str = uploaded_at[:10] if uploaded_at else "?"
-                    description += f"**{idx}. {name}**\n"
-                    description += f"   📝 {desc[:100]}{'...' if len(desc) > 100 else ''}\n"
-                    description += f"   📦 {size_str} | ⬇️ {downloads} | 📅 {date_str}\n\n"
-                
+            async def settings_cb(i):
+                view = SettingsView(self.user_id, self.guild)
                 embed = discord.Embed(
-                    title="📁 **ПОЛЕЗНЫЕ ФАЙЛЫ**",
-                    description=description,
-                    color=0x00ff00
+                    title="⚙️ **НАСТРОЙКИ СИСТЕМЫ**",
+                    description="Выберите раздел для настройки:",
+                    color=0x7289da
                 )
-                embed.set_footer(text=f"Страница 1/{((total-1)//5)+1} • Нажмите кнопку для скачивания")
-                
-                view = FilesView(str(i.user.id), page=1)
                 await i.response.send_message(embed=embed, view=view, ephemeral=True)
-            
-            files_btn.callback = files_cb
-            self.add_item(files_btn)
+            settings_btn.callback = settings_cb
+            self.add_item(settings_btn)
 
 
 class SettingsView(discord.ui.View):
