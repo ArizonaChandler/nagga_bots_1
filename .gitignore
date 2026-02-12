@@ -1,0 +1,27 @@
+# Виртуальное окружение
+venv/
+env/
+.env
+.venv
+__pycache__/
+*.pyc
+
+# База данных
+*.db
+*.db-journal
+
+# Файлы конфигурации
+config.json
+allowed_users.txt
+admin_users.txt
+
+# Логи
+*.log
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+
+# Папка с файлами (НО НЕ ИХ СОДЕРЖИМОЕ!)
+files/storage/*
+!files/storage/.gitkeep
