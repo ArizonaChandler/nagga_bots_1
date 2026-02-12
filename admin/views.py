@@ -15,7 +15,9 @@ class MainView(discord.ui.View):
     def __init__(self, user_id: str, guild):
         super().__init__(timeout=120)
         
+        # Проверяем есть ли вообще доступ у пользователя
         if db.user_exists(user_id):
+            # Кнопка CAPT для всех с доступом
             capt_btn = discord.ui.Button(
                 label="🚨 CAPT",
                 style=discord.ButtonStyle.danger,
@@ -28,6 +30,7 @@ class MainView(discord.ui.View):
             capt_btn.callback = capt_cb
             self.add_item(capt_btn)
             
+            # Кнопка DUAL MCL для всех с доступом
             mcl_btn = discord.ui.Button(
                 label="🎨 DUAL MCL",
                 style=discord.ButtonStyle.primary,
@@ -44,7 +47,7 @@ class MainView(discord.ui.View):
             mcl_btn.callback = mcl_cb
             self.add_item(mcl_btn)
             
-            # 📁 Кнопка полезных файлов - ИСПРАВЛЕНО (было дублирование)
+            # 📁 Кнопка полезных файлов - ДЛЯ ВСЕХ С ДОСТУПОМ!
             files_btn = discord.ui.Button(
                 label="📁 Полезные файлы",
                 style=discord.ButtonStyle.secondary,
