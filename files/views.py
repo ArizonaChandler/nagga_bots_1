@@ -1,5 +1,4 @@
-"""Files Views - Кнопочный интерфейс с пагинацией"""
-import discord  # ✅ ЭТО БЫЛО ПРОПУЩЕНО!
+import discord
 from datetime import datetime
 from files.core import file_manager
 
@@ -8,12 +7,14 @@ class FilesView(discord.ui.View):
         super().__init__(timeout=120)
         self.user_id = user_id
         self.page = page
+        self.files = []
+        self.total = 0
+        self.max_page = 1
         self.load_files()
     
     def load_files(self):
         self.files, self.total = file_manager.get_files(self.page, per_page=5)
         self.max_page = (self.total + 4) // 5 if self.total > 0 else 1
-        
         self.clear_items()
         
         for i, (file_id, name, desc, size, uploader, uploaded_at, downloads) in enumerate(self.files, 1):
@@ -26,24 +27,20 @@ class FilesView(discord.ui.View):
             )
             
             async def callback(interaction, fid=file_id, fname=name, fdesc=desc, fsize=size_str):
-                try:
-                    success, msg = await file_manager.send_file(interaction, fid)
-                    if success:
-                        embed = discord.Embed(
-                            title="✅ Файл отправлен!",
-                            description=f"**{fname}**\n{fdesc}",
-                            color=0x00ff00
-                        )
-                        embed.add_field(name="📦 Размер", value=fsize, inline=True)
-                        embed.add_field(name="📥 Статус", value="Успешно", inline=True)
-                        if msg:
-                            embed.add_field(name="⚠️", value=msg, inline=False)
-                        
-                        await interaction.response.send_message(embed=embed, ephemeral=True)
-                    else:
-                        await interaction.response.send_message(f"❌ {msg}", ephemeral=True)
-                except Exception as e:
-                    await interaction.response.send_message(f"❌ Ошибка: {str(e)[:100]}", ephemeral=True)
+                success, msg = await file_manager.send_file(interaction, fid)
+                if success:
+                    embed = discord.Embed(
+                        title="✅ Файл отправлен!",
+                        description=f"**{fname}**\n{fdesc}",
+                        color=0x00ff00
+                    )
+                    embed.add_field(name="📦 Размер", value=fsize, inline=True)
+                    embed.add_field(name="📥 Статус", value="Успешно", inline=True)
+                    if msg:
+                        embed.add_field(name="⚠️", value=msg, inline=False)
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                else:
+                    await interaction.response.send_message(f"❌ {msg}", ephemeral=True)
             
             btn.callback = callback
             self.add_item(btn)
