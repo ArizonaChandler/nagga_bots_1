@@ -1,5 +1,5 @@
 """Files Views - Кнопочный интерфейс с пагинацией"""
-import discord
+import discord  # ✅ ЭТО БЫЛО ПРОПУЩЕНО!
 from datetime import datetime
 from files.core import file_manager
 
@@ -47,9 +47,6 @@ class FilesView(discord.ui.View):
             
             btn.callback = callback
             self.add_item(btn)
-        
-        # Кнопки навигации
-        nav_frame = discord.ui.View()
         
         if self.page > 1:
             prev_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary)
