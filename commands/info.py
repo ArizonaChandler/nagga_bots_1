@@ -9,17 +9,14 @@ def setup(bot):
     async def info(ctx):
         user_id = str(ctx.author.id)
         
-        if not await has_access(user_id):
-            db.log_action(user_id, "INFO_DENIED")
-            return
-        
-        db.update_last_used(user_id)
+        # ✅ ДАЖЕ без доступа - показываем файлы!
+        db.update_last_used(user_id)  # Обновляем статистику если есть
         
         embed = discord.Embed(
             title="🤖 **UNIT MANAGEMENT SYSTEM**",
             color=0x7289da
         )
-        embed.set_footer(text="Выберите действие")
+        embed.set_footer(text="📁 Полезные файлы доступны всем")
         
         view = MainView(user_id, ctx.guild)
         
