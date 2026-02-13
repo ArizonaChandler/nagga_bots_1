@@ -352,13 +352,25 @@ class Database:
                 return dict(zip(columns, row))
             return None
     
-    def delete_event(self, event_id: int, soft: bool = True) -> bool:
-        """Удалить мероприятие (soft delete по умолчанию)"""
+    def delete_event(self, event_id: int, soft: bool = False) -> bool:
+        """Удалить мероприятие
+        
+        Args:
+            event_id: ID мероприятия
+            soft: если True - только отключить (enabled=0), если False - полностью удалить
+        """
         with self.get_connection() as conn:
             cursor = conn.cursor()
             if soft:
+                # Мягкое удаление - только отключаем
                 cursor.execute('UPDATE events SET enabled = 0 WHERE id = ?', (event_id,))
             else:
+                # Полное удаление
+                # Сначала удаляем связанные записи
+                cursor.execute('DELETE FROM event_takes WHERE event_id = ?', (event_id,))
+                cursor.execute('DELETE FROM event_logs WHERE event_id = ?', (event_id,))
+                cursor.execute('DELETE FROM event_schedule WHERE event_id = ?', (event_id,))
+                # Затем само мероприятие
                 cursor.execute('DELETE FROM events WHERE id = ?', (event_id,))
             conn.commit()
             return cursor.rowcount > 0
