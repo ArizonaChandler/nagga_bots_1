@@ -616,26 +616,36 @@ class ConfirmDeleteView(BaseMenuView):
     
     @discord.ui.button(label="✅ Да, удалить", style=discord.ButtonStyle.danger)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Удаляем мероприятие
-        success = db.delete_event(self.event_id)
+        # Полное удаление из БД (не soft delete)
+        success = db.delete_event(self.event_id, soft=False)
         
         if success:
             db.log_event_action(self.event_id, "deleted", str(interaction.user.id))
             
-            # Возвращаемся к списку мероприятий через EventSettingsView
+            # Сначала возвращаемся в EventSettingsView
             from admin.views import EventSettingsView
             settings_view = EventSettingsView(
                 self.user_id,
                 interaction.guild,
-                self.previous_view,
-                self.previous_embed
+                None,  # previous_view
+                None   # previous_embed
             )
-            settings_embed = discord.Embed(
-                title="🔔 **СИСТЕМА ОПОВЕЩЕНИЙ**",
-                description="Управление автоматическими напоминаниями о мероприятиях",
-                color=0xffa500
+            
+            # Затем показываем список мероприятий
+            from admin.views import EventsListView
+            list_view = EventsListView(
+                self.user_id,
+                interaction.guild,
+                page=1,
+                previous_view=settings_view,
+                previous_embed=discord.Embed(
+                    title="🔔 **СИСТЕМА ОПОВЕЩЕНИЙ**",
+                    description="Управление автоматическими напоминаниями о мероприятиях",
+                    color=0xffa500
+                )
             )
-            await interaction.response.edit_message(embed=settings_embed, view=settings_view)
+            embed = list_view.create_embed()
+            await interaction.response.edit_message(embed=embed, view=list_view)
         else:
             await interaction.response.edit_message(
                 content="❌ Не удалось удалить мероприятие",
