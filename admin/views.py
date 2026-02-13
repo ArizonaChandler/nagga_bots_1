@@ -10,12 +10,13 @@ from mcl.modals import SetMclChannelModal, SetDualColorModal
 from admin.modals import *
 from files.core import file_manager
 from files.views import FilesView
+from events.views import EventInfoView  # Импорт для кнопки мероприятий
 
 class MainView(discord.ui.View):
     def __init__(self, user_id: str, guild):
         super().__init__(timeout=120)
         
-        # ✅ 1. КНОПКА ФАЙЛОВ - ВИДНА ВСЕМ! (даже без доступа)
+        # ✅ 1. КНОПКА ФАЙЛОВ - ВИДНА ВСЕМ!
         files_btn = discord.ui.Button(
             label="📁 Полезные файлы",
             style=discord.ButtonStyle.secondary,
@@ -50,9 +51,27 @@ class MainView(discord.ui.View):
             await i.response.send_message(embed=embed, view=view, ephemeral=True)
         
         files_btn.callback = files_cb
-        self.add_item(files_btn)  # ✅ Добавляем для ВСЕХ!
+        self.add_item(files_btn)
         
-        # ✅ 2. КНОПКИ ДЛЯ ПОЛЬЗОВАТЕЛЕЙ С ДОСТУПОМ (есть в базе)
+        # ✅ 2. НОВАЯ КНОПКА МЕРОПРИЯТИЙ - ТОЖЕ ВИДНА ВСЕМ!
+        events_btn = discord.ui.Button(
+            label="📅 Мероприятия",
+            style=discord.ButtonStyle.secondary,
+            emoji="📅",
+            row=0
+        )
+        async def events_cb(i):
+            view = EventInfoView()
+            embed = discord.Embed(
+                title="📅 **МЕРОПРИЯТИЯ**",
+                description="Информация о сегодняшних мероприятиях",
+                color=0x7289da
+            )
+            await i.response.send_message(embed=embed, view=view, ephemeral=True)
+        events_btn.callback = events_cb
+        self.add_item(events_btn)  # ✅ Добавляем для ВСЕХ!
+        
+        # ✅ 3. КНОПКИ ДЛЯ ПОЛЬЗОВАТЕЛЕЙ С ДОСТУПОМ (есть в базе)
         if db.user_exists(user_id):
             # CAPT
             capt_btn = discord.ui.Button(
@@ -84,7 +103,7 @@ class MainView(discord.ui.View):
             mcl_btn.callback = mcl_cb
             self.add_item(mcl_btn)
         
-        # ✅ 3. КНОПКИ ДЛЯ АДМИНИСТРАТОРОВ
+        # ✅ 4. КНОПКИ ДЛЯ АДМИНИСТРАТОРОВ
         if db.is_admin(user_id):
             settings_btn = discord.ui.Button(
                 label="⚙️ Настройки",
@@ -222,6 +241,34 @@ class GlobalSettingsView(discord.ui.View):
             await i.response.send_message(embed=embed, view=view, ephemeral=True)
         admin_btn.callback = admin_cb
         self.add_item(admin_btn)
+        
+        # 🔔 НОВАЯ КНОПКА - Настройка оповещений
+        alarm_btn = discord.ui.Button(
+            label="🔔 Настройка оповещений",
+            style=discord.ButtonStyle.secondary,
+            emoji="🔔",
+            row=1
+        )
+        async def alarm_cb(i):
+            view = EventSettingsView(self.user_id, self.guild)
+            embed = discord.Embed(
+                title="🔔 **СИСТЕМА ОПОВЕЩЕНИЙ**",
+                description="Управление автоматическими напоминаниями о мероприятиях",
+                color=0xffa500
+            )
+            
+            # Текущий канал оповещений
+            alarm_channel = CONFIG.get('alarm_channel_id')
+            channel_info = format_mention(self.guild, alarm_channel, 'channel') if alarm_channel else "`Не установлен`"
+            embed.add_field(name="📢 Чат оповещений", value=channel_info, inline=False)
+            
+            # Количество активных мероприятий
+            events = db.get_events(enabled_only=True)
+            embed.add_field(name="📅 Активных мероприятий", value=f"`{len(events)}`", inline=True)
+            
+            await i.response.send_message(embed=embed, view=view, ephemeral=True)
+        alarm_btn.callback = alarm_cb
+        self.add_item(alarm_btn)
 
 
 class AccessView(discord.ui.View):
@@ -325,3 +372,320 @@ class AdminView(discord.ui.View):
             await i.response.send_message(embed=embed, ephemeral=True)
         list_btn.callback = list_cb
         self.add_item(list_btn)
+
+
+# ===== НОВЫЕ VIEWS ДЛЯ СИСТЕМЫ ОПОВЕЩЕНИЙ =====
+
+class EventSettingsView(discord.ui.View):
+    def __init__(self, user_id: str, guild):
+        super().__init__(timeout=120)
+        self.user_id = user_id
+        self.guild = guild
+        
+        # Установить чат оповещений
+        channel_btn = discord.ui.Button(
+            label="📢 Установить чат",
+            style=discord.ButtonStyle.primary,
+            emoji="📢",
+            row=0
+        )
+        async def channel_cb(i):
+            await i.response.send_modal(SetAlarmChannelModal())
+        channel_btn.callback = channel_cb
+        self.add_item(channel_btn)
+        
+        # Добавить мероприятие
+        add_btn = discord.ui.Button(
+            label="➕ Добавить МП",
+            style=discord.ButtonStyle.success,
+            emoji="➕",
+            row=0
+        )
+        async def add_cb(i):
+            await i.response.send_modal(AddEventModal())
+        add_btn.callback = add_cb
+        self.add_item(add_btn)
+        
+        # Список мероприятий
+        list_btn = discord.ui.Button(
+            label="📋 Список МП",
+            style=discord.ButtonStyle.secondary,
+            emoji="📋",
+            row=1
+        )
+        async def list_cb(i):
+            view = EventsListView(self.user_id, self.guild, page=1)
+            await view.send_initial(i)
+        list_btn.callback = list_cb
+        self.add_item(list_btn)
+        
+        # Статистика
+        stats_btn = discord.ui.Button(
+            label="📊 Статистика",
+            style=discord.ButtonStyle.secondary,
+            emoji="📊",
+            row=1
+        )
+        async def stats_cb(i):
+            await send_event_stats(i, self.guild)
+        stats_btn.callback = stats_cb
+        self.add_item(stats_btn)
+        
+        # Разовое мероприятие
+        one_time_btn = discord.ui.Button(
+            label="📅 Разовое МП",
+            style=discord.ButtonStyle.secondary,
+            emoji="📅",
+            row=2
+        )
+        async def one_time_cb(i):
+            from events.modals import ScheduleEventModal
+            await i.response.send_modal(ScheduleEventModal())
+        one_time_btn.callback = one_time_cb
+        self.add_item(one_time_btn)
+
+
+class EventsListView(discord.ui.View):
+    """Список мероприятий с пагинацией"""
+    def __init__(self, user_id: str, guild, page: int = 1):
+        super().__init__(timeout=120)
+        self.user_id = user_id
+        self.guild = guild
+        self.page = page
+        self.events = []
+        self.max_page = 1
+        self.load_events()
+    
+    def load_events(self):
+        per_page = 5
+        offset = (self.page - 1) * per_page
+        
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM events WHERE enabled = 1')
+            total = cursor.fetchone()[0]
+            self.max_page = (total + per_page - 1) // per_page if total > 0 else 1
+            
+            cursor.execute('''
+                SELECT id, name, weekday, event_time, 
+                       CASE WHEN enabled = 1 THEN '✅' ELSE '❌' END as status
+                FROM events
+                WHERE enabled = 1
+                ORDER BY weekday, event_time
+                LIMIT ? OFFSET ?
+            ''', (per_page, offset))
+            
+            columns = [description[0] for description in cursor.description]
+            rows = cursor.fetchall()
+            
+            self.events = []
+            for row in rows:
+                self.events.append(dict(zip(columns, row)))
+        
+        self.clear_items()
+        
+        days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+        
+        for event in self.events:
+            event_id = event['id']
+            name = event['name']
+            weekday = event['weekday']
+            event_time = event['event_time']
+            status = event['status']
+            
+            btn = discord.ui.Button(
+                label=f"{status} {name[:20]}... | {days[weekday]} {event_time}",
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"event_{event_id}"
+            )
+            
+            async def callback(interaction, eid=event_id, ename=name, ewday=weekday, etime=event_time):
+                view = EventDetailView(self.user_id, self.guild, eid, ename, ewday, etime)
+                embed = discord.Embed(
+                    title=f"📋 {ename}",
+                    color=0x7289da
+                )
+                embed.add_field(name="🆔 ID", value=f"`{eid}`", inline=True)
+                embed.add_field(name="📅 День", value=days[ewday], inline=True)
+                embed.add_field(name="⏰ Время", value=etime, inline=True)
+                
+                # Статистика взятий
+                with db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        SELECT COUNT(*) FROM event_takes 
+                        WHERE event_id = ? AND event_date >= date('now', '-30 days')
+                    ''', (eid,))
+                    takes_30d = cursor.fetchone()[0]
+                embed.add_field(name="📊 За 30 дней", value=f"`{takes_30d}` взятий", inline=True)
+                
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            
+            btn.callback = callback
+            self.add_item(btn)
+        
+        # Пагинация
+        if self.page > 1:
+            prev_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary)
+            async def prev_cb(i):
+                await i.response.edit_message(view=EventsListView(self.user_id, self.guild, self.page - 1))
+            prev_btn.callback = prev_cb
+            self.add_item(prev_btn)
+        
+        if self.page < self.max_page:
+            next_btn = discord.ui.Button(label="Вперёд ▶", style=discord.ButtonStyle.secondary)
+            async def next_cb(i):
+                await i.response.edit_message(view=EventsListView(self.user_id, self.guild, self.page + 1))
+            next_btn.callback = next_cb
+            self.add_item(next_btn)
+    
+    async def send_initial(self, interaction):
+        embed = discord.Embed(
+            title="📋 **СПИСОК МЕРОПРИЯТИЙ**",
+            description=f"Страница {self.page}/{self.max_page}",
+            color=0x7289da
+        )
+        
+        days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
+        lines = []
+        
+        for event in self.events:
+            lines.append(f"`{event['id']:03d}` {event['status']} **{event['name']}** — {days[event['weekday']]} {event['event_time']}")
+        
+        embed.description = "\n".join(lines) if lines else "Нет активных мероприятий"
+        embed.set_footer(text=f"Всего: {len(self.events)} на странице")
+        
+        await interaction.response.send_message(embed=embed, view=self, ephemeral=True)
+    
+    async def interaction_check(self, interaction):
+        if str(interaction.user.id) != self.user_id:
+            await interaction.response.send_message("❌ Это меню вызвано другим пользователем", ephemeral=True)
+            return False
+        return True
+
+
+class EventDetailView(discord.ui.View):
+    def __init__(self, user_id: str, guild, event_id: int, event_name: str, weekday: int, event_time: str):
+        super().__init__(timeout=120)
+        self.user_id = user_id
+        self.guild = guild
+        self.event_id = event_id
+        self.event_name = event_name
+        self.weekday = weekday
+        self.event_time = event_time
+        
+        # Включить/выключить
+        toggle_btn = discord.ui.Button(
+            label="🔴 Выключить",
+            style=discord.ButtonStyle.danger,
+            emoji="🔴",
+            row=0
+        )
+        async def toggle_cb(i):
+            event = db.get_event(self.event_id)
+            if event and event['enabled']:
+                db.update_event(self.event_id, enabled=0)
+                db.log_event_action(self.event_id, "disabled", str(i.user.id))
+                await i.response.send_message(f"❌ Мероприятие **{self.event_name}** отключено", ephemeral=True)
+            else:
+                db.update_event(self.event_id, enabled=1)
+                db.log_event_action(self.event_id, "enabled", str(i.user.id))
+                await i.response.send_message(f"✅ Мероприятие **{self.event_name}** включено", ephemeral=True)
+        toggle_btn.callback = toggle_cb
+        self.add_item(toggle_btn)
+        
+        # Редактировать
+        edit_btn = discord.ui.Button(
+            label="✏️ Редактировать",
+            style=discord.ButtonStyle.primary,
+            emoji="✏️",
+            row=0
+        )
+        async def edit_cb(i):
+            await i.response.send_modal(EditEventModal(
+                self.event_id, 
+                self.event_name, 
+                self.weekday, 
+                self.event_time
+            ))
+        edit_btn.callback = edit_cb
+        self.add_item(edit_btn)
+        
+        # Удалить
+        delete_btn = discord.ui.Button(
+            label="🗑️ Удалить",
+            style=discord.ButtonStyle.danger,
+            emoji="🗑️",
+            row=0
+        )
+        async def delete_cb(i):
+            confirm_view = ConfirmDeleteView(self.user_id, self.event_id, self.event_name)
+            await i.response.send_message(
+                f"❓ Ты уверен, что хочешь удалить **{self.event_name}**?",
+                view=confirm_view,
+                ephemeral=True
+            )
+        delete_btn.callback = delete_cb
+        self.add_item(delete_btn)
+
+
+class ConfirmDeleteView(discord.ui.View):
+    def __init__(self, user_id: str, event_id: int, event_name: str):
+        super().__init__(timeout=60)
+        self.user_id = user_id
+        self.event_id = event_id
+        self.event_name = event_name
+    
+    @discord.ui.button(label="✅ Да, удалить", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        db.delete_event(self.event_id)
+        db.log_event_action(self.event_id, "deleted", str(interaction.user.id))
+        await interaction.response.edit_message(
+            content=f"🗑️ Мероприятие **{self.event_name}** удалено",
+            view=None
+        )
+    
+    @discord.ui.button(label="❌ Отмена", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="❌ Удаление отменено", view=None)
+    
+    async def interaction_check(self, interaction):
+        if str(interaction.user.id) != self.user_id:
+            await interaction.response.send_message("❌ Это не ваше меню", ephemeral=True)
+            return False
+        return True
+
+
+async def send_event_stats(interaction, guild):
+    """Отправка статистики по мероприятиям"""
+    top = db.get_top_organizers(10)
+    takes = db.get_event_takes(days=30)
+    events = db.get_events(enabled_only=False)
+    
+    embed = discord.Embed(
+        title="📊 **СТАТИСТИКА МЕРОПРИЯТИЙ**",
+        color=0x00ff00,
+        timestamp=datetime.now()
+    )
+    
+    # Топ организаторов
+    if top:
+        top_text = "\n".join([f"{i+1}. <@{row[0]}> — **{row[2]}** МП" for i, row in enumerate(top[:5])])
+        embed.add_field(name="🏆 Топ организаторов (30 дней)", value=top_text, inline=False)
+    
+    # Общая статистика
+    active = sum(1 for e in events if e['enabled'])
+    embed.add_field(name="📅 Всего МП", value=f"`{len(events)}` (активных: `{active}`)", inline=True)
+    embed.add_field(name="✅ Проведено (30д)", value=f"`{len(takes)}`", inline=True)
+    
+    # Статистика по дням недели
+    days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+    day_counts = [0] * 7
+    for event in events:
+        if event['enabled']:
+            day_counts[event['weekday']] += 1
+    
+    days_text = ", ".join([f"{days[i]}:{day_counts[i]}" for i in range(7) if day_counts[i] > 0])
+    embed.add_field(name="📆 Распределение", value=days_text or "Нет данных", inline=False)
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)

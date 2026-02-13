@@ -46,4 +46,16 @@ def setup(bot):
             inline=True
         )
         
+        events_today = len(db.get_today_events())
+        events_total = len(db.get_events(enabled_only=False))
+        takes_30d = len(db.get_event_takes(days=30))
+
+        embed.add_field(
+            name="📅 МЕРОПРИЯТИЯ",
+            value=f"Сегодня: `{events_today}`\n"
+                f"Всего: `{events_total}`\n"
+                f"Проведено (30д): `{takes_30d}`",
+            inline=True
+        )
+
         await ctx.send(embed=embed)

@@ -13,6 +13,7 @@ class Database:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
+            # Существующие таблицы
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS users (
                     discord_id TEXT PRIMARY KEY,
@@ -65,9 +66,65 @@ class Database:
                 )
             ''')
             
+            # ===== НОВЫЕ ТАБЛИЦЫ ДЛЯ СИСТЕМЫ ОПОВЕЩЕНИЙ =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    weekday INTEGER NOT NULL,
+                    event_time TEXT NOT NULL,
+                    enabled BOOLEAN DEFAULT 1,
+                    created_by TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(name, weekday, event_time)
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS event_takes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_id INTEGER NOT NULL,
+                    user_id TEXT NOT NULL,
+                    user_name TEXT NOT NULL,
+                    group_code TEXT NOT NULL,
+                    meeting_place TEXT NOT NULL,
+                    taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    event_date DATE NOT NULL,
+                    is_cancelled BOOLEAN DEFAULT 0,
+                    FOREIGN KEY (event_id) REFERENCES events (id)
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS event_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_id INTEGER NOT NULL,
+                    action TEXT NOT NULL,
+                    user_id TEXT,
+                    details TEXT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (event_id) REFERENCES events (id)
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS event_schedule (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_id INTEGER NOT NULL,
+                    scheduled_date DATE NOT NULL,
+                    reminder_sent BOOLEAN DEFAULT 0,
+                    taken_by TEXT,
+                    group_code TEXT,
+                    meeting_place TEXT,
+                    FOREIGN KEY (event_id) REFERENCES events (id),
+                    UNIQUE(event_id, scheduled_date)
+                )
+            ''')
+            
             conn.commit()
     
-    # ===== ПОЛЬЗОВАТЕЛИ =====
+    # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
     def add_user(self, discord_id: str, added_by: str):
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -121,7 +178,6 @@ class Database:
             cursor.execute('UPDATE users SET last_used = CURRENT_TIMESTAMP WHERE discord_id = ?', (discord_id,))
             conn.commit()
     
-    # ===== АДМИНИСТРАТОРЫ =====
     def add_admin(self, discord_id: str, added_by: str, is_super: bool = False):
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -165,7 +221,6 @@ class Database:
             ''')
             return cursor.fetchall()
     
-    # ===== НАСТРОЙКИ =====
     def set_setting(self, key: str, value: str, updated_by: str = None):
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -188,7 +243,6 @@ class Database:
             cursor.execute('SELECT key, value FROM settings')
             return dict(cursor.fetchall())
     
-    # ===== DUAL MCL ЦВЕТА =====
     def save_dual_colors(self, color1: str, color2: str, updated_by: str = None):
         self.set_setting('mcl_color_1', color1, updated_by)
         self.set_setting('mcl_color_2', color2, updated_by)
@@ -198,7 +252,6 @@ class Database:
         color2 = self.get_setting('mcl_color_2') or 'Blue'
         return color1, color2
     
-    # ===== ЛОГИРОВАНИЕ =====
     def log_action(self, user_id: str, action: str, details: str = None):
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -219,7 +272,6 @@ class Database:
             ''', (limit,))
             return cursor.fetchall()
     
-    # ===== СТАТИСТИКА =====
     def log_command(self, command: str, user_id: str, success: bool, recipients: int = None, details: str = None):
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -227,6 +279,227 @@ class Database:
                 INSERT INTO command_stats (command, user_id, success, recipients, details)
                 VALUES (?, ?, ?, ?, ?)
             ''', (command, user_id, 1 if success else 0, recipients, details))
+            conn.commit()
+    
+    # ===== НОВЫЕ МЕТОДЫ ДЛЯ СИСТЕМЫ ОПОВЕЩЕНИЙ =====
+    
+    # ----- МЕРОПРИЯТИЯ -----
+    def add_event(self, name: str, weekday: int, event_time: str, created_by: str) -> int:
+        """Добавить новое мероприятие"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO events (name, weekday, event_time, created_by)
+                VALUES (?, ?, ?, ?)
+            ''', (name, weekday, event_time, created_by))
+            conn.commit()
+            return cursor.lastrowid
+    
+    def update_event(self, event_id: int, **kwargs) -> bool:
+        """Обновить мероприятие"""
+        allowed = {'name', 'weekday', 'event_time', 'enabled'}
+        updates = {k: v for k, v in kwargs.items() if k in allowed}
+        if not updates:
+            return False
+        
+        sets = ', '.join([f"{k} = ?" for k in updates.keys()])
+        values = list(updates.values()) + [event_id]
+        
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f'''
+                UPDATE events 
+                SET {sets}, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', values)
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def get_events(self, enabled_only: bool = True, weekday: int = None):
+        """Получить список мероприятий"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            query = 'SELECT * FROM events WHERE 1=1'
+            params = []
+            
+            if enabled_only:
+                query += ' AND enabled = 1'
+            if weekday is not None:
+                query += ' AND weekday = ?'
+                params.append(weekday)
+            
+            query += ' ORDER BY weekday, event_time'
+            cursor.execute(query, params)
+            
+            columns = [description[0] for description in cursor.description]
+            rows = cursor.fetchall()
+            
+            result = []
+            for row in rows:
+                result.append(dict(zip(columns, row)))
+            return result
+    
+    def get_event(self, event_id: int):
+        """Получить мероприятие по ID"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM events WHERE id = ?', (event_id,))
+            
+            columns = [description[0] for description in cursor.description]
+            row = cursor.fetchone()
+            
+            if row:
+                return dict(zip(columns, row))
+            return None
+    
+    def delete_event(self, event_id: int, soft: bool = True) -> bool:
+        """Удалить мероприятие (soft delete по умолчанию)"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if soft:
+                cursor.execute('UPDATE events SET enabled = 0 WHERE id = ?', (event_id,))
+            else:
+                cursor.execute('DELETE FROM events WHERE id = ?', (event_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    # ----- ВЗЯТИЕ МЕРОПРИЯТИЙ -----
+    def take_event(self, event_id: int, user_id: str, user_name: str, 
+                   group_code: str, meeting_place: str, event_date: str) -> int:
+        """Записать взятие МП"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO event_takes 
+                (event_id, user_id, user_name, group_code, meeting_place, event_date)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (event_id, user_id, user_name, group_code, meeting_place, event_date))
+            conn.commit()
+            
+            cursor.execute('''
+                UPDATE event_schedule 
+                SET taken_by = ?, group_code = ?, meeting_place = ?
+                WHERE event_id = ? AND scheduled_date = ?
+            ''', (user_id, group_code, meeting_place, event_id, event_date))
+            conn.commit()
+            
+            return cursor.lastrowid
+    
+    def get_event_takes(self, user_id: str = None, days: int = 30):
+        """Получить статистику взятий"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            query = '''
+                SELECT et.*, e.name as event_name
+                FROM event_takes et
+                JOIN events e ON et.event_id = e.id
+                WHERE et.event_date >= date('now', ?) AND et.is_cancelled = 0
+            '''
+            params = [f'-{days} days']
+            
+            if user_id:
+                query += ' AND et.user_id = ?'
+                params.append(user_id)
+            
+            query += ' ORDER BY et.event_date DESC'
+            cursor.execute(query, params)
+            
+            columns = [description[0] for description in cursor.description]
+            rows = cursor.fetchall()
+            
+            result = []
+            for row in rows:
+                result.append(dict(zip(columns, row)))
+            return result
+    
+    def get_top_organizers(self, limit: int = 10):
+        """Топ организаторов МП"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT user_id, user_name, COUNT(*) as count
+                FROM event_takes
+                WHERE is_cancelled = 0
+                GROUP BY user_id
+                ORDER BY count DESC
+                LIMIT ?
+            ''', (limit,))
+            return cursor.fetchall()
+    
+    # ----- РАСПИСАНИЕ -----
+    def generate_schedule(self, days_ahead: int = 14):
+        """Сгенерировать расписание на ближайшие дни"""
+        from datetime import datetime, timedelta
+        import pytz
+        
+        msk_tz = pytz.timezone('Europe/Moscow')
+        today = datetime.now(msk_tz).date()
+        
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            events = self.get_events(enabled_only=True)
+            
+            for event in events:
+                for day_offset in range(days_ahead):
+                    check_date = today + timedelta(days=day_offset)
+                    if check_date.weekday() == event['weekday']:
+                        cursor.execute('''
+                            INSERT OR IGNORE INTO event_schedule 
+                            (event_id, scheduled_date)
+                            VALUES (?, ?)
+                        ''', (event['id'], check_date.isoformat()))
+            
+            conn.commit()
+            return cursor.rowcount
+    
+    def get_today_events(self):
+        """Мероприятия на сегодня"""
+        from datetime import datetime
+        import pytz
+        
+        msk_tz = pytz.timezone('Europe/Moscow')
+        today = datetime.now(msk_tz).date()
+        weekday = today.weekday()
+        
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT e.*, s.id as schedule_id, s.reminder_sent, s.taken_by,
+                       s.group_code, s.meeting_place
+                FROM events e
+                LEFT JOIN event_schedule s ON e.id = s.event_id AND s.scheduled_date = ?
+                WHERE e.weekday = ? AND e.enabled = 1
+                ORDER BY e.event_time
+            ''', (today.isoformat(), weekday))
+            
+            columns = [description[0] for description in cursor.description]
+            rows = cursor.fetchall()
+            
+            result = []
+            for row in rows:
+                result.append(dict(zip(columns, row)))
+            return result
+    
+    def mark_reminder_sent(self, event_id: int, event_date: str):
+        """Отметить что напоминание отправлено"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE event_schedule 
+                SET reminder_sent = 1 
+                WHERE event_id = ? AND scheduled_date = ?
+            ''', (event_id, event_date))
+            conn.commit()
+    
+    # ----- ЛОГИРОВАНИЕ СОБЫТИЙ -----
+    def log_event_action(self, event_id: int, action: str, user_id: str = None, details: str = None):
+        """Логирование действий с мероприятиями"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO event_logs (event_id, action, user_id, details)
+                VALUES (?, ?, ?, ?)
+            ''', (event_id, action, user_id, details))
             conn.commit()
 
 db = Database()

@@ -16,7 +16,9 @@ CONFIG = {
     'message_2': 'Unit\nBlue',
     'user_token_1': os.getenv('DISCORD_USER_TOKEN_1'),
     'user_token_2': os.getenv('DISCORD_USER_TOKEN_2'),
-    'super_admin_id': SUPER_ADMIN_ID
+    'super_admin_id': SUPER_ADMIN_ID,
+    # НОВОЕ: канал для оповещений
+    'alarm_channel_id': None
 }
 
 def load_config():

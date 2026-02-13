@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Unit Management System v1.2
-Модульная архитектура с файловым хранилищем
+Unit Management System v1.3
+Модульная архитектура с системой автоматических оповещений
 """
 import asyncio
 import sys
@@ -21,6 +21,9 @@ from commands.stats import setup as setup_stats
 from capt.core import capt_core
 from mcl.core import dual_mcl_core
 from files.core import file_manager
+
+# НОВОЕ: импорт планировщика мероприятий
+from events.scheduler import setup as setup_scheduler
 
 import discord
 from discord.ext import commands
@@ -49,10 +52,13 @@ setup_settings(bot)
 setup_log(bot)
 setup_stats(bot)
 
+# НОВОЕ: запуск планировщика мероприятий
+setup_scheduler(bot)
+
 @bot.event
 async def on_ready():
     print("\n" + "="*60)
-    print("✅ **UNIT MANAGEMENT SYSTEM v1.2**")
+    print("✅ **UNIT MANAGEMENT SYSTEM v1.3**")
     print("="*60)
     print(f"🤖 Бот: {bot.user.name}")
     print(f"🆔 ID: {bot.user.id}")
@@ -65,7 +71,7 @@ async def on_ready():
     
     await bot.change_presence(activity=discord.Activity(
         type=discord.ActivityType.watching,
-        name="!info | v1.2"
+        name="!info | v1.3"
     ))
 
 @bot.event
