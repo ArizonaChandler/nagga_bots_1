@@ -1,4 +1,4 @@
-"""DUAL MCL Core - С кнопкой отмены и блокировкой"""
+"""DUAL MCL Core - С кнопкой отмены и блокировкой (исправлено)"""
 import aiohttp
 import asyncio
 import time
@@ -12,7 +12,7 @@ active_mcl_tasks = {}
 class CancelView(discord.ui.View):
     """Кнопка отмены отправки (без таймаута)"""
     def __init__(self, task_id: int, user_id: str):
-        super().__init__(timeout=None)  # ← Изменено: теперь бесконечно
+        super().__init__(timeout=None)
         self.task_id = task_id
         self.user_id = user_id
     
@@ -38,14 +38,13 @@ class DualMCLCore:
         'sessions', 'session_locks', 'headers_cache', 'last_tokens',
         'payload_cache', 'last_messages', 'last_channel', 
         'stats', 'token_colors', 'current_sender', 'sending_lock',
-        'connectors'
+        '_connectors_initialized', '_connectors'
     )
     
     def __init__(self):
-        self.connectors = {
-            1: aiohttp.TCPConnector(limit=0, ttl_dns_cache=3600, force_close=False, ssl=False),
-            2: aiohttp.TCPConnector(limit=0, ttl_dns_cache=3600, force_close=False, ssl=False)
-        }
+        # Не создаём коннекторы здесь - только флаг
+        self._connectors_initialized = False
+        self._connectors = {1: None, 2: None}
         
         self.sessions = {1: None, 2: None}
         self.session_locks = {1: asyncio.Lock(), 2: asyncio.Lock()}
@@ -65,14 +64,27 @@ class DualMCLCore:
         self.token_colors = {1: 'Pink', 2: 'Blue'}
         print("⚡ DUAL MCL Core (CANCELABLE) инициализирован")
     
+    async def _ensure_connectors(self):
+        """Создаём коннекторы при первом использовании (уже в event loop)"""
+        if not self._connectors_initialized:
+            self._connectors = {
+                1: aiohttp.TCPConnector(limit=0, ttl_dns_cache=3600, force_close=False, ssl=False),
+                2: aiohttp.TCPConnector(limit=0, ttl_dns_cache=3600, force_close=False, ssl=False)
+            }
+            self._connectors_initialized = True
+    
     async def get_session(self, token_id: int):
+        """Получение сессии с отдельным коннектором"""
+        # Убеждаемся что коннекторы созданы
+        await self._ensure_connectors()
+        
         if self.sessions[token_id] and not self.sessions[token_id].closed:
             return self.sessions[token_id]
         
         async with self.session_locks[token_id]:
             if self.sessions[token_id] is None or self.sessions[token_id].closed:
                 self.sessions[token_id] = aiohttp.ClientSession(
-                    connector=self.connectors[token_id],
+                    connector=self._connectors[token_id],
                     headers={'User-Agent': 'Mozilla/5.0'},
                     timeout=aiohttp.ClientTimeout(total=10)
                 )
