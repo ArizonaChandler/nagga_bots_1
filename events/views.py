@@ -1,35 +1,32 @@
-"""Event Views - Кнопки для мероприятий"""
+"""Event Views - Кнопки для мероприятий (ОДНО ОКНО)"""
 import discord
 from datetime import datetime, timedelta
 import pytz
 from core.database import db
 from core.config import CONFIG
 from admin.modals import TakeEventModal
+from admin.views import BaseMenuView
 
 MSK_TZ = pytz.timezone('Europe/Moscow')
 
 class EventReminderView(discord.ui.View):
     """Кнопка 'Взять МП' в напоминании"""
     def __init__(self, event_id: int, event_name: str, event_time: str, meeting_time: str, guild):
-        super().__init__(timeout=2400)  # 40 минут в секундах
+        super().__init__(timeout=2400)
         self.event_id = event_id
         self.event_name = event_name
         self.event_time = event_time
-        self.meeting_time = meeting_time  # НОВОЕ: время сбора
+        self.meeting_time = meeting_time
         self.guild = guild
         self.taken = False
-        self.message = None  # для сохранения сообщения
+        self.message = None
     
     @discord.ui.button(label="🎮 ВЗЯТЬ МП", style=discord.ButtonStyle.success, emoji="🎮")
     async def take_event(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.taken:
-            await interaction.response.send_message(
-                "❌ Это мероприятие уже кто-то взял",
-                ephemeral=True
-            )
+            await interaction.response.send_message("❌ Уже взято", ephemeral=True)
             return
         
-        # Проверяем, не взято ли уже
         today = datetime.now(MSK_TZ).date().isoformat()
         with db.get_connection() as conn:
             cursor = conn.cursor()
@@ -43,41 +40,28 @@ class EventReminderView(discord.ui.View):
                 self.taken = True
                 button.disabled = True
                 await interaction.message.edit(view=self)
-                await interaction.response.send_message(
-                    f"❌ Мероприятие уже взял <@{result[0]}>",
-                    ephemeral=True
-                )
+                await interaction.response.send_message(f"❌ Уже взял <@{result[0]}>", ephemeral=True)
                 return
         
-        # Открываем модалку с временем сбора
-        modal = TakeEventModal(
-            self.event_id, 
-            self.event_name, 
-            self.event_time,
-            self.meeting_time  # НОВОЕ: передаём время сбора
-        )
+        modal = TakeEventModal(self.event_id, self.event_name, self.event_time, self.meeting_time)
         await interaction.response.send_modal(modal)
     
     async def on_timeout(self):
-        """НОВОЕ: Когда прошло 40 минут и кнопка стала неактивной"""
-        if not self.taken:
-            # Отключаем кнопку
+        if not self.taken and self.message:
             for child in self.children:
                 child.disabled = True
-            
-            # Обновляем сообщение
-            if self.message:
-                embed = self.message.embeds[0]
-                embed.color = 0xff0000
-                embed.set_footer(text="⏰ Время на взятие МП истекло")
-                
-                await self.message.edit(embed=embed, view=self)
+            embed = self.message.embeds[0]
+            embed.color = 0xff0000
+            embed.set_footer(text="⏰ Время на взятие МП истекло")
+            await self.message.edit(embed=embed, view=self)
 
 
-class EventInfoView(discord.ui.View):
+class EventInfoView(BaseMenuView):
     """Кнопка информации о мероприятии в !info"""
-    def __init__(self):
-        super().__init__(timeout=60)
+    def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
+        super().__init__(user_id, guild, previous_view, previous_embed)
+        
+        self.add_back_button()
     
     @discord.ui.button(label="📅 Мероприятия сегодня", style=discord.ButtonStyle.primary, emoji="📅")
     async def today_events(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -87,9 +71,10 @@ class EventInfoView(discord.ui.View):
         events = db.get_events(enabled_only=True, weekday=weekday)
         
         if not events:
-            await interaction.response.send_message(
-                "📅 На сегодня мероприятий нет",
-                ephemeral=True
+            await interaction.response.edit_message(
+                content="📅 На сегодня мероприятий нет",
+                embed=None,
+                view=None
             )
             return
         
@@ -108,18 +93,15 @@ class EventInfoView(discord.ui.View):
                 result = cursor.fetchone()
             
             if result and result[0]:
-                status = f"✅ **Взял:** <@{result[0]}>\n"
-                status += f"📍 **Сбор:** {result[2]}\n"
-                status += f"🔢 **Код:** {result[1]}"
+                status = f"✅ **Взял:** <@{result[0]}>\n📍 {result[2]}\n🔢 {result[1]}"
             else:
-                # Проверяем, не истекло ли время взятия
                 event_time = event['event_time']
                 event_dt = datetime.strptime(event_time, "%H:%M")
                 reminder_time = event_dt - timedelta(hours=1)
                 now_time = datetime.now(MSK_TZ).time()
                 
                 if now_time > reminder_time.time() and now_time < event_dt.time():
-                    status = "⏳ **Можно взять** (есть 40 минут)"
+                    status = "⏳ **Можно взять** (40 мин)"
                 elif now_time > event_dt.time():
                     status = "❌ **Прошло**"
                 else:
@@ -131,4 +113,4 @@ class EventInfoView(discord.ui.View):
                 inline=False
             )
         
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.edit_message(embed=embed, view=self)

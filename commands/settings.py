@@ -26,7 +26,8 @@ class AdminSettingsView(discord.ui.View):
                 title="⚙️ **НАСТРОЙКИ БОТА**",
                 color=0x7289da
             )
-            await i.response.send_message(embed=embed, view=view, ephemeral=True)
+            # Редактируем существующее сообщение, а не отправляем новое
+            await i.response.edit_message(embed=embed, view=view)
         settings_btn.callback = settings_cb
         self.add_item(settings_btn)
         
@@ -43,9 +44,28 @@ class AdminSettingsView(discord.ui.View):
                 description=f"Всего файлов: **{file_manager.get_files(page=1)[1]}**",
                 color=0x00ff00
             )
-            await i.response.send_message(embed=embed, view=view, ephemeral=True)
+            await i.response.edit_message(embed=embed, view=view)
         files_btn.callback = files_cb
         self.add_item(files_btn)
+        
+        # Кнопка "Назад" в главное меню !info
+        back_btn = discord.ui.Button(
+            label="◀ В главное меню",
+            style=discord.ButtonStyle.secondary,
+            emoji="◀",
+            row=1
+        )
+        async def back_cb(i):
+            from admin.views import MainView
+            embed = discord.Embed(
+                title="🤖 **UNIT MANAGEMENT SYSTEM**",
+                color=0x7289da
+            )
+            embed.set_footer(text="📁 Полезные файлы доступны всем")
+            view = MainView(self.user_id, self.guild)
+            await i.response.edit_message(embed=embed, view=view)
+        back_btn.callback = back_cb
+        self.add_item(back_btn)
 
 class FileSettingsView(discord.ui.View):
     def __init__(self, user_id: str, guild):
@@ -106,9 +126,27 @@ class FileSettingsView(discord.ui.View):
                 )
             
             embed.set_footer(text=f"Всего файлов: {total}")
-            await i.response.send_message(embed=embed, ephemeral=True)
+            await i.response.edit_message(embed=embed, view=self)
         list_btn.callback = list_cb
         self.add_item(list_btn)
+        
+        back_btn = discord.ui.Button(
+            label="◀ Назад",
+            style=discord.ButtonStyle.secondary,
+            emoji="◀",
+            row=2
+        )
+        async def back_cb(i):
+            embed = discord.Embed(
+                title="⚙️ **ПАНЕЛЬ АДМИНИСТРАТОРА**",
+                description="Выберите раздел для настройки:",
+                color=0x7289da,
+                timestamp=datetime.now()
+            )
+            view = AdminSettingsView(self.user_id, self.guild)
+            await i.response.edit_message(embed=embed, view=view)
+        back_btn.callback = back_cb
+        self.add_item(back_btn)
 
 def setup(bot):
     @bot.command(name='settings')
