@@ -78,30 +78,45 @@ class EventScheduler:
                 await self.send_reminder(event, now)
     
     async def check_timeouts(self):
-        """Проверка, не истекло ли время взятия МП (40 минут)"""
+        """Проверка, не истекло ли время взятия МП (за 10 минут до начала)"""
         now = datetime.now(MSK_TZ)
-        current_time = now.timestamp()
+        current_time = now.time()
         
         for key, sent_time in list(self.reminder_sent_time.items()):
             event_id, event_date = key
             
-            # Если прошло 40 минут (2400 секунд)
-            if current_time - sent_time > 2400:
-                # Проверяем, не взял ли кто-то МП
-                with db.get_connection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        SELECT taken_by FROM event_schedule 
-                        WHERE event_id = ? AND scheduled_date = ?
-                    ''', (event_id, event_date))
-                    result = cursor.fetchone()
+            # Получаем информацию о мероприятии
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT e.event_time, s.taken_by 
+                    FROM events e
+                    LEFT JOIN event_schedule s ON e.id = s.event_id AND s.scheduled_date = ?
+                    WHERE e.id = ?
+                ''', (event_date, event_id))
+                result = cursor.fetchone()
                 
-                # Если никто не взял
-                if not result or not result[0]:
-                    await self.send_timeout_message(event_id, event_date)
+                if not result:
+                    del self.reminder_sent_time[key]
+                    continue
                 
-                # Удаляем из отслеживания
-                del self.reminder_sent_time[key]
+                event_time_str, taken_by = result
+                event_time = datetime.strptime(event_time_str, "%H:%M").time()
+                
+                # Вычисляем время, за которое нужно отключить кнопку (за 10 минут до начала)
+                from datetime import timedelta
+                event_dt = datetime.combine(now.date(), event_time)
+                timeout_dt = event_dt - timedelta(minutes=10)
+                timeout_time = timeout_dt.time()
+                
+                # Если текущее время >= времени отключения И никто не взял
+                if current_time >= timeout_time and not taken_by:
+                    await self.send_timeout_message(event_id, event_date, event_time_str)
+                    del self.reminder_sent_time[key]
+                
+                # Если кто-то взял - удаляем из отслеживания
+                elif taken_by:
+                    del self.reminder_sent_time[key]
     
     async def send_reminder(self, event, now):
         """Отправка напоминания о мероприятии"""
@@ -176,8 +191,8 @@ class EventScheduler:
         except Exception as e:
             logger.error(f"Ошибка отправки напоминания: {e}")
     
-    async def send_timeout_message(self, event_id: int, event_date: str):
-        """Отправка сообщения об истечении времени"""
+    async def send_timeout_message(self, event_id: int, event_date: str, event_time: str):
+        """Отправка сообщения об истечении времени и отключение кнопки"""
         try:
             channel_id = CONFIG.get('alarm_channel_id')
             if not channel_id:
@@ -192,29 +207,43 @@ class EventScheduler:
             if not event:
                 return
             
-            embed = discord.Embed(
-                title=f"⏰ ВРЕМЯ ВЫШЛО: {event['name']}",
-                description=f"Никто не взял мероприятие в течение 40 минут после напоминания.",
-                color=0xff0000
-            )
+            # Ищем сообщение с напоминанием в истории канала
+            async for message in channel.history(limit=50):
+                if message.author == self.bot.user and message.embeds:
+                    embed = message.embeds[0]
+                    # Проверяем, что это сообщение о нашем мероприятии
+                    if embed.title and event['name'] in embed.title:
+                        # Отключаем кнопки в старом сообщении
+                        for child in message.components:
+                            for component in child.children:
+                                component.disabled = True
+                        
+                        # Создаём новое embed с сообщением о таймауте
+                        new_embed = discord.Embed(
+                            title=f"⏰ ВРЕМЯ ВЫШЛО: {event['name']}",
+                            description=f"Мероприятие в **{event_time}** не состоялось - никто не взял его вовремя.",
+                            color=0xff0000
+                        )
+                        
+                        new_embed.add_field(
+                            name="⏰ Время начала",
+                            value=f"**{event_time}** МСК",
+                            inline=True
+                        )
+                        
+                        new_embed.add_field(
+                            name="📅 Дата",
+                            value=event_date,
+                            inline=True
+                        )
+                        
+                        new_embed.set_footer(text="Unit Management System by Nagga")
+                        
+                        # Редактируем сообщение
+                        await message.edit(embed=new_embed, view=None)
+                        break
             
-            embed.add_field(
-                name="⏰ Время начала",
-                value=f"**{event['event_time']}** МСК",
-                inline=True
-            )
-            
-            embed.add_field(
-                name="📅 Дата",
-                value=event_date,
-                inline=True
-            )
-            
-            embed.set_footer(text="Мероприятие отменяется, если никто не возьмёт")
-            
-            await channel.send(embed=embed)
-            
-            logger.info(f"⚠️ Таймаут МП: {event['name']} на {event_date}")
+            logger.info(f"⏰ Таймаут МП: {event['name']} на {event_date} в {event_time}")
             
         except Exception as e:
             logger.error(f"Ошибка отправки сообщения о таймауте: {e}")

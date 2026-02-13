@@ -12,7 +12,27 @@ MSK_TZ = pytz.timezone('Europe/Moscow')
 class EventReminderView(discord.ui.View):
     """Кнопка 'Взять МП' в напоминании"""
     def __init__(self, event_id: int, event_name: str, event_time: str, meeting_time: str, guild):
-        super().__init__(timeout=2400)
+        # Вычисляем таймаут: до времени начала минус 10 минут
+        from datetime import datetime, timedelta
+        import pytz
+        
+        msk_tz = pytz.timezone('Europe/Moscow')
+        now = datetime.now(msk_tz)
+        
+        # Парсим время мероприятия
+        event_dt = datetime.strptime(event_time, "%H:%M")
+        event_datetime = datetime.combine(now.date(), event_dt.time())
+        
+        # Если мероприятие уже сегодня, но время прошло - добавляем день
+        if event_datetime < now:
+            event_datetime += timedelta(days=1)
+        
+        # Вычисляем время таймаута (за 10 минут до начала)
+        timeout_datetime = event_datetime - timedelta(minutes=10)
+        timeout_seconds = max(0, (timeout_datetime - now).total_seconds())
+        
+        super().__init__(timeout=timeout_seconds)
+        
         self.event_id = event_id
         self.event_name = event_name
         self.event_time = event_time
@@ -136,39 +156,89 @@ class EventReminderView(discord.ui.View):
             await self.message.edit(embed=embed, view=self)
     
     async def on_timeout(self):
+        """Когда время вышло (за 10 минут до начала)"""
         if not self.taken and self.message:
+            # Отключаем все кнопки
             for child in self.children:
                 child.disabled = True
-            embed = self.message.embeds[0]
-            embed.color = 0xff0000
-            embed.set_footer(text="⏰ Время на взятие МП истекло")
+            
+            # Обновляем embed
+            embed = discord.Embed(
+                title=f"⏰ ВРЕМЯ ВЫШЛО: {self.event_name}",
+                description=f"Мероприятие в **{self.event_time}** не состоялось - никто не взял его вовремя.",
+                color=0xff0000
+            )
+            
+            embed.add_field(
+                name="⏰ Время начала",
+                value=f"**{self.event_time}** МСК",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="⏱️ Сбор был в",
+                value=f"**{self.meeting_time}** МСК",
+                inline=True
+            )
+            
+            embed.set_footer(text="Unit Management System by Nagga")
+            
             await self.message.edit(embed=embed, view=self)
 
 class EventInfoView(BaseMenuView):
     """Кнопка информации о мероприятии в !info"""
     def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
         super().__init__(user_id, guild, previous_view, previous_embed)
-        self.add_item(self.create_button())
+        # Создаём кнопку динамически
+        self.add_item(self.create_today_button())
     
-    def create_button(self):
-        btn = discord.ui.Button(label="📅 Мероприятия сегодня", style=discord.ButtonStyle.primary, emoji="📅")
-        async def callback(interaction: discord.Interaction, button: discord.ui.Button):
-            await self.today_events(interaction, button)
+    def create_today_button(self):
+        """Создать кнопку 'Мероприятия сегодня'"""
+        btn = discord.ui.Button(
+            label="📅 Мероприятия сегодня", 
+            style=discord.ButtonStyle.primary, 
+            emoji="📅"
+        )
+        
+        async def callback(interaction: discord.Interaction):
+            # При нажатии сразу убираем кнопку
+            self.clear_items()
+            self.add_back_button()
+            
+            await self.show_today_events(interaction)
+        
         btn.callback = callback
         return btn
     
-    async def today_events(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def show_today_events(self, interaction: discord.Interaction):
+        """Показать мероприятия на сегодня"""
         today = datetime.now(MSK_TZ).date()
         weekday = today.weekday()
         
+        # Получаем все мероприятия на сегодня (включая прошедшие)
         events = db.get_events(enabled_only=True, weekday=weekday)
         
         if not events:
-            # Убираем кнопку и показываем сообщение
-            self.clear_items()
-            self.add_back_button()
             await interaction.response.edit_message(
                 content="📅 На сегодня мероприятий нет",
+                embed=None,
+                view=self
+            )
+            return
+        
+        # Фильтруем только будущие мероприятия
+        now = datetime.now(MSK_TZ).time()
+        future_events = []
+        
+        for event in events:
+            event_time = datetime.strptime(event['event_time'], "%H:%M").time()
+            # Показываем только мероприятия, которые ещё не начались
+            if event_time >= now:
+                future_events.append(event)
+        
+        if not future_events:
+            await interaction.response.edit_message(
+                content="📅 На сегодня все мероприятия уже прошли",
                 embed=None,
                 view=self
             )
@@ -179,7 +249,7 @@ class EventInfoView(BaseMenuView):
             color=0x7289da
         )
         
-        for event in events:
+        for event in future_events:
             with db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
@@ -191,17 +261,7 @@ class EventInfoView(BaseMenuView):
             if result and result[0]:
                 status = f"✅ **Взял:** <@{result[0]}>\n📍 {result[2]}\n🔢 {result[1]}"
             else:
-                event_time = event['event_time']
-                event_dt = datetime.strptime(event_time, "%H:%M")
-                reminder_time = event_dt - timedelta(hours=1)
-                now_time = datetime.now(MSK_TZ).time()
-                
-                if now_time > reminder_time.time() and now_time < event_dt.time():
-                    status = "⏳ **Можно взять** (40 мин)"
-                elif now_time > event_dt.time():
-                    status = "❌ **Прошло**"
-                else:
-                    status = "❌ **Свободно**"
+                status = "❌ **Свободно**"
             
             embed.add_field(
                 name=f"{event['event_time']} — {event['name']}",
@@ -209,7 +269,4 @@ class EventInfoView(BaseMenuView):
                 inline=False
             )
         
-        # Убираем кнопку "Мероприятия сегодня" после нажатия
-        self.clear_items()
-        self.add_back_button()
         await interaction.response.edit_message(embed=embed, view=self)
