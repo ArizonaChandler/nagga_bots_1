@@ -151,25 +151,23 @@ class SetAnnounceChannelModal(discord.ui.Modal, title="📢 УСТАНОВИТЬ
         )
 
 
-class AddEventModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕРОПРИЯТИЕ"):
+class AddEventModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕРОПРИЯТИЯ"):
     event_name = discord.ui.TextInput(
         label="Название мероприятия",
-        placeholder="Например: Штурм, Каньон, ГГ",
+        placeholder="Например: DROP, Штурм, Каньон",
         max_length=100
     )
     
-    weekday = discord.ui.TextInput(
-        label="День недели (0-6, где 0 - Пн)",
-        placeholder="1 (вторник)",
-        max_length=1,
-        min_length=1
+    weekdays = discord.ui.TextInput(
+        label="Дни недели (0-6 через запятую или диапазон)",
+        placeholder="2 (среда) или 1,3,5 или 1-5 (Вт-Сб)",
+        max_length=20
     )
     
-    event_time = discord.ui.TextInput(
-        label="Время (МСК, ЧЧ:ММ)",
-        placeholder="19:30",
-        max_length=5,
-        min_length=5
+    event_times = discord.ui.TextInput(
+        label="Время (ЧЧ:ММ через запятую)",
+        placeholder="20:00 или 08:00,12:00,20:00",
+        max_length=50
     )
     
     async def on_submit(self, interaction: discord.Interaction):
@@ -178,47 +176,124 @@ class AddEventModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕРОПРИ
             return
         
         try:
-            # Проверка дня недели
-            try:
-                weekday = int(self.weekday.value)
-                if weekday < 0 or weekday > 6:
-                    await interaction.response.send_message("❌ День недели должен быть от 0 до 6", ephemeral=True)
+            # ===== ПАРСИМ ДНИ НЕДЕЛИ =====
+            weekdays = []
+            days_input = self.weekdays.value.replace(' ', '')
+            
+            if not days_input:
+                await interaction.response.send_message("❌ Укажите дни недели", ephemeral=True)
+                return
+            
+            # Проверяем, есть ли диапазон (например "1-5")
+            if '-' in days_input:
+                parts = days_input.split('-')
+                if len(parts) == 2:
+                    try:
+                        start = int(parts[0])
+                        end = int(parts[1])
+                        if 0 <= start <= 6 and 0 <= end <= 6 and start <= end:
+                            weekdays = list(range(start, end + 1))
+                        else:
+                            await interaction.response.send_message(
+                                "❌ Диапазон должен быть от 0 до 6 и начало <= конец", 
+                                ephemeral=True
+                            )
+                            return
+                    except ValueError:
+                        await interaction.response.send_message(
+                            "❌ Неверный формат диапазона. Используйте например 1-5", 
+                            ephemeral=True
+                        )
+                        return
+                else:
+                    await interaction.response.send_message(
+                        "❌ Неверный формат диапазона. Используйте например 1-5", 
+                        ephemeral=True
+                    )
                     return
-            except ValueError:
-                await interaction.response.send_message("❌ День недели должен быть числом", ephemeral=True)
+            else:
+                # Разбираем через запятую (может быть одно число или несколько)
+                for d in days_input.split(','):
+                    try:
+                        day = int(d)
+                        if 0 <= day <= 6:
+                            weekdays.append(day)
+                        else:
+                            await interaction.response.send_message(
+                                f"❌ День {day} должен быть от 0 до 6 (0-Пн, 6-Вс)", 
+                                ephemeral=True
+                            )
+                            return
+                    except ValueError:
+                        await interaction.response.send_message(
+                            f"❌ Неверный день: {d}. Должно быть число от 0 до 6", 
+                            ephemeral=True
+                        )
+                        return
+            
+            # Убираем дубликаты и сортируем
+            weekdays = sorted(set(weekdays))
+            
+            # ===== ПАРСИМ ВРЕМЯ =====
+            times = []
+            times_input = self.event_times.value.replace(' ', '')
+            
+            if not times_input:
+                await interaction.response.send_message("❌ Укажите время", ephemeral=True)
                 return
             
-            # Проверка времени
-            try:
-                datetime.strptime(self.event_time.value, "%H:%M")
-            except ValueError:
-                await interaction.response.send_message("❌ Неверный формат времени. Используйте ЧЧ:ММ", ephemeral=True)
-                return
+            for t in times_input.split(','):
+                try:
+                    # Проверяем формат времени
+                    datetime.strptime(t, "%H:%M")
+                    times.append(t)
+                except ValueError:
+                    await interaction.response.send_message(
+                        f"❌ Неверный формат времени: {t}. Используйте ЧЧ:ММ (например 20:00)",
+                        ephemeral=True
+                    )
+                    return
             
-            # ✅ ИСПРАВЛЕНО: сохраняем результат в переменную
-            new_event_id = db.add_event(
-                name=self.event_name.value,
-                weekday=weekday,
-                event_time=self.event_time.value,
-                created_by=str(interaction.user.id)
-            )
+            # Убираем дубликаты времени
+            times = sorted(set(times))
             
-            # Немедленно генерируем расписание
+            # ===== СОЗДАЁМ МЕРОПРИЯТИЯ =====
+            created_count = 0
+            days_names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+            created_ids = []
+            
+            for day in weekdays:
+                for time in times:
+                    event_id = db.add_event(
+                        name=self.event_name.value,
+                        weekday=day,
+                        event_time=time,
+                        created_by=str(interaction.user.id)
+                    )
+                    created_count += 1
+                    created_ids.append(event_id)
+            
+            # Генерируем расписание
             db.generate_schedule(days_ahead=14)
             
-            db.log_event_action(new_event_id, "created", str(interaction.user.id), 
-                               f"Название: {self.event_name.value}, Время: {self.event_time.value}")
+            # Формируем красивое описание
+            days_str = ', '.join([days_names[d] for d in weekdays])
+            times_str = ', '.join(times)
             
-            days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
             embed = discord.Embed(
-                title="✅ Мероприятие добавлено",
+                title="✅ Мероприятия добавлены",
+                description=f"Создано **{created_count}** мероприятий",
                 color=0x00ff00,
                 timestamp=datetime.now()
             )
             embed.add_field(name="📌 Название", value=self.event_name.value, inline=True)
-            embed.add_field(name="📅 День", value=days[weekday], inline=True)
-            embed.add_field(name="⏰ Время", value=self.event_time.value, inline=True)
-            embed.add_field(name="🆔 ID", value=f"`{new_event_id}`", inline=False)
+            embed.add_field(name="📅 Дни", value=days_str, inline=True)
+            embed.add_field(name="⏰ Времена", value=times_str, inline=False)
+            
+            # Логируем первое мероприятие
+            if created_ids:
+                db.log_event_action(created_ids[0], "created", str(interaction.user.id), 
+                                   f"Название: {self.event_name.value}, Дни: {days_str}, Времена: {times_str}")
             
             await interaction.response.send_message(embed=embed, ephemeral=True)
             
