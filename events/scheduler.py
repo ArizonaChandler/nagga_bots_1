@@ -55,20 +55,26 @@ class EventScheduler:
         """Проверка предстоящих мероприятий"""
         now = datetime.now(MSK_TZ)
         current_time = now.strftime("%H:%M")
-
+        current_date = now.date()
+        
         # Получаем мероприятия на сегодня
         today_events = db.get_today_events()
-
+        
         for event in today_events:
-            # Проверяем, нужно ли отправить напоминание (за 1 час)
+            # Проверяем, что мероприятие ещё не началось
             event_time = event['event_time']
+            event_dt = datetime.strptime(event_time, "%H:%M").time()
             
-            # Вычисляем время напоминания
-            event_dt = datetime.strptime(event_time, "%H:%M")
-            reminder_dt = (event_dt - timedelta(hours=1)).strftime("%H:%M")
+            # Если время мероприятия уже прошло сегодня - пропускаем
+            if event_dt < now.time():
+                continue
             
-            # Если время напоминания пришло (или прошло, но напоминание не отправлено)
-            if current_time >= reminder_dt and not event['reminder_sent'] and not event['taken_by']:
+            # Вычисляем время напоминания (за 1 час до начала)
+            reminder_dt = (datetime.combine(current_date, event_dt) - timedelta(hours=1)).time()
+            reminder_str = reminder_dt.strftime("%H:%M")
+            
+            # Если время напоминания пришло и напоминание ещё не отправлено
+            if current_time >= reminder_str and not event['reminder_sent'] and not event['taken_by']:
                 await self.send_reminder(event, now)
     
     async def check_timeouts(self):

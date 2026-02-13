@@ -543,7 +543,7 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT e.*, s.id as schedule_id, s.reminder_sent, s.taken_by,
-                       s.group_code, s.meeting_place
+                    s.group_code, s.meeting_place
                 FROM events e
                 LEFT JOIN event_schedule s ON e.id = s.event_id AND s.scheduled_date = ?
                 WHERE e.weekday = ? AND e.enabled = 1
