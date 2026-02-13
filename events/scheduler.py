@@ -40,12 +40,11 @@ class EventScheduler:
             try:
                 now = datetime.now(MSK_TZ)
                 await self.check_events()
-                await self.check_timeouts()  # НОВОЕ: проверка таймаутов
+                await self.check_timeouts()
                 
                 # Генерируем расписание раз в день в 00:00
                 if now.hour == 0 and now.minute == 0:
                     db.generate_schedule(days_ahead=14)
-                    # Очищаем старые записи о напоминаниях (>7 дней)
                     self.cleanup_old_reminders()
                     
             except Exception as e:
@@ -73,7 +72,7 @@ class EventScheduler:
                 await self.send_reminder(event, now)
     
     async def check_timeouts(self):
-        """НОВОЕ: Проверка, не истекло ли время взятия МП (40 минут)"""
+        """Проверка, не истекло ли время взятия МП (40 минут)"""
         now = datetime.now(MSK_TZ)
         current_time = now.timestamp()
         
@@ -116,13 +115,13 @@ class EventScheduler:
             
             # Вычисляем время сбора (за 20 минут до начала)
             event_dt = datetime.strptime(event_time, "%H:%M")
-            meeting_dt = (event_dt - timedelta(minutes=20)).strftime("%H:%M")
+            meeting_time = (event_dt - timedelta(minutes=20)).strftime("%H:%M")  # ✅ ИСПРАВЛЕНО
             
             # Создаём embed с напоминанием
             embed = discord.Embed(
                 title=f"🔔 НАПОМИНАНИЕ: {event['name']}",
                 description=f"Через 1 час начинаем мероприятие!\n"
-                           f"⏰ **Сбор в {meeting_dt} МСК**",
+                           f"⏰ **Сбор в {meeting_time} МСК**",
                 color=0xffa500
             )
             
@@ -148,12 +147,12 @@ class EventScheduler:
             
             # Отправляем с кнопкой взятия
             view = EventReminderView(
-            event_id=event['id'],
-            event_name=event['name'],
-            event_time=event_time,
-            meeting_time=meeting_time,  # передаём строку, не datetime
-            guild=channel.guild
-        )
+                event_id=event['id'],
+                event_name=event['name'],
+                event_time=event_time,
+                meeting_time=meeting_time,
+                guild=channel.guild
+            )
             
             message = await channel.send(embed=embed, view=view)
             
@@ -171,7 +170,7 @@ class EventScheduler:
             logger.error(f"Ошибка отправки напоминания: {e}")
     
     async def send_timeout_message(self, event_id: int, event_date: str):
-        """НОВОЕ: Отправка сообщения об истечении времени"""
+        """Отправка сообщения об истечении времени"""
         try:
             channel_id = CONFIG.get('alarm_channel_id')
             if not channel_id:
@@ -214,11 +213,10 @@ class EventScheduler:
             logger.error(f"Ошибка отправки сообщения о таймауте: {e}")
     
     def cleanup_old_reminders(self):
-        """НОВОЕ: Очистка старых записей о напоминаниях"""
+        """Очистка старых записей о напоминаниях"""
         now = datetime.now(MSK_TZ)
         for key in list(self.reminder_sent_time.keys()):
             event_id, event_date = key
-            # Удаляем записи старше 7 дней
             try:
                 date_obj = datetime.strptime(event_date, "%Y-%m-%d").date()
                 if (now.date() - date_obj).days > 7:

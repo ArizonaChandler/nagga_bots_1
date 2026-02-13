@@ -445,15 +445,17 @@ class EventSettingsView(discord.ui.View):
 
 
 class EventsListView(discord.ui.View):
-    """Список мероприятий с пагинацией"""
-    def __init__(self, user_id: str, guild, page: int = 1):
+    """Список мероприятий с пагинацией - одно сообщение"""
+    def __init__(self, user_id: str, guild, page: int = 1, message=None):
         super().__init__(timeout=120)
         self.user_id = user_id
         self.guild = guild
         self.page = page
+        self.message = message
         self.events = []
         self.max_page = 1
         self.load_events()
+        self.update_buttons()
     
     def load_events(self):
         per_page = 5
@@ -461,7 +463,8 @@ class EventsListView(discord.ui.View):
         
         with db.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT COUNT(*) FROM events WHERE enabled = 1')
+            # ПОКАЗЫВАЕМ ВСЕ МЕРОПРИЯТИЯ, даже отключенные
+            cursor.execute('SELECT COUNT(*) FROM events')
             total = cursor.fetchone()[0]
             self.max_page = (total + per_page - 1) // per_page if total > 0 else 1
             
@@ -469,7 +472,6 @@ class EventsListView(discord.ui.View):
                 SELECT id, name, weekday, event_time, 
                        CASE WHEN enabled = 1 THEN '✅' ELSE '❌' END as status
                 FROM events
-                WHERE enabled = 1
                 ORDER BY weekday, event_time
                 LIMIT ? OFFSET ?
             ''', (per_page, offset))
@@ -480,11 +482,14 @@ class EventsListView(discord.ui.View):
             self.events = []
             for row in rows:
                 self.events.append(dict(zip(columns, row)))
-        
+    
+    def update_buttons(self):
+        """Обновить состояние кнопок навигации"""
         self.clear_items()
         
         days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
         
+        # Кнопки мероприятий
         for event in self.events:
             event_id = event['id']
             name = event['name']
@@ -508,7 +513,6 @@ class EventsListView(discord.ui.View):
                 embed.add_field(name="📅 День", value=days[ewday], inline=True)
                 embed.add_field(name="⏰ Время", value=etime, inline=True)
                 
-                # Статистика взятий
                 with db.get_connection() as conn:
                     cursor = conn.cursor()
                     cursor.execute('''
@@ -523,22 +527,30 @@ class EventsListView(discord.ui.View):
             btn.callback = callback
             self.add_item(btn)
         
-        # Пагинация
+        # Кнопки навигации
         if self.page > 1:
             prev_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary)
             async def prev_cb(i):
-                await i.response.edit_message(view=EventsListView(self.user_id, self.guild, self.page - 1))
+                self.page -= 1
+                self.load_events()
+                self.update_buttons()
+                embed = self.create_embed()
+                await i.response.edit_message(embed=embed, view=self)
             prev_btn.callback = prev_cb
             self.add_item(prev_btn)
         
         if self.page < self.max_page:
             next_btn = discord.ui.Button(label="Вперёд ▶", style=discord.ButtonStyle.secondary)
             async def next_cb(i):
-                await i.response.edit_message(view=EventsListView(self.user_id, self.guild, self.page + 1))
+                self.page += 1
+                self.load_events()
+                self.update_buttons()
+                embed = self.create_embed()
+                await i.response.edit_message(embed=embed, view=self)
             next_btn.callback = next_cb
             self.add_item(next_btn)
     
-    async def send_initial(self, interaction):
+    def create_embed(self):
         embed = discord.Embed(
             title="📋 **СПИСОК МЕРОПРИЯТИЙ**",
             description=f"Страница {self.page}/{self.max_page}",
@@ -551,10 +563,15 @@ class EventsListView(discord.ui.View):
         for event in self.events:
             lines.append(f"`{event['id']:03d}` {event['status']} **{event['name']}** — {days[event['weekday']]} {event['event_time']}")
         
-        embed.description = "\n".join(lines) if lines else "Нет активных мероприятий"
+        embed.description = "\n".join(lines) if lines else "Нет мероприятий"
         embed.set_footer(text=f"Всего: {len(self.events)} на странице")
         
+        return embed
+    
+    async def send_initial(self, interaction):
+        embed = self.create_embed()
         await interaction.response.send_message(embed=embed, view=self, ephemeral=True)
+        self.message = await interaction.original_response()
     
     async def interaction_check(self, interaction):
         if str(interaction.user.id) != self.user_id:

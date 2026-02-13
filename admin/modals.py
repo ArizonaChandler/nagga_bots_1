@@ -195,12 +195,7 @@ class AddEventModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕРОПРИ
                 await interaction.response.send_message("❌ Неверный формат времени. Используйте ЧЧ:ММ", ephemeral=True)
                 return
             
-            event_id = db.add_event(
-                name=self.event_name.value,
-                weekday=weekday,
-                event_time=self.event_time.value,
-                created_by=str(interaction.user.id)
-            )
+            db.generate_schedule(days_ahead=14)
             
             db.log_event_action(event_id, "created", str(interaction.user.id), 
                                f"Название: {self.event_name.value}, Время: {self.event_time.value}")
