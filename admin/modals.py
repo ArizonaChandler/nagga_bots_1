@@ -306,6 +306,36 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
         max_length=100
     )
     
+    async def update_reminder_message(self, interaction):
+        """Найти и обновить сообщение с напоминанием"""
+        try:
+            channel_id = CONFIG.get('alarm_channel_id')
+            if not channel_id:
+                return
+            
+            channel = interaction.guild.get_channel(int(channel_id))
+            if not channel:
+                return
+            
+            async for message in channel.history(limit=20):
+                if message.author == interaction.client.user and message.embeds:
+                    embed = message.embeds[0]
+                    # Проверяем, что это сообщение о нашем мероприятии
+                    if embed.title and self.event_name in embed.title:
+                        from events.views import EventReminderView
+                        view = EventReminderView(
+                            self.event_id, 
+                            self.event_name, 
+                            self.event_time, 
+                            self.meeting_time or "", 
+                            interaction.guild
+                        )
+                        view.message = message
+                        await view.update_taken_status(interaction.user.id, interaction.user.display_name)
+                        break
+        except Exception as e:
+            print(f"Ошибка при обновлении сообщения: {e}")
+    
     async def on_submit(self, interaction: discord.Interaction):
         from datetime import datetime, timedelta
         import pytz
@@ -362,20 +392,18 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
                 meeting_timestamp = int(meeting_dt_today.timestamp())
                 
                 embed = discord.Embed(
-                    title=f"🎮 {self.event_name}",
-                    description=f"В **{self.event_time}** играем!\n"
-                               f"⏰ **Сбор в {meeting_time} МСК**",
+                    title=f"🎮 СБОР НА МЕРОПРИЯТИЕ: {self.event_name}",
+                    description=f"Мероприятие проведёт: {interaction.user.mention}",
                     color=0x00ff00
                 )
-                embed.add_field(name="👤 Проводит", value=interaction.user.mention, inline=True)
                 embed.add_field(name="📍 Место сбора", value=self.meeting_place.value, inline=True)
                 embed.add_field(name="🔢 Код группы", value=self.group_code.value, inline=True)
                 embed.add_field(
-                    name="⏰ Сбор через",
-                    value=f"<t:{meeting_timestamp}:R>",
-                    inline=True
+                    name="⏰ Сбор",
+                    value=f"<t:{meeting_timestamp}:t> (<t:{meeting_timestamp}:R>)",
+                    inline=False
                 )
-                embed.set_footer(text="Всем желающим в войс, в игру и на зафул!")
+                embed.set_footer(text="Unit Management System by Nagga")
                 
                 await channel.send(embed=embed)
         
@@ -394,3 +422,6 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
             f"🔢 Код группы: {self.group_code.value}",
             ephemeral=True
         )
+        
+        # Обновляем сообщение с напоминанием
+        await self.update_reminder_message(interaction)

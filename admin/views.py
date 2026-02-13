@@ -142,6 +142,7 @@ class SettingsView(BaseMenuView):
         global_btn.callback = global_cb
         self.add_item(global_btn)
         
+        # ✅ Добавляем кнопку "Назад"
         self.add_back_button()
     
     def get_current_embed(self):
@@ -531,17 +532,42 @@ class EventDetailView(BaseMenuView):
         self.weekday = weekday
         self.event_time = event_time
         
-        toggle_btn = discord.ui.Button(label="🔴 Выключить", style=discord.ButtonStyle.danger, emoji="🔴", row=0)
+        # Определяем текст кнопки в зависимости от состояния
+        event = db.get_event(self.event_id)
+        toggle_text = "🔴 Выключить" if event and event['enabled'] else "🟢 Включить"
+        toggle_style = discord.ButtonStyle.danger if event and event['enabled'] else discord.ButtonStyle.success
+        
+        toggle_btn = discord.ui.Button(label=toggle_text, style=toggle_style, emoji="🔴" if event and event['enabled'] else "🟢", row=0)
         async def toggle_cb(i):
             event = db.get_event(self.event_id)
             if event and event['enabled']:
                 db.update_event(self.event_id, enabled=0)
                 db.log_event_action(self.event_id, "disabled", str(i.user.id))
-                await i.response.edit_message(content=f"❌ Мероприятие **{self.event_name}** отключено", embed=None, view=None)
+                # Возвращаемся к списку
+                from admin.views import EventsListView
+                view = EventsListView(
+                    self.user_id, 
+                    self.guild, 
+                    page=1, 
+                    previous_view=self.previous_view, 
+                    previous_embed=self.previous_embed
+                )
+                embed = view.create_embed()
+                await i.response.edit_message(embed=embed, view=view)
             else:
                 db.update_event(self.event_id, enabled=1)
                 db.log_event_action(self.event_id, "enabled", str(i.user.id))
-                await i.response.edit_message(content=f"✅ Мероприятие **{self.event_name}** включено", embed=None, view=None)
+                # Возвращаемся к списку
+                from admin.views import EventsListView
+                view = EventsListView(
+                    self.user_id, 
+                    self.guild, 
+                    page=1, 
+                    previous_view=self.previous_view, 
+                    previous_embed=self.previous_embed
+                )
+                embed = view.create_embed()
+                await i.response.edit_message(embed=embed, view=view)
         toggle_btn.callback = toggle_cb
         self.add_item(toggle_btn)
         
@@ -564,6 +590,48 @@ class EventDetailView(BaseMenuView):
         
         self.add_back_button(row=4)
 
+class ConfirmDeleteView(BaseMenuView):
+    def __init__(self, user_id: str, event_id: int, event_name: str, previous_view=None, previous_embed=None):
+        super().__init__(user_id, None, previous_view, previous_embed)
+        self.event_id = event_id
+        self.event_name = event_name
+    
+    @discord.ui.button(label="✅ Да, удалить", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Удаляем мероприятие
+        success = db.delete_event(self.event_id)
+        
+        if success:
+            db.log_event_action(self.event_id, "deleted", str(interaction.user.id))
+            
+            # Возвращаемся к списку мероприятий через EventSettingsView
+            from admin.views import EventSettingsView
+            settings_view = EventSettingsView(
+                self.user_id,
+                interaction.guild,
+                self.previous_view,
+                self.previous_embed
+            )
+            settings_embed = discord.Embed(
+                title="🔔 **СИСТЕМА ОПОВЕЩЕНИЙ**",
+                description="Управление автоматическими напоминаниями о мероприятиях",
+                color=0xffa500
+            )
+            await interaction.response.edit_message(embed=settings_embed, view=settings_view)
+        else:
+            await interaction.response.edit_message(
+                content="❌ Не удалось удалить мероприятие",
+                embed=None,
+                view=None
+            )
+    
+    @discord.ui.button(label="❌ Отмена", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Возвращаемся к деталям мероприятия
+        await interaction.response.edit_message(
+            embed=self.previous_embed,
+            view=self.previous_view
+        )
 
 class ConfirmDeleteView(BaseMenuView):
     def __init__(self, user_id: str, event_id: int, event_name: str, previous_view=None, previous_embed=None):

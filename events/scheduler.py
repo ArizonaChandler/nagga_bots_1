@@ -55,10 +55,10 @@ class EventScheduler:
         """Проверка предстоящих мероприятий"""
         now = datetime.now(MSK_TZ)
         current_time = now.strftime("%H:%M")
-        
+
         # Получаем мероприятия на сегодня
         today_events = db.get_today_events()
-        
+
         for event in today_events:
             # Проверяем, нужно ли отправить напоминание (за 1 час)
             event_time = event['event_time']
@@ -67,8 +67,8 @@ class EventScheduler:
             event_dt = datetime.strptime(event_time, "%H:%M")
             reminder_dt = (event_dt - timedelta(hours=1)).strftime("%H:%M")
             
-            # Если ещё не отправляли и время пришло
-            if current_time == reminder_dt and not event['reminder_sent'] and not event['taken_by']:
+            # Если время напоминания пришло (или прошло, но напоминание не отправлено)
+            if current_time >= reminder_dt and not event['reminder_sent'] and not event['taken_by']:
                 await self.send_reminder(event, now)
     
     async def check_timeouts(self):
@@ -115,13 +115,12 @@ class EventScheduler:
             
             # Вычисляем время сбора (за 20 минут до начала)
             event_dt = datetime.strptime(event_time, "%H:%M")
-            meeting_time = (event_dt - timedelta(minutes=20)).strftime("%H:%M")  # ✅ ИСПРАВЛЕНО
+            meeting_time = (event_dt - timedelta(minutes=20)).strftime("%H:%M")
             
             # Создаём embed с напоминанием
             embed = discord.Embed(
-                title=f"🔔 НАПОМИНАНИЕ: {event['name']}",
-                description=f"Через 1 час начинаем мероприятие!\n"
-                           f"⏰ **Сбор в {meeting_time} МСК**",
+                title=f"🔔 НАПОМИНАНИЕ О МЕРОПРИЯТИИ: {event['name']}",
+                description=f"Через 1 час начинается мероприятие **{event['name']}**!",
                 color=0xffa500
             )
             
@@ -132,8 +131,8 @@ class EventScheduler:
             )
             
             embed.add_field(
-                name="⏱️ Сбор за",
-                value="**20 минут** до начала",
+                name="⏱️ Сбор в",
+                value=f"**{meeting_time}** МСК",
                 inline=True
             )
             
@@ -143,9 +142,10 @@ class EventScheduler:
                 inline=False
             )
             
-            embed.set_footer(text="У вас есть 40 минут, чтобы взять МП! ⏳")
+            embed.set_footer(text="Unit Management System by Nagga")
             
             # Отправляем с кнопкой взятия
+            from events.views import EventReminderView
             view = EventReminderView(
                 event_id=event['id'],
                 event_name=event['name'],
@@ -155,6 +155,7 @@ class EventScheduler:
             )
             
             message = await channel.send(embed=embed, view=view)
+            view.message = message
             
             # Отмечаем что напоминание отправлено
             today = now.date().isoformat()
