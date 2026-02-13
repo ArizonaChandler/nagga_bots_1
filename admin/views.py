@@ -434,6 +434,7 @@ class EventSettingsView(BaseMenuView):
 
 
 class EventsListView(BaseMenuView):
+    """Список мероприятий с пагинацией"""
     def __init__(self, user_id: str, guild, page: int = 1, previous_view=None, previous_embed=None):
         super().__init__(user_id, guild, previous_view, previous_embed)
         self.page = page
@@ -444,6 +445,7 @@ class EventsListView(BaseMenuView):
         self.update_buttons()
     
     def load_events(self):
+        """Загрузка мероприятий с пагинацией"""
         per_page = 5
         offset = (self.page - 1) * per_page
         
@@ -469,9 +471,11 @@ class EventsListView(BaseMenuView):
                 self.events.append(dict(zip(columns, row)))
     
     def update_buttons(self):
+        """Обновить кнопки навигации и мероприятий"""
         self.clear_items()
         days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
         
+        # Кнопки для каждого мероприятия
         for event in self.events:
             btn = discord.ui.Button(
                 label=f"{event['status']} {event['name'][:20]}... | {days[event['weekday']]} {event['event_time']}",
@@ -479,7 +483,16 @@ class EventsListView(BaseMenuView):
             )
             async def callback(interaction, eid=event['id'], ename=event['name'], 
                              ewday=event['weekday'], etime=event['event_time']):
-                view = EventDetailView(self.user_id, self.guild, eid, ename, ewday, etime, self, self.create_embed())
+                view = EventDetailView(
+                    self.user_id, 
+                    self.guild, 
+                    eid, 
+                    ename, 
+                    ewday, 
+                    etime, 
+                    self, 
+                    self.create_embed()
+                )
                 embed = discord.Embed(title=f"📋 {ename}", color=0x7289da)
                 embed.add_field(name="🆔 ID", value=f"`{eid}`", inline=True)
                 embed.add_field(name="📅 День", value=days[ewday], inline=True)
@@ -498,7 +511,7 @@ class EventsListView(BaseMenuView):
             btn.callback = callback
             self.add_item(btn)
         
-        # Навигация
+        # Кнопки пагинации
         if self.page > 1:
             prev_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary)
             async def prev_cb(i):
@@ -519,9 +532,29 @@ class EventsListView(BaseMenuView):
             next_btn.callback = next_cb
             self.add_item(next_btn)
         
+        # Кнопка "Назад" в меню настроек оповещений
         self.add_back_button(row=4)
     
+    def add_back_button(self, row=4):
+        """Добавить кнопку "Назад" если есть предыдущее меню"""
+        if self.previous_view:
+            back_btn = discord.ui.Button(
+                label="◀ Назад",
+                style=discord.ButtonStyle.secondary,
+                emoji="◀",
+                row=row
+            )
+            async def back_callback(i):
+                await i.response.edit_message(
+                    content=None,
+                    embed=self.previous_embed,
+                    view=self.previous_view
+                )
+            back_btn.callback = back_callback
+            self.add_item(back_btn)
+    
     def create_embed(self):
+        """Создать embed для списка мероприятий"""
         embed = discord.Embed(
             title="📋 **СПИСОК МЕРОПРИЯТИЙ**",
             description=f"Страница {self.page}/{self.max_page}",
@@ -536,6 +569,7 @@ class EventsListView(BaseMenuView):
         return embed
     
     async def send_initial(self, interaction):
+        """Отправить начальное сообщение"""
         embed = self.create_embed()
         await interaction.response.edit_message(embed=embed, view=self)
         self.message = await interaction.original_response()
@@ -666,26 +700,50 @@ class ConfirmDeleteView(BaseMenuView):
         super().__init__(user_id, None, previous_view, previous_embed)
         self.event_id = event_id
         self.event_name = event_name
+        self.message = None  # для сохранения сообщения
     
     @discord.ui.button(label="✅ Да, удалить", style=discord.ButtonStyle.danger)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Удаляем мероприятие
-        success = db.delete_event(self.event_id)
+        # Полное удаление из БД
+        success = db.delete_event(self.event_id, soft=False)
         
         if success:
             db.log_event_action(self.event_id, "deleted", str(interaction.user.id))
             
-            # Возвращаемся к списку мероприятий
-            from admin.views import EventsListView
-            view = EventsListView(
-                self.user_id, 
-                interaction.guild, 
-                page=1, 
-                previous_view=self.previous_view, 
-                previous_embed=self.previous_embed
+            # Создаём свежее меню списка мероприятий
+            from admin.views import EventsListView, EventSettingsView
+            
+            # Сначала создаём SettingsView как предыдущее меню
+            settings_view = EventSettingsView(
+                self.user_id,
+                interaction.guild,
+                None,
+                None
             )
-            embed = view.create_embed()
-            await interaction.response.edit_message(embed=embed, view=view)
+            settings_embed = discord.Embed(
+                title="🔔 **СИСТЕМА ОПОВЕЩЕНИЙ**",
+                description="Управление автоматическими напоминаниями о мероприятиях",
+                color=0xffa500
+            )
+            
+            # Затем создаём список мероприятий
+            list_view = EventsListView(
+                self.user_id,
+                interaction.guild,
+                page=1,
+                previous_view=settings_view,
+                previous_embed=settings_embed
+            )
+            
+            # Получаем embed для списка
+            embed = list_view.create_embed()
+            
+            # Редактируем сообщение - полностью заменяем контент
+            await interaction.response.edit_message(
+                content=None,  # Убираем текст подтверждения
+                embed=embed,
+                view=list_view
+            )
         else:
             await interaction.response.edit_message(
                 content="❌ Не удалось удалить мероприятие",
@@ -697,10 +755,10 @@ class ConfirmDeleteView(BaseMenuView):
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Возвращаемся к деталям мероприятия
         await interaction.response.edit_message(
+            content=None,  # Убираем текст подтверждения
             embed=self.previous_embed,
             view=self.previous_view
         )
-
 
 async def send_event_stats(interaction, guild, previous_view=None, previous_embed=None):
     """Отправка статистики по мероприятиям"""
