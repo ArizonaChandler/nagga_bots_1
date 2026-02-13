@@ -424,19 +424,85 @@ class Database:
                 result.append(dict(zip(columns, row)))
             return result
     
-    def get_top_organizers(self, limit: int = 10):
-        """Топ организаторов МП"""
+    def get_top_organizers(self, limit: int = 10, days: int = 30):
+        """Топ организаторов МП за последние N дней
+        
+        Args:
+            limit: количество записей
+            days: за сколько дней считать (по умолчанию 30)
+        """
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT user_id, user_name, COUNT(*) as count
                 FROM event_takes
-                WHERE is_cancelled = 0
+                WHERE is_cancelled = 0 
+                AND event_date >= date('now', ?)
                 GROUP BY user_id
                 ORDER BY count DESC
                 LIMIT ?
-            ''', (limit,))
-            return cursor.fetchall()
+            ''', (f'-{days} days', limit))
+            
+            result = cursor.fetchall()
+            
+            # Если за 30 дней нет данных, показываем общую статистику
+            if not result:
+                cursor.execute('''
+                    SELECT user_id, user_name, COUNT(*) as count
+                    FROM event_takes
+                    WHERE is_cancelled = 0
+                    GROUP BY user_id
+                    ORDER BY count DESC
+                    LIMIT ?
+                ''', (limit,))
+                result = cursor.fetchall()
+            
+            return result
+
+    def get_event_stats_summary(self):
+        """Получить сводную статистику по мероприятиям"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Общее количество МП
+            cursor.execute('SELECT COUNT(*) FROM events')
+            total_events = cursor.fetchone()[0]
+            
+            # Активные МП
+            cursor.execute('SELECT COUNT(*) FROM events WHERE enabled = 1')
+            active_events = cursor.fetchone()[0]
+            
+            # Всего проведено МП
+            cursor.execute('SELECT COUNT(*) FROM event_takes WHERE is_cancelled = 0')
+            total_takes = cursor.fetchone()[0]
+            
+            # За последние 30 дней
+            cursor.execute('''
+                SELECT COUNT(*) FROM event_takes 
+                WHERE is_cancelled = 0 
+                AND event_date >= date('now', '-30 days')
+            ''')
+            takes_30d = cursor.fetchone()[0]
+            
+            # За сегодня
+            from datetime import datetime
+            import pytz
+            msk_tz = pytz.timezone('Europe/Moscow')
+            today = datetime.now(msk_tz).date().isoformat()
+            
+            cursor.execute('''
+                SELECT COUNT(*) FROM event_takes 
+                WHERE is_cancelled = 0 AND event_date = ?
+            ''', (today,))
+            takes_today = cursor.fetchone()[0]
+            
+            return {
+                'total_events': total_events,
+                'active_events': active_events,
+                'total_takes': total_takes,
+                'takes_30d': takes_30d,
+                'takes_today': takes_today
+            }
     
     # ----- РАСПИСАНИЕ -----
     def generate_schedule(self, days_ahead: int = 14):

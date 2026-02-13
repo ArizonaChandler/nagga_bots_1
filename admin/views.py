@@ -762,9 +762,8 @@ class ConfirmDeleteView(BaseMenuView):
 
 async def send_event_stats(interaction, guild, previous_view=None, previous_embed=None):
     """Отправка статистики по мероприятиям"""
-    top = db.get_top_organizers(10)
-    takes = db.get_event_takes(days=30)
-    events = db.get_events(enabled_only=False)
+    top = db.get_top_organizers(10, days=30)  # За последние 30 дней
+    stats = db.get_event_stats_summary()
     
     embed = discord.Embed(
         title="📊 **СТАТИСТИКА МЕРОПРИЯТИЙ**",
@@ -772,13 +771,35 @@ async def send_event_stats(interaction, guild, previous_view=None, previous_embe
         timestamp=datetime.now()
     )
     
+    # Топ организаторов за 30 дней
     if top:
-        top_text = "\n".join([f"{i+1}. <@{row[0]}> — **{row[2]}** МП" for i, row in enumerate(top[:5])])
-        embed.add_field(name="🏆 Топ организаторов (30 дней)", value=top_text, inline=False)
+        top_text = ""
+        for i, row in enumerate(top[:5], 1):
+            user_id, user_name, count = row
+            # Пытаемся получить упоминание, если не получается - используем имя
+            try:
+                user = await guild.fetch_member(int(user_id))
+                mention = user.mention
+            except:
+                mention = f"**{user_name}**"
+            top_text += f"{i}. {mention} — **{count}** МП\n"
+        
+        embed.add_field(name="🏆 Топ организаторов (30 дней)", value=top_text or "Нет данных", inline=False)
+    else:
+        embed.add_field(name="🏆 Топ организаторов", value="Нет данных за 30 дней", inline=False)
     
-    active = sum(1 for e in events if e['enabled'])
-    embed.add_field(name="📅 Всего МП", value=f"`{len(events)}` (активных: `{active}`)", inline=True)
-    embed.add_field(name="✅ Проведено (30д)", value=f"`{len(takes)}`", inline=True)
+    # Общая статистика
+    embed.add_field(
+        name="📅 Мероприятия",
+        value=f"Всего: `{stats['total_events']}`\nАктивных: `{stats['active_events']}`",
+        inline=True
+    )
+    
+    embed.add_field(
+        name="✅ Проведено",
+        value=f"За всё время: `{stats['total_takes']}`\nЗа 30 дней: `{stats['takes_30d']}`\nСегодня: `{stats['takes_today']}`",
+        inline=True
+    )
     
     class StatsView(BaseMenuView):
         def __init__(self):
