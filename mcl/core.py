@@ -1,4 +1,4 @@
-"""DUAL MCL Core - С кнопкой отмены и блокировкой (исправлено)"""
+"""DUAL MCL Core - Надёжная блокировка повторного запуска"""
 import aiohttp
 import asyncio
 import time
@@ -38,18 +38,22 @@ class DualMCLCore:
         'sessions', 'session_locks', 'headers_cache', 'last_tokens',
         'payload_cache', 'last_messages', 'last_channel', 
         'stats', 'token_colors', 'current_sender', 'sending_lock',
+        'sender_name', 'sending_active',  # Добавлено для надёжности
         '_connectors_initialized', '_connectors'
     )
     
     def __init__(self):
-        # Не создаём коннекторы здесь - только флаг
         self._connectors_initialized = False
         self._connectors = {1: None, 2: None}
         
         self.sessions = {1: None, 2: None}
         self.session_locks = {1: asyncio.Lock(), 2: asyncio.Lock()}
-        self.current_sender = None
+        
+        # Блокировка отправки
         self.sending_lock = asyncio.Lock()
+        self.current_sender = None  # ID текущего отправителя
+        self.sender_name = None     # Имя для красивого вывода
+        self.sending_active = False # Флаг активности
         
         self.headers_cache = {1: None, 2: None}
         self.last_tokens = {1: None, 2: None}
@@ -61,11 +65,10 @@ class DualMCLCore:
             1: {'success': 0, 'failed': 0, 'total_attempts': 0},
             2: {'success': 0, 'failed': 0, 'total_attempts': 0}
         }
-        self.token_colors = {1: 'Pink', 2: 'Blue'}
-        print("⚡ DUAL MCL Core (CANCELABLE) инициализирован")
+        self.token_colors = {1: 'Pink', 2: 'Orange'}
+        print("⚡ DUAL MCL Core (LOCK FIXED) инициализирован")
     
     async def _ensure_connectors(self):
-        """Создаём коннекторы при первом использовании (уже в event loop)"""
         if not self._connectors_initialized:
             self._connectors = {
                 1: aiohttp.TCPConnector(limit=0, ttl_dns_cache=3600, force_close=False, ssl=False),
@@ -74,8 +77,6 @@ class DualMCLCore:
             self._connectors_initialized = True
     
     async def get_session(self, token_id: int):
-        """Получение сессии с отдельным коннектором"""
-        # Убеждаемся что коннекторы созданы
         await self._ensure_connectors()
         
         if self.sessions[token_id] and not self.sessions[token_id].closed:
@@ -114,7 +115,6 @@ class DualMCLCore:
         return payload
     
     async def _send_infinite(self, token_id: int, task_id: int):
-        """Бесконечная отправка до первого успеха с проверкой отмены"""
         url = f'https://discord.com/api/v9/channels/{CONFIG["channel_id"]}/messages'
         session = await self.get_session(token_id)
         headers = self.prepare_headers(token_id)
@@ -124,9 +124,8 @@ class DualMCLCore:
         start_time = time.time()
         
         while True:
-            # Проверяем, не отменили ли задачу
             if task_id in active_mcl_tasks and active_mcl_tasks[task_id].get('cancelled', False):
-                return False, attempt, time.time() - start_time, True  # True = отменено
+                return False, attempt, time.time() - start_time, True
             
             attempt += 1
             try:
@@ -151,18 +150,31 @@ class DualMCLCore:
                 await asyncio.sleep(0.1)
     
     async def send_dual(self, interaction):
-        """Отправка с возможностью отмены"""
+        """Отправка с надёжной блокировкой повторного запуска"""
         user_id = str(interaction.user.id)
         
-        # Блокируем повторный запуск
+        # ===== БЛОКИРОВКА ПОВТОРНОГО ЗАПУСКА =====
         async with self.sending_lock:
-            if self.current_sender and self.current_sender != user_id:
-                await interaction.response.send_message(
-                    f"❌ MCL уже запущен: <@{self.current_sender}>",
-                    ephemeral=True
-                )
+            # Проверяем, не запущена ли уже отправка
+            if self.sending_active:
+                if self.current_sender:
+                    await interaction.response.send_message(
+                        f"❌ MCL **УЖЕ ЗАПУЩЕН** пользователем <@{self.current_sender}>\n"
+                        f"👤 Отправитель: {self.sender_name}\n"
+                        f"⏳ Дождитесь завершения или отмены.",
+                        ephemeral=True
+                    )
+                else:
+                    await interaction.response.send_message(
+                        "❌ MCL уже запущен. Дождитесь завершения.",
+                        ephemeral=True
+                    )
                 return False
+            
+            # Устанавливаем флаги блокировки
+            self.sending_active = True
             self.current_sender = user_id
+            self.sender_name = interaction.user.display_name
         
         task_id = id(asyncio.current_task())
         active_mcl_tasks[task_id] = {'cancelled': False, 'user': user_id}
@@ -180,7 +192,9 @@ class DualMCLCore:
             # Отправляем сообщение с кнопкой отмены
             embed = discord.Embed(
                 title="🚀 DUAL MCL",
-                description=f"Запущено: {interaction.user.mention}\nОжидание отправки...",
+                description=f"**Запущено:** {interaction.user.mention}\n"
+                           f"**Статус:** Ожидание отправки...\n"
+                           f"⚡ Отправка может занять некоторое время",
                 color=0xffa500
             )
             cancel_view = CancelView(task_id, user_id)
@@ -197,9 +211,8 @@ class DualMCLCore:
             success1, attempts1, time1, cancelled1 = results[0]
             success2, attempts2, time2, cancelled2 = results[1]
             
-            # Проверяем, не была ли отправка отменена
+            # Проверяем отмену
             if cancelled1 or cancelled2 or (task_id in active_mcl_tasks and active_mcl_tasks[task_id].get('cancelled', False)):
-                # Отмена - показываем красный embed
                 result_embed = discord.Embed(
                     title="🛑 ОТПРАВКА ОСТАНОВЛЕНА",
                     description=f"Пользователь {interaction.user.mention} остановил отправку",
@@ -217,7 +230,6 @@ class DualMCLCore:
                     inline=True
                 )
             else:
-                # Успешная отправка - зелёный embed
                 result_embed = discord.Embed(
                     title="✅ DUAL MCL",
                     color=0x00ff00,
@@ -239,9 +251,7 @@ class DualMCLCore:
                     inline=False
                 )
             
-            # Редактируем сообщение (убираем кнопку)
             await interaction.edit_original_response(embed=result_embed, view=None)
-            
             db.log_command('MCL_DUAL', user_id, True, 
                           details=f'Попытки: {attempts1}/{attempts2}, Время: {total_elapsed:.2f}с')
             return True
@@ -256,9 +266,13 @@ class DualMCLCore:
             db.log_command('MCL_DUAL', user_id, False, details=str(e))
             return False
         finally:
+            # ===== СНИМАЕМ БЛОКИРОВКУ =====
             if task_id in active_mcl_tasks:
                 del active_mcl_tasks[task_id]
+            
             async with self.sending_lock:
+                self.sending_active = False
                 self.current_sender = None
+                self.sender_name = None
 
 dual_mcl_core = DualMCLCore()
