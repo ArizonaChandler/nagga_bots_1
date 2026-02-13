@@ -22,7 +22,7 @@ from capt.core import capt_core
 from mcl.core import dual_mcl_core
 from files.core import file_manager
 
-# НОВОЕ: импорт планировщика мероприятий
+# Импорт планировщика мероприятий
 from events.scheduler import setup as setup_scheduler
 
 import discord
@@ -52,9 +52,6 @@ setup_settings(bot)
 setup_log(bot)
 setup_stats(bot)
 
-# НОВОЕ: запуск планировщика мероприятий
-setup_scheduler(bot)
-
 @bot.event
 async def on_ready():
     print("\n" + "="*60)
@@ -82,6 +79,8 @@ async def on_command_error(ctx, error):
 
 async def main():
     async with bot:
+        # Запускаем планировщик мероприятий
+        await setup_scheduler(bot)
         await bot.start(BOT_TOKEN)
 
 if __name__ == '__main__':
