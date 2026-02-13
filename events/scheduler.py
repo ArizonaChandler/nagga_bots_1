@@ -123,25 +123,25 @@ class EventScheduler:
                 description=f"Через 1 час начинается мероприятие **{event['name']}**!",
                 color=0xffa500
             )
-            
+
             embed.add_field(
                 name="⏰ Время начала",
                 value=f"**{event_time}** МСК",
                 inline=True
             )
-            
+
             embed.add_field(
                 name="⏱️ Сбор в",
                 value=f"**{meeting_time}** МСК",
                 inline=True
             )
-            
+
             embed.add_field(
                 name="👥 Статус",
                 value="❌ Никто не взял",
                 inline=False
             )
-            
+
             embed.set_footer(text="Unit Management System by Nagga")
             
             # Отправляем с кнопкой взятия

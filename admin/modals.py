@@ -287,12 +287,13 @@ class EditEventModal(discord.ui.Modal, title="✏️ РЕДАКТИРОВАТЬ 
 
 
 class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТИЕ"):
-    def __init__(self, event_id: int, event_name: str, event_time: str, meeting_time: str = None):
+    def __init__(self, event_id: int, event_name: str, event_time: str, meeting_time: str = None, reminder_view=None):
         super().__init__()
         self.event_id = event_id
         self.event_name = event_name
         self.event_time = event_time
         self.meeting_time = meeting_time
+        self.reminder_view = reminder_view  # Сохраняем ссылку на view с напоминанием
         
     group_code = discord.ui.TextInput(
         label="🔢 Код группы",
@@ -306,33 +307,17 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
         max_length=100
     )
     
-    async def update_reminder_message(self, interaction):
-        """Найти и обновить сообщение с напоминанием"""
+    async def update_reminder_message(self, interaction, user_id, group_code, meeting_place):
+        """Мгновенно обновить сообщение с напоминанием"""
         try:
-            channel_id = CONFIG.get('alarm_channel_id')
-            if not channel_id:
-                return
-            
-            channel = interaction.guild.get_channel(int(channel_id))
-            if not channel:
-                return
-            
-            async for message in channel.history(limit=20):
-                if message.author == interaction.client.user and message.embeds:
-                    embed = message.embeds[0]
-                    # Проверяем, что это сообщение о нашем мероприятии
-                    if embed.title and self.event_name in embed.title:
-                        from events.views import EventReminderView
-                        view = EventReminderView(
-                            self.event_id, 
-                            self.event_name, 
-                            self.event_time, 
-                            self.meeting_time or "", 
-                            interaction.guild
-                        )
-                        view.message = message
-                        await view.update_taken_status(interaction.user.id, interaction.user.display_name)
-                        break
+            if self.reminder_view and self.reminder_view.message:
+                # Обновляем статус в существующем view
+                await self.reminder_view.update_taken_status(
+                    user_id, 
+                    interaction.user.display_name,
+                    group_code,
+                    meeting_place
+                )
         except Exception as e:
             print(f"Ошибка при обновлении сообщения: {e}")
     
@@ -381,28 +366,53 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
         db.log_event_action(self.event_id, "taken", str(interaction.user.id),
                            f"Группа: {self.group_code.value}, Место: {self.meeting_place.value}")
         
-        # Отправляем в канал оповещений (или в канал напоминаний, если отдельный не настроен)
+        # МГНОВЕННО обновляем сообщение с напоминанием
+        await self.update_reminder_message(
+            interaction, 
+            interaction.user.id,
+            self.group_code.value,
+            self.meeting_place.value
+        )
+        
+        # Отправляем в канал оповещений
         channel_id = CONFIG.get('announce_channel_id') or CONFIG.get('alarm_channel_id')
         if channel_id:
             channel = interaction.guild.get_channel(int(channel_id))
             if channel:
-                # Вычисляем unix timestamp для сбора (20 минут до начала)
                 event_dt_today = datetime.strptime(f"{today} {self.event_time}", "%Y-%m-%d %H:%M")
                 meeting_dt_today = event_dt_today - timedelta(minutes=20)
                 meeting_timestamp = int(meeting_dt_today.timestamp())
                 
                 embed = discord.Embed(
-                    title=f"🎮 СБОР НА МЕРОПРИЯТИЕ: {self.event_name}",
+                    title=f"✅ СБОР НА МЕРОПРИЯТИЕ: {self.event_name}",
                     description=f"Мероприятие проведёт: {interaction.user.mention}",
                     color=0x00ff00
                 )
-                embed.add_field(name="📍 Место сбора", value=self.meeting_place.value, inline=True)
-                embed.add_field(name="🔢 Код группы", value=self.group_code.value, inline=True)
+                
                 embed.add_field(
-                    name="⏰ Сбор",
-                    value=f"<t:{meeting_timestamp}:t> (<t:{meeting_timestamp}:R>)",
+                    name="⏱️ Сбор в",
+                    value=f"**{meeting_time}** МСК",
                     inline=False
                 )
+                
+                embed.add_field(
+                    name="📍 Место сбора",
+                    value=self.meeting_place.value,
+                    inline=True
+                )
+                
+                embed.add_field(
+                    name="🔢 Код группы",
+                    value=self.group_code.value,
+                    inline=True
+                )
+                
+                embed.add_field(
+                    name="Участие:",
+                    value="Для участия зайди в игру, в войс и приедь на место сбора",
+                    inline=False
+                )
+                
                 embed.set_footer(text="Unit Management System by Nagga")
                 
                 await channel.send(embed=embed)
@@ -422,6 +432,3 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
             f"🔢 Код группы: {self.group_code.value}",
             ephemeral=True
         )
-        
-        # Обновляем сообщение с напоминанием
-        await self.update_reminder_message(interaction)

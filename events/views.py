@@ -39,30 +39,100 @@ class EventReminderView(discord.ui.View):
             if result and result[0]:
                 self.taken = True
                 button.disabled = True
-                # Обновляем embed с информацией кто взял
+                # Обновляем embed
                 embed = self.message.embeds[0]
-                embed.set_field_at(2, name="👥 Статус", value=f"✅ Взял: <@{result[0]}>", inline=False)
-                await self.message.edit(embed=embed, view=self)
+                embed.title = f"✅ СБОР НА МЕРОПРИЯТИЕ: {self.event_name}"
+                embed.description = f"Мероприятие проведёт: <@{result[0]}>"
+                embed.color = 0x00ff00
+                
+                # Обновляем поля
+                new_embed = discord.Embed(
+                    title=embed.title,
+                    description=embed.description,
+                    color=embed.color
+                )
+                
+                new_embed.add_field(
+                    name="⏱️ Сбор в",
+                    value=f"**{self.meeting_time}** МСК",
+                    inline=False
+                )
+                
+                new_embed.add_field(
+                    name="📍 Место сбора",
+                    value="Будет указано организатором",
+                    inline=True
+                )
+                
+                new_embed.add_field(
+                    name="🔢 Код группы",
+                    value="Будет указан организатором",
+                    inline=True
+                )
+                
+                new_embed.add_field(
+                    name="Участие:",
+                    value="Для участия зайди в игру, в войс и приедь на место сбора",
+                    inline=False
+                )
+                
+                new_embed.set_footer(text="Unit Management System by Nagga")
+                
+                await self.message.edit(embed=new_embed, view=self)
                 await interaction.response.send_message(f"❌ Уже взял <@{result[0]}>", ephemeral=True)
                 return
         
+        # Открываем модалку с передачей ссылки на этот view
         from admin.modals import TakeEventModal
-        modal = TakeEventModal(self.event_id, self.event_name, self.event_time, self.meeting_time)
+        modal = TakeEventModal(
+            self.event_id, 
+            self.event_name, 
+            self.event_time, 
+            self.meeting_time,
+            self  # Передаем ссылку на текущий view
+        )
         await interaction.response.send_modal(modal)
     
-    async def update_taken_status(self, user_id: str, user_name: str):
-        """Обновить статус после взятия МП"""
+    async def update_taken_status(self, user_id: str, user_name: str, group_code: str, meeting_place: str):
+        """Мгновенно обновить статус после взятия МП"""
         self.taken = True
         for child in self.children:
             child.disabled = True
         
         if self.message:
-            embed = self.message.embeds[0]
-            embed.title = f"✅ СБОР НА МЕРОПРИЯТИЕ: {self.event_name}"
-            embed.description = f"Мероприятие проведёт: <@{user_id}>"
-            embed.color = 0x00ff00
-            embed.set_field_at(2, name="👥 Статус", value=f"✅ Взял: <@{user_id}>", inline=False)
+            # Создаём новый embed с обновлённой информацией
+            embed = discord.Embed(
+                title=f"✅ СБОР НА МЕРОПРИЯТИЕ: {self.event_name}",
+                description=f"Мероприятие проведёт: <@{user_id}>",
+                color=0x00ff00
+            )
+            
+            embed.add_field(
+                name="⏱️ Сбор в",
+                value=f"**{self.meeting_time}** МСК",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="📍 Место сбора",
+                value=meeting_place,
+                inline=True
+            )
+            
+            embed.add_field(
+                name="🔢 Код группы",
+                value=group_code,
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Участие:",
+                value="Для участия зайди в игру, в войс и приедь на место сбора",
+                inline=False
+            )
+            
             embed.set_footer(text="Unit Management System by Nagga")
+            
             await self.message.edit(embed=embed, view=self)
     
     async def on_timeout(self):
