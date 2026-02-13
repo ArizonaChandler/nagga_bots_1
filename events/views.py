@@ -4,8 +4,8 @@ from datetime import datetime, timedelta
 import pytz
 from core.database import db
 from core.config import CONFIG
+from core.menus import BaseMenuView  # Импорт из core.menus
 from admin.modals import TakeEventModal
-from admin.views import BaseMenuView
 
 MSK_TZ = pytz.timezone('Europe/Moscow')
 
