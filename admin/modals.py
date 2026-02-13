@@ -1,113 +1,11 @@
-"""Admin Modals - Модальные окна для административных настроек"""
-import discord
-from core.database import db
-from core.config import CONFIG, save_config, SUPER_ADMIN_ID
-from core.utils import format_mention, is_super_admin
-
-class SetRoleModal(discord.ui.Modal, title="🎭 УСТАНОВИТЬ РОЛЬ CAPT"):
-    role_id = discord.ui.TextInput(label="ID роли", placeholder="123456789012345678")
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        CONFIG['capt_role_id'] = self.role_id.value
-        save_config(str(interaction.user.id))
-        db.log_action(str(interaction.user.id), "SET_CAPT_ROLE", f"Role ID: {self.role_id.value}")
-        await interaction.response.send_message(
-            f"✅ Роль CAPT: {format_mention(interaction.guild, self.role_id.value, 'role')}",
-            ephemeral=True
-        )
-
-class SetCaptChannelModal(discord.ui.Modal, title="💬 УСТАНОВИТЬ ЧАТ ОШИБОК"):
-    channel_id = discord.ui.TextInput(label="ID канала", placeholder="123456789012345678")
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        CONFIG['capt_channel_id'] = self.channel_id.value
-        save_config(str(interaction.user.id))
-        db.log_action(str(interaction.user.id), "SET_CAPT_CHANNEL", f"Channel ID: {self.channel_id.value}")
-        await interaction.response.send_message(
-            f"✅ Чат ошибок: {format_mention(interaction.guild, self.channel_id.value, 'channel')}",
-            ephemeral=True
-        )
-
-class SetServerModal(discord.ui.Modal, title="🌍 УСТАНОВИТЬ СЕРВЕР"):
-    server_id = discord.ui.TextInput(label="ID сервера", placeholder="123456789012345678")
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        CONFIG['server_id'] = self.server_id.value
-        save_config(str(interaction.user.id))
-        db.log_action(str(interaction.user.id), "SET_SERVER", f"Server ID: {self.server_id.value}")
-        await interaction.response.send_message(
-            f"✅ Сервер: `{self.server_id.value}`",
-            ephemeral=True
-        )
-
-class AddUserModal(discord.ui.Modal, title="👥 ДОБАВИТЬ ПОЛЬЗОВАТЕЛЯ"):
-    user_id = discord.ui.TextInput(label="ID пользователя", placeholder="123456789012345678")
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        if db.add_user(self.user_id.value, str(interaction.user.id)):
-            db.log_action(str(interaction.user.id), "ADD_USER", f"Added {self.user_id.value}")
-            await interaction.response.send_message(
-                f"✅ Добавлен: {format_mention(interaction.guild, self.user_id.value, 'user')}",
-                ephemeral=True
-            )
-        else:
-            await interaction.response.send_message("⚠️ Пользователь уже существует", ephemeral=True)
-
-class RemoveUserModal(discord.ui.Modal, title="❌ УДАЛИТЬ ПОЛЬЗОВАТЕЛЯ"):
-    user_id = discord.ui.TextInput(label="ID пользователя", placeholder="123456789012345678")
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        if db.remove_user(self.user_id.value):
-            db.log_action(str(interaction.user.id), "REMOVE_USER", f"Removed {self.user_id.value}")
-            await interaction.response.send_message(
-                f"✅ Удалён: {format_mention(interaction.guild, self.user_id.value, 'user')}",
-                ephemeral=True
-            )
-        else:
-            await interaction.response.send_message("⚠️ Пользователь не найден", ephemeral=True)
-
-class AddAdminModal(discord.ui.Modal, title="👑 ДОБАВИТЬ АДМИНИСТРАТОРА"):
-    user_id = discord.ui.TextInput(label="ID пользователя", placeholder="123456789012345678")
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        if not await is_super_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только супер-администратор", ephemeral=True)
-            return
-        
-        if db.add_admin(self.user_id.value, str(interaction.user.id)):
-            db.add_user(self.user_id.value, str(interaction.user.id))
-            db.log_action(str(interaction.user.id), "ADD_ADMIN", f"Added admin {self.user_id.value}")
-            await interaction.response.send_message(
-                f"✅ Администратор: {format_mention(interaction.guild, self.user_id.value, 'user')}",
-                ephemeral=True
-            )
-        else:
-            await interaction.response.send_message("⚠️ Пользователь уже администратор", ephemeral=True)
-
-class RemoveAdminModal(discord.ui.Modal, title="👑 УДАЛИТЬ АДМИНИСТРАТОРА"):
-    user_id = discord.ui.TextInput(label="ID пользователя", placeholder="123456789012345678")
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        if not await is_super_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только супер-администратор", ephemeral=True)
-            return
-        
-        if self.user_id.value == SUPER_ADMIN_ID:
-            await interaction.response.send_message("❌ Нельзя удалить супер-администратора", ephemeral=True)
-            return
-        
-        if db.remove_admin(self.user_id.value):
-            db.log_action(str(interaction.user.id), "REMOVE_ADMIN", f"Removed admin {self.user_id.value}")
-            await interaction.response.send_message(
-                f"✅ Администратор удалён: {format_mention(interaction.guild, self.user_id.value, 'user')}",
-                ephemeral=True
-            )
-        else:
-            await interaction.response.send_message("⚠️ Пользователь не является администратором", ephemeral=True)
-
 """Модальные окна для системы оповещений"""
+import discord
+from datetime import datetime
+from core.database import db
+from core.config import CONFIG, save_config
+from core.utils import format_mention, is_admin
 
-class SetAlarmChannelModal(discord.ui.Modal, title="🔔 УСТАНОВИТЬ ЧАТ ОПОВЕЩЕНИЙ"):
+class SetAlarmChannelModal(discord.ui.Modal, title="🔔 УСТАНОВИТЬ ЧАТ НАПОМИНАНИЙ"):
     channel_id = discord.ui.TextInput(
         label="ID канала",
         placeholder="123456789012345678",
@@ -119,7 +17,24 @@ class SetAlarmChannelModal(discord.ui.Modal, title="🔔 УСТАНОВИТЬ Ч
         save_config(str(interaction.user.id))
         db.log_action(str(interaction.user.id), "SET_ALARM_CHANNEL", f"Channel ID: {self.channel_id.value}")
         await interaction.response.send_message(
-            f"✅ Чат оповещений: {format_mention(interaction.guild, self.channel_id.value, 'channel')}",
+            f"✅ Чат напоминаний: {format_mention(interaction.guild, self.channel_id.value, 'channel')}",
+            ephemeral=True
+        )
+
+
+class SetAnnounceChannelModal(discord.ui.Modal, title="📢 УСТАНОВИТЬ КАНАЛ ОПОВЕЩЕНИЙ"):
+    channel_id = discord.ui.TextInput(
+        label="ID канала",
+        placeholder="123456789012345678",
+        max_length=20
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        CONFIG['announce_channel_id'] = self.channel_id.value
+        save_config(str(interaction.user.id))
+        db.log_action(str(interaction.user.id), "SET_ANNOUNCE_CHANNEL", f"Channel ID: {self.channel_id.value}")
+        await interaction.response.send_message(
+            f"✅ Канал оповещений: {format_mention(interaction.guild, self.channel_id.value, 'channel')}",
             ephemeral=True
         )
 
@@ -151,41 +66,49 @@ class AddEventModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕРОПРИ
             return
         
         try:
-            weekday = int(self.weekday.value)
-            if weekday < 0 or weekday > 6:
-                raise ValueError
-        except ValueError:
-            await interaction.response.send_message("❌ День недели должен быть числом от 0 до 6", ephemeral=True)
-            return
-        
-        try:
-            datetime.strptime(self.event_time.value, "%H:%M")
-        except ValueError:
-            await interaction.response.send_message("❌ Неверный формат времени. Используйте ЧЧ:ММ", ephemeral=True)
-            return
-        
-        event_id = db.add_event(
-            name=self.event_name.value,
-            weekday=weekday,
-            event_time=self.event_time.value,
-            created_by=str(interaction.user.id)
-        )
-        
-        db.log_event_action(event_id, "created", str(interaction.user.id), 
-                           f"Название: {self.event_name.value}, Время: {self.event_time.value}")
-        
-        days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-        embed = discord.Embed(
-            title="✅ Мероприятие добавлено",
-            color=0x00ff00,
-            timestamp=datetime.now()
-        )
-        embed.add_field(name="📌 Название", value=self.event_name.value, inline=True)
-        embed.add_field(name="📅 День", value=days[weekday], inline=True)
-        embed.add_field(name="⏰ Время", value=self.event_time.value, inline=True)
-        embed.add_field(name="🆔 ID", value=f"`{event_id}`", inline=False)
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            # Проверка дня недели
+            try:
+                weekday = int(self.weekday.value)
+                if weekday < 0 or weekday > 6:
+                    await interaction.response.send_message("❌ День недели должен быть от 0 до 6", ephemeral=True)
+                    return
+            except ValueError:
+                await interaction.response.send_message("❌ День недели должен быть числом", ephemeral=True)
+                return
+            
+            # Проверка времени
+            try:
+                datetime.strptime(self.event_time.value, "%H:%M")
+            except ValueError:
+                await interaction.response.send_message("❌ Неверный формат времени. Используйте ЧЧ:ММ", ephemeral=True)
+                return
+            
+            event_id = db.add_event(
+                name=self.event_name.value,
+                weekday=weekday,
+                event_time=self.event_time.value,
+                created_by=str(interaction.user.id)
+            )
+            
+            db.log_event_action(event_id, "created", str(interaction.user.id), 
+                               f"Название: {self.event_name.value}, Время: {self.event_time.value}")
+            
+            days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+            embed = discord.Embed(
+                title="✅ Мероприятие добавлено",
+                color=0x00ff00,
+                timestamp=datetime.now()
+            )
+            embed.add_field(name="📌 Название", value=self.event_name.value, inline=True)
+            embed.add_field(name="📅 День", value=days[weekday], inline=True)
+            embed.add_field(name="⏰ Время", value=self.event_time.value, inline=True)
+            embed.add_field(name="🆔 ID", value=f"`{event_id}`", inline=False)
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            
+        except Exception as e:
+            print(f"Ошибка в AddEventModal: {e}")
+            await interaction.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
 
 
 class EditEventModal(discord.ui.Modal, title="✏️ РЕДАКТИРОВАТЬ МЕРОПРИЯТИЕ"):
@@ -222,9 +145,10 @@ class EditEventModal(discord.ui.Modal, title="✏️ РЕДАКТИРОВАТЬ 
         try:
             weekday = int(self.weekday.value)
             if weekday < 0 or weekday > 6:
-                raise ValueError
+                await interaction.response.send_message("❌ День недели должен быть от 0 до 6", ephemeral=True)
+                return
         except ValueError:
-            await interaction.response.send_message("❌ День недели должен быть числом от 0 до 6", ephemeral=True)
+            await interaction.response.send_message("❌ День недели должен быть числом", ephemeral=True)
             return
         
         try:
@@ -252,7 +176,7 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
         self.event_id = event_id
         self.event_name = event_name
         self.event_time = event_time
-        self.meeting_time = meeting_time  # НОВОЕ: время сбора
+        self.meeting_time = meeting_time
         
     group_code = discord.ui.TextInput(
         label="🔢 Код группы",
@@ -267,7 +191,7 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
     )
     
     async def on_submit(self, interaction: discord.Interaction):
-        from datetime import datetime
+        from datetime import datetime, timedelta
         import pytz
         
         msk_tz = pytz.timezone('Europe/Moscow')
@@ -311,8 +235,8 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
         db.log_event_action(self.event_id, "taken", str(interaction.user.id),
                            f"Группа: {self.group_code.value}, Место: {self.meeting_place.value}")
         
-        # Отправляем в alarm чат
-        channel_id = CONFIG.get('alarm_channel_id')
+        # Отправляем в канал оповещений (или в канал напоминаний, если отдельный не настроен)
+        channel_id = CONFIG.get('announce_channel_id') or CONFIG.get('alarm_channel_id')
         if channel_id:
             channel = interaction.guild.get_channel(int(channel_id))
             if channel:

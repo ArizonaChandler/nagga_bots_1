@@ -17,8 +17,8 @@ CONFIG = {
     'user_token_1': os.getenv('DISCORD_USER_TOKEN_1'),
     'user_token_2': os.getenv('DISCORD_USER_TOKEN_2'),
     'super_admin_id': SUPER_ADMIN_ID,
-    # НОВОЕ: канал для оповещений
-    'alarm_channel_id': None
+    'alarm_channel_id': None,      # канал для напоминаний
+    'announce_channel_id': None    # канал для оповещений о взятии МП
 }
 
 def load_config():

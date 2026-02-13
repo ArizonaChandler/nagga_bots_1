@@ -69,6 +69,9 @@ class ScheduleEventModal(discord.ui.Modal, title="📅 ЗАПЛАНИРОВАТ�
             ''', (event_id, date_iso))
             conn.commit()
         
+        # Генерируем расписание на будущее
+        db.generate_schedule(days_ahead=14)
+        
         db.log_event_action(event_id, "scheduled", str(interaction.user.id),
                            f"Разовое на {self.event_date.value} {self.event_time.value}")
         

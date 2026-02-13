@@ -10,7 +10,7 @@ from mcl.modals import SetMclChannelModal, SetDualColorModal
 from admin.modals import *
 from files.core import file_manager
 from files.views import FilesView
-from events.views import EventInfoView  # Импорт для кнопки мероприятий
+from events.views import EventInfoView
 
 class MainView(discord.ui.View):
     def __init__(self, user_id: str, guild):
@@ -30,7 +30,6 @@ class MainView(discord.ui.View):
                 await i.response.send_message("📁 **Пока нет доступных файлов**", ephemeral=True)
                 return
             
-            # Создаём красивое описание файлов
             description = f"**📊 Всего доступно файлов: {total}**\n\n"
             
             for idx, (file_id, name, desc, size, uploader, uploaded_at, downloads) in enumerate(files[:5], 1):
@@ -53,7 +52,7 @@ class MainView(discord.ui.View):
         files_btn.callback = files_cb
         self.add_item(files_btn)
         
-        # ✅ 2. НОВАЯ КНОПКА МЕРОПРИЯТИЙ - ТОЖЕ ВИДНА ВСЕМ!
+        # ✅ 2. КНОПКА МЕРОПРИЯТИЙ - ТОЖЕ ВИДНА ВСЕМ!
         events_btn = discord.ui.Button(
             label="📅 Мероприятия",
             style=discord.ButtonStyle.secondary,
@@ -69,9 +68,9 @@ class MainView(discord.ui.View):
             )
             await i.response.send_message(embed=embed, view=view, ephemeral=True)
         events_btn.callback = events_cb
-        self.add_item(events_btn)  # ✅ Добавляем для ВСЕХ!
+        self.add_item(events_btn)
         
-        # ✅ 3. КНОПКИ ДЛЯ ПОЛЬЗОВАТЕЛЕЙ С ДОСТУПОМ (есть в базе)
+        # ✅ 3. КНОПКИ ДЛЯ ПОЛЬЗОВАТЕЛЕЙ С ДОСТУПОМ
         if db.user_exists(user_id):
             # CAPT
             capt_btn = discord.ui.Button(
@@ -103,24 +102,7 @@ class MainView(discord.ui.View):
             mcl_btn.callback = mcl_cb
             self.add_item(mcl_btn)
         
-        # ✅ 4. КНОПКИ ДЛЯ АДМИНИСТРАТОРОВ
-        if db.is_admin(user_id):
-            settings_btn = discord.ui.Button(
-                label="⚙️ Настройки",
-                style=discord.ButtonStyle.secondary,
-                emoji="⚙️",
-                row=2
-            )
-            async def settings_cb(i):
-                view = SettingsView(self.user_id, self.guild)
-                embed = discord.Embed(
-                    title="⚙️ **НАСТРОЙКИ СИСТЕМЫ**",
-                    description="Выберите раздел для настройки:",
-                    color=0x7289da
-                )
-                await i.response.send_message(embed=embed, view=view, ephemeral=True)
-            settings_btn.callback = settings_cb
-            self.add_item(settings_btn)
+        # КНОПКА НАСТРОЕК УБРАНА - теперь только через !settings
 
 
 class SettingsView(discord.ui.View):
@@ -257,10 +239,15 @@ class GlobalSettingsView(discord.ui.View):
                 color=0xffa500
             )
             
-            # Текущий канал оповещений
+            # Текущий канал напоминаний
             alarm_channel = CONFIG.get('alarm_channel_id')
             channel_info = format_mention(self.guild, alarm_channel, 'channel') if alarm_channel else "`Не установлен`"
-            embed.add_field(name="📢 Чат оповещений", value=channel_info, inline=False)
+            embed.add_field(name="🔔 Чат напоминаний", value=channel_info, inline=False)
+            
+            # Текущий канал оповещений
+            announce_channel = CONFIG.get('announce_channel_id')
+            channel_info2 = format_mention(self.guild, announce_channel, 'channel') if announce_channel else "`Не установлен (используется чат напоминаний)`"
+            embed.add_field(name="📢 Канал оповещений", value=channel_info2, inline=False)
             
             # Количество активных мероприятий
             events = db.get_events(enabled_only=True)
@@ -382,11 +369,11 @@ class EventSettingsView(discord.ui.View):
         self.user_id = user_id
         self.guild = guild
         
-        # Установить чат оповещений
+        # Установить чат напоминаний
         channel_btn = discord.ui.Button(
-            label="📢 Установить чат",
+            label="🔔 Чат напоминаний",
             style=discord.ButtonStyle.primary,
-            emoji="📢",
+            emoji="🔔",
             row=0
         )
         async def channel_cb(i):
@@ -394,12 +381,24 @@ class EventSettingsView(discord.ui.View):
         channel_btn.callback = channel_cb
         self.add_item(channel_btn)
         
+        # Установить канал оповещений
+        announce_btn = discord.ui.Button(
+            label="📢 Канал оповещений",
+            style=discord.ButtonStyle.primary,
+            emoji="📢",
+            row=0
+        )
+        async def announce_cb(i):
+            await i.response.send_modal(SetAnnounceChannelModal())
+        announce_btn.callback = announce_cb
+        self.add_item(announce_btn)
+        
         # Добавить мероприятие
         add_btn = discord.ui.Button(
             label="➕ Добавить МП",
             style=discord.ButtonStyle.success,
             emoji="➕",
-            row=0
+            row=1
         )
         async def add_cb(i):
             await i.response.send_modal(AddEventModal())
@@ -424,7 +423,7 @@ class EventSettingsView(discord.ui.View):
             label="📊 Статистика",
             style=discord.ButtonStyle.secondary,
             emoji="📊",
-            row=1
+            row=2
         )
         async def stats_cb(i):
             await send_event_stats(i, self.guild)
