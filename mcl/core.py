@@ -1,4 +1,4 @@
-"""DUAL MCL Core - Ожидание отправки обоих токенов"""
+"""DUAL MCL Core - С кнопкой отмены и блокировкой"""
 import aiohttp
 import asyncio
 import time
@@ -7,20 +7,51 @@ from datetime import datetime
 from core.database import db
 from core.config import CONFIG
 
-active_mcl_tasks = set()
+active_mcl_tasks = {}
+
+class CancelView(discord.ui.View):
+    """Кнопка отмены отправки (без таймаута)"""
+    def __init__(self, task_id: int, user_id: str):
+        super().__init__(timeout=None)  # ← Изменено: теперь бесконечно
+        self.task_id = task_id
+        self.user_id = user_id
+    
+    @discord.ui.button(label="❌ ОТМЕНИТЬ", style=discord.ButtonStyle.danger, emoji="🛑")
+    async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if str(interaction.user.id) != self.user_id:
+            await interaction.response.send_message("❌ Только запустивший может отменить", ephemeral=True)
+            return
+        
+        if self.task_id in active_mcl_tasks:
+            active_mcl_tasks[self.task_id]['cancelled'] = True
+            button.disabled = True
+            await interaction.response.edit_message(
+                content="🛑 Отправка остановлена",
+                embed=None,
+                view=None
+            )
+        else:
+            await interaction.response.send_message("❌ Задача уже завершена", ephemeral=True)
 
 class DualMCLCore:
     __slots__ = (
         'sessions', 'session_locks', 'headers_cache', 'last_tokens',
         'payload_cache', 'last_messages', 'last_channel', 
-        'stats', 'token_colors', 'current_sender', 'sending_lock'
+        'stats', 'token_colors', 'current_sender', 'sending_lock',
+        'connectors'
     )
     
     def __init__(self):
+        self.connectors = {
+            1: aiohttp.TCPConnector(limit=0, ttl_dns_cache=3600, force_close=False, ssl=False),
+            2: aiohttp.TCPConnector(limit=0, ttl_dns_cache=3600, force_close=False, ssl=False)
+        }
+        
         self.sessions = {1: None, 2: None}
         self.session_locks = {1: asyncio.Lock(), 2: asyncio.Lock()}
         self.current_sender = None
         self.sending_lock = asyncio.Lock()
+        
         self.headers_cache = {1: None, 2: None}
         self.last_tokens = {1: None, 2: None}
         self.payload_cache = {1: None, 2: None}
@@ -32,7 +63,7 @@ class DualMCLCore:
             2: {'success': 0, 'failed': 0, 'total_attempts': 0}
         }
         self.token_colors = {1: 'Pink', 2: 'Blue'}
-        print("⚡ DUAL MCL Core (RELIABLE MODE) инициализирован")
+        print("⚡ DUAL MCL Core (CANCELABLE) инициализирован")
     
     async def get_session(self, token_id: int):
         if self.sessions[token_id] and not self.sessions[token_id].closed:
@@ -41,9 +72,9 @@ class DualMCLCore:
         async with self.session_locks[token_id]:
             if self.sessions[token_id] is None or self.sessions[token_id].closed:
                 self.sessions[token_id] = aiohttp.ClientSession(
-                    connector=aiohttp.TCPConnector(limit=0, ttl_dns_cache=3600),
+                    connector=self.connectors[token_id],
                     headers={'User-Agent': 'Mozilla/5.0'},
-                    timeout=aiohttp.ClientTimeout(total=3)
+                    timeout=aiohttp.ClientTimeout(total=10)
                 )
             return self.sessions[token_id]
     
@@ -70,38 +101,48 @@ class DualMCLCore:
         self.last_channel = CONFIG['channel_id']
         return payload
     
-    async def _send_with_retry(self, token_id: int, max_attempts: int = 5):
-        """Отправка с повторными попытками до успеха"""
+    async def _send_infinite(self, token_id: int, task_id: int):
+        """Бесконечная отправка до первого успеха с проверкой отмены"""
         url = f'https://discord.com/api/v9/channels/{CONFIG["channel_id"]}/messages'
         session = await self.get_session(token_id)
         headers = self.prepare_headers(token_id)
         payload = self.prepare_payload(token_id)
         
-        for attempt in range(max_attempts):
+        attempt = 0
+        start_time = time.time()
+        
+        while True:
+            # Проверяем, не отменили ли задачу
+            if task_id in active_mcl_tasks and active_mcl_tasks[task_id].get('cancelled', False):
+                return False, attempt, time.time() - start_time, True  # True = отменено
+            
+            attempt += 1
             try:
                 async with session.post(url, json=payload, headers=headers) as resp:
                     self.stats[token_id]['total_attempts'] += 1
                     
                     if resp.status == 200:
                         self.stats[token_id]['success'] += 1
-                        return True, attempt + 1
+                        elapsed = time.time() - start_time
+                        return True, attempt, elapsed, False
+                    
                     elif resp.status == 429:
                         data = await resp.json()
                         retry_after = float(data.get('retry_after', 1))
                         await asyncio.sleep(retry_after)
                     else:
                         self.stats[token_id]['failed'] += 1
-                        await asyncio.sleep(0.5)
-            except Exception:
+                        await asyncio.sleep(0.1)
+                        
+            except Exception as e:
                 self.stats[token_id]['failed'] += 1
-                await asyncio.sleep(0.5)
-        
-        return False, max_attempts
+                await asyncio.sleep(0.1)
     
     async def send_dual(self, interaction):
-        """Отправка с ожиданием обоих токенов"""
+        """Отправка с возможностью отмены"""
         user_id = str(interaction.user.id)
         
+        # Блокируем повторный запуск
         async with self.sending_lock:
             if self.current_sender and self.current_sender != user_id:
                 await interaction.response.send_message(
@@ -112,8 +153,8 @@ class DualMCLCore:
             self.current_sender = user_id
         
         task_id = id(asyncio.current_task())
-        active_mcl_tasks.add(task_id)
-        start_time = time.time()
+        active_mcl_tasks[task_id] = {'cancelled': False, 'user': user_id}
+        overall_start = time.time()
         
         try:
             if not CONFIG['user_token_1'] or not CONFIG['user_token_2']:
@@ -124,48 +165,87 @@ class DualMCLCore:
                 await interaction.response.send_message("❌ Канал не настроен", ephemeral=True)
                 return False
             
-            await interaction.response.send_message("🚀 **DUAL MCL** | Ожидание отправки...", ephemeral=True)
-            
-            task1 = asyncio.create_task(self._send_with_retry(1))
-            task2 = asyncio.create_task(self._send_with_retry(2))
-            
-            result1, result2 = await asyncio.gather(task1, task2)
-            
-            elapsed = time.time() - start_time
-            success1, attempts1 = result1
-            success2, attempts2 = result2
-            
+            # Отправляем сообщение с кнопкой отмены
             embed = discord.Embed(
-                title="✅ DUAL MCL",
-                color=0x00ff00,
-                timestamp=datetime.now()
+                title="🚀 DUAL MCL",
+                description=f"Запущено: {interaction.user.mention}\nОжидание отправки...",
+                color=0xffa500
             )
+            cancel_view = CancelView(task_id, user_id)
+            await interaction.response.send_message(embed=embed, view=cancel_view, ephemeral=True)
             
-            embed.add_field(
-                name=f"🎨 {self.token_colors[1]}",
-                value=f"{'✅' if success1 else '❌'} (попыток: {attempts1})",
-                inline=True
-            )
-            embed.add_field(
-                name=f"🎨 {self.token_colors[2]}",
-                value=f"{'✅' if success2 else '❌'} (попыток: {attempts2})",
-                inline=True
-            )
-            embed.add_field(
-                name="⚡",
-                value=f"⏱️ {elapsed:.3f}с",
-                inline=False
-            )
+            # Запускаем бесконечные попытки
+            task1 = asyncio.create_task(self._send_infinite(1, task_id))
+            task2 = asyncio.create_task(self._send_infinite(2, task_id))
             
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            db.log_command('MCL_DUAL', user_id, True, details=f'{elapsed:.3f}с')
+            # Ждем результаты
+            results = await asyncio.gather(task1, task2)
+            
+            total_elapsed = time.time() - overall_start
+            success1, attempts1, time1, cancelled1 = results[0]
+            success2, attempts2, time2, cancelled2 = results[1]
+            
+            # Проверяем, не была ли отправка отменена
+            if cancelled1 or cancelled2 or (task_id in active_mcl_tasks and active_mcl_tasks[task_id].get('cancelled', False)):
+                # Отмена - показываем красный embed
+                result_embed = discord.Embed(
+                    title="🛑 ОТПРАВКА ОСТАНОВЛЕНА",
+                    description=f"Пользователь {interaction.user.mention} остановил отправку",
+                    color=0xff0000,
+                    timestamp=datetime.now()
+                )
+                result_embed.add_field(
+                    name=f"🎨 {self.token_colors[1]}",
+                    value=f"{'✅' if success1 else '❌'} (попыток: {attempts1})",
+                    inline=True
+                )
+                result_embed.add_field(
+                    name=f"🎨 {self.token_colors[2]}",
+                    value=f"{'✅' if success2 else '❌'} (попыток: {attempts2})",
+                    inline=True
+                )
+            else:
+                # Успешная отправка - зелёный embed
+                result_embed = discord.Embed(
+                    title="✅ DUAL MCL",
+                    color=0x00ff00,
+                    timestamp=datetime.now()
+                )
+                result_embed.add_field(
+                    name=f"🎨 {self.token_colors[1]}",
+                    value=f"{'✅' if success1 else '❌'} (попыток: {attempts1}, ⏱️ {time1:.2f}с)",
+                    inline=False
+                )
+                result_embed.add_field(
+                    name=f"🎨 {self.token_colors[2]}",
+                    value=f"{'✅' if success2 else '❌'} (попыток: {attempts2}, ⏱️ {time2:.2f}с)",
+                    inline=False
+                )
+                result_embed.add_field(
+                    name="⚡ Общее время",
+                    value=f"⏱️ {total_elapsed:.3f}с",
+                    inline=False
+                )
+            
+            # Редактируем сообщение (убираем кнопку)
+            await interaction.edit_original_response(embed=result_embed, view=None)
+            
+            db.log_command('MCL_DUAL', user_id, True, 
+                          details=f'Попытки: {attempts1}/{attempts2}, Время: {total_elapsed:.2f}с')
             return True
             
         except Exception as e:
+            error_embed = discord.Embed(
+                title="❌ ОШИБКА",
+                description=str(e),
+                color=0xff0000
+            )
+            await interaction.edit_original_response(embed=error_embed, view=None)
             db.log_command('MCL_DUAL', user_id, False, details=str(e))
             return False
         finally:
-            active_mcl_tasks.discard(task_id)
+            if task_id in active_mcl_tasks:
+                del active_mcl_tasks[task_id]
             async with self.sending_lock:
                 self.current_sender = None
 
