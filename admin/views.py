@@ -142,8 +142,26 @@ class SettingsView(BaseMenuView):
         global_btn.callback = global_cb
         self.add_item(global_btn)
         
-        # ✅ Добавляем кнопку "Назад"
-        self.add_back_button()
+        # ✅ КНОПКА "НАЗАД" - ВОЗВРАТ В ГЛАВНОЕ МЕНЮ АДМИНКИ
+        back_btn = discord.ui.Button(
+            label="◀ Назад",
+            style=discord.ButtonStyle.secondary,
+            emoji="◀",
+            row=4
+        )
+        async def back_cb(i):
+            # Возвращаемся в главное меню админки (AdminSettingsView)
+            from commands.settings import AdminSettingsView
+            embed = discord.Embed(
+                title="⚙️ **ПАНЕЛЬ АДМИНИСТРАТОРА**",
+                description="Выберите раздел для настройки:",
+                color=0x7289da,
+                timestamp=datetime.now()
+            )
+            view = AdminSettingsView(self.user_id, self.guild)
+            await i.response.edit_message(embed=embed, view=view)
+        back_btn.callback = back_cb
+        self.add_item(back_btn)
     
     def get_current_embed(self):
         embed = discord.Embed(
