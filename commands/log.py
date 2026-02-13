@@ -1,28 +1,41 @@
-"""Команда !info - главное меню с кнопками (ОДНО ОКНО)"""
+"""Команда !log - просмотр логов (супер-админ, только ЛС)"""
 import discord
+from datetime import datetime
 from core.database import db
-from admin.views import MainView
+from core.utils import format_mention, is_super_admin
 
 def setup(bot):
-    @bot.command(name='info')
-    async def info(ctx):
+    @bot.command(name='log')  # ✅ ИСПРАВЛЕНО: теперь 'log', а не 'info'
+    async def log(ctx):
         user_id = str(ctx.author.id)
         
-        db.update_last_used(user_id)
+        if ctx.guild is not None:
+            return
+        
+        if not await is_super_admin(user_id):
+            return
+        
+        logs = db.get_recent_logs(20)
+        if not logs:
+            await ctx.author.send("📋 **Логи отсутствуют**")
+            return
         
         embed = discord.Embed(
-            title="🤖 **UNIT MANAGEMENT SYSTEM**",
-            color=0x7289da
+            title="📋 **ПОСЛЕДНИЕ ДЕЙСТВИЯ**",
+            color=0x7289da,
+            timestamp=datetime.now()
         )
-        embed.set_footer(text="📁 Полезные файлы доступны всем")
         
-        view = MainView(user_id, ctx.guild)
+        lines = []
+        for ts, uid, act, det in logs:
+            time_str = ts.split('.')[0][-8:] if '.' in ts else ts[-8:]
+            user = format_mention(ctx.guild, uid, 'user')
+            line = f"`[{time_str}]` {user} → **{act}**"
+            if det:
+                line += f" *({det})*"
+            lines.append(line)
         
-        if ctx.guild is None:
-            # В ЛС отправляем новое сообщение
-            await ctx.author.send(embed=embed, view=view)
-        else:
-            # На сервере отправляем новое сообщение
-            await ctx.channel.send(embed=embed, view=view)
+        embed.description = "\n".join(lines)
+        embed.set_footer(text=f"Всего записей: {len(logs)}")
         
-        db.log_action(user_id, "INFO_SENT", "Успешно")
+        await ctx.author.send(embed=embed)

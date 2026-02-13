@@ -1,7 +1,6 @@
 """Команда !info - главное меню с кнопками"""
 import discord
 from core.database import db
-from core.utils import has_access
 from admin.views import MainView
 
 def setup(bot):
@@ -9,8 +8,7 @@ def setup(bot):
     async def info(ctx):
         user_id = str(ctx.author.id)
         
-        # ✅ ДАЖЕ без доступа - показываем файлы!
-        db.update_last_used(user_id)  # Обновляем статистику если есть
+        db.update_last_used(user_id)
         
         embed = discord.Embed(
             title="🤖 **UNIT MANAGEMENT SYSTEM**",
