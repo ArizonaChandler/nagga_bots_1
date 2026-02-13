@@ -195,9 +195,18 @@ class AddEventModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕРОПРИ
                 await interaction.response.send_message("❌ Неверный формат времени. Используйте ЧЧ:ММ", ephemeral=True)
                 return
             
+            # ✅ ИСПРАВЛЕНО: сохраняем результат в переменную
+            new_event_id = db.add_event(
+                name=self.event_name.value,
+                weekday=weekday,
+                event_time=self.event_time.value,
+                created_by=str(interaction.user.id)
+            )
+            
+            # Немедленно генерируем расписание
             db.generate_schedule(days_ahead=14)
             
-            db.log_event_action(event_id, "created", str(interaction.user.id), 
+            db.log_event_action(new_event_id, "created", str(interaction.user.id), 
                                f"Название: {self.event_name.value}, Время: {self.event_time.value}")
             
             days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
@@ -209,7 +218,7 @@ class AddEventModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕРОПРИ
             embed.add_field(name="📌 Название", value=self.event_name.value, inline=True)
             embed.add_field(name="📅 День", value=days[weekday], inline=True)
             embed.add_field(name="⏰ Время", value=self.event_time.value, inline=True)
-            embed.add_field(name="🆔 ID", value=f"`{event_id}`", inline=False)
+            embed.add_field(name="🆔 ID", value=f"`{new_event_id}`", inline=False)
             
             await interaction.response.send_message(embed=embed, ephemeral=True)
             

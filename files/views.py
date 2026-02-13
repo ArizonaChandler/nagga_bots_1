@@ -1,20 +1,24 @@
 import discord
 from datetime import datetime
 from files.core import file_manager
+from core.menus import BaseMenuView
 
-class FilesView(discord.ui.View):
-    def __init__(self, user_id: str, page: int = 1):
-        super().__init__(timeout=120)
-        self.user_id = user_id
+class FilesView(BaseMenuView):
+    def __init__(self, user_id: str, page: int = 1, previous_view=None, previous_embed=None):
+        super().__init__(user_id, None, previous_view, previous_embed)
         self.page = page
         self.files = []
         self.total = 0
         self.max_page = 1
+        self.message = None
         self.load_files()
     
     def load_files(self):
         self.files, self.total = file_manager.get_files(self.page, per_page=5)
         self.max_page = (self.total + 4) // 5 if self.total > 0 else 1
+        self.update_buttons()
+    
+    def update_buttons(self):
         self.clear_items()
         
         for i, (file_id, name, desc, size, uploader, uploaded_at, downloads) in enumerate(self.files, 1):
@@ -45,22 +49,48 @@ class FilesView(discord.ui.View):
             btn.callback = callback
             self.add_item(btn)
         
+        # Пагинация
         if self.page > 1:
             prev_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary)
             async def prev_cb(interaction):
-                await interaction.response.edit_message(view=FilesView(self.user_id, self.page - 1))
+                self.page -= 1
+                self.load_files()
+                embed = self.create_embed()
+                await interaction.response.edit_message(embed=embed, view=self)
             prev_btn.callback = prev_cb
             self.add_item(prev_btn)
         
         if self.page < self.max_page:
             next_btn = discord.ui.Button(label="Вперёд ▶", style=discord.ButtonStyle.secondary)
             async def next_cb(interaction):
-                await interaction.response.edit_message(view=FilesView(self.user_id, self.page + 1))
+                self.page += 1
+                self.load_files()
+                embed = self.create_embed()
+                await interaction.response.edit_message(embed=embed, view=self)
             next_btn.callback = next_cb
             self.add_item(next_btn)
+        
+        # Кнопка "Назад" в главное меню
+        self.add_back_button(row=4)
     
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if str(interaction.user.id) != self.user_id:
-            await interaction.response.send_message("❌ Это меню вызвано другим пользователем", ephemeral=True)
-            return False
-        return True
+    def create_embed(self):
+        description = f"**📊 Всего доступно файлов: {self.total}**\n\n"
+        for idx, (file_id, name, desc, size, uploader, uploaded_at, downloads) in enumerate(self.files, 1):
+            size_str = f"{size / 1024:.1f} КБ" if size < 1024*1024 else f"{size / (1024*1024):.1f} МБ"
+            date_str = uploaded_at[:10] if uploaded_at else "?"
+            description += f"**{idx}. {name}**\n"
+            description += f"   📝 {desc[:100]}{'...' if len(desc) > 100 else ''}\n"
+            description += f"   📦 {size_str} | ⬇️ {downloads} | 📅 {date_str}\n\n"
+        
+        embed = discord.Embed(
+            title="📁 **ПОЛЕЗНЫЕ ФАЙЛЫ**",
+            description=description,
+            color=0x00ff00
+        )
+        embed.set_footer(text=f"Страница {self.page}/{self.max_page} • Нажмите кнопку для скачивания")
+        return embed
+    
+    async def send_initial(self, interaction):
+        embed = self.create_embed()
+        await interaction.response.edit_message(embed=embed, view=self)
+        self.message = await interaction.original_response()

@@ -4,7 +4,7 @@ from datetime import datetime
 from core.database import db
 from core.config import CONFIG
 from core.utils import format_mention, get_server_name, is_super_admin, has_access
-from core.menus import BaseMenuView  # Импорт из core.menus
+from core.menus import BaseMenuView
 from capt.modals import CaptModal
 from mcl.core import dual_mcl_core
 from mcl.modals import SetMclChannelModal, SetDualColorModal
@@ -33,23 +33,8 @@ class MainView(BaseMenuView):
                 await i.response.send_message("📁 **Пока нет доступных файлов**", ephemeral=True)
                 return
             
-            description = f"**📊 Всего доступно файлов: {total}**\n\n"
-            for idx, (file_id, name, desc, size, uploader, uploaded_at, downloads) in enumerate(files[:5], 1):
-                size_str = f"{size / 1024:.1f} КБ" if size < 1024*1024 else f"{size / (1024*1024):.1f} МБ"
-                date_str = uploaded_at[:10] if uploaded_at else "?"
-                description += f"**{idx}. {name}**\n"
-                description += f"   📝 {desc[:100]}{'...' if len(desc) > 100 else ''}\n"
-                description += f"   📦 {size_str} | ⬇️ {downloads} | 📅 {date_str}\n\n"
-            
-            embed = discord.Embed(
-                title="📁 **ПОЛЕЗНЫЕ ФАЙЛЫ**",
-                description=description,
-                color=0x00ff00
-            )
-            embed.set_footer(text=f"Страница 1/{((total-1)//5)+1} • Нажмите кнопку для скачивания")
-            
-            view = FilesView(str(i.user.id), page=1)
-            await i.response.edit_message(embed=embed, view=view)
+            view = FilesView(str(i.user.id), page=1, previous_view=self, previous_embed=self.get_current_embed())
+            await view.send_initial(i)
         files_btn.callback = files_cb
         self.add_item(files_btn)
         
@@ -218,7 +203,7 @@ class GlobalSettingsView(BaseMenuView):
         
         users_btn = discord.ui.Button(label="👥 Управление доступом", style=discord.ButtonStyle.secondary)
         async def users_cb(i):
-            view = AccessView(self.user_id, self.guild, self, self.get_current_embed())
+            view = AccessView(self.user_id, self.guild, self, await self.get_current_embed())
             embed = discord.Embed(title="👥 **УПРАВЛЕНИЕ ДОСТУПОМ**", color=0x7289da)
             await i.response.edit_message(embed=embed, view=view)
         users_btn.callback = users_cb
@@ -229,7 +214,7 @@ class GlobalSettingsView(BaseMenuView):
             if not await is_super_admin(str(i.user.id)):
                 await i.response.send_message("❌ Только супер-администратор", ephemeral=True)
                 return
-            view = AdminView(self.user_id, self.guild, self, self.get_current_embed())
+            view = AdminView(self.user_id, self.guild, self, await self.get_current_embed())
             embed = discord.Embed(title="👑 **УПРАВЛЕНИЕ АДМИНИСТРАТОРАМИ**", color=0xffd700)
             await i.response.edit_message(embed=embed, view=view)
         admin_btn.callback = admin_cb
@@ -242,7 +227,7 @@ class GlobalSettingsView(BaseMenuView):
             row=1
         )
         async def alarm_cb(i):
-            view = EventSettingsView(self.user_id, self.guild, self, self.get_current_embed())
+            view = EventSettingsView(self.user_id, self.guild, self, await self.get_current_embed())
             embed = discord.Embed(
                 title="🔔 **СИСТЕМА ОПОВЕЩЕНИЙ**",
                 description="Управление автоматическими напоминаниями о мероприятиях",
@@ -266,8 +251,8 @@ class GlobalSettingsView(BaseMenuView):
         
         self.add_back_button()
     
-    def get_current_embed(self):
-        server_name = get_server_name(self.guild, CONFIG.get('server_id'))
+    async def get_current_embed(self):
+        server_name = await get_server_name(self.guild, CONFIG.get('server_id'))
         embed = discord.Embed(
             title="🌍 **ГЛОБАЛЬНЫЕ НАСТРОЙКИ**",
             description=f"**Текущие настройки:**\n🌍 Сервер: {server_name}",
@@ -400,14 +385,14 @@ class EventSettingsView(BaseMenuView):
         
         list_btn = discord.ui.Button(label="📋 Список МП", style=discord.ButtonStyle.secondary, emoji="📋", row=1)
         async def list_cb(i):
-            view = EventsListView(self.user_id, self.guild, page=1, previous_view=self, previous_embed=self.get_current_embed())
+            view = EventsListView(self.user_id, self.guild, page=1, previous_view=self, previous_embed=await self.get_current_embed())
             await view.send_initial(i)
         list_btn.callback = list_cb
         self.add_item(list_btn)
         
         stats_btn = discord.ui.Button(label="📊 Статистика", style=discord.ButtonStyle.secondary, emoji="📊", row=2)
         async def stats_cb(i):
-            await send_event_stats(i, self.guild, self, self.get_current_embed())
+            await send_event_stats(i, self.guild, self, await self.get_current_embed())
         stats_btn.callback = stats_cb
         self.add_item(stats_btn)
         
@@ -420,7 +405,7 @@ class EventSettingsView(BaseMenuView):
         
         self.add_back_button()
     
-    def get_current_embed(self):
+    async def get_current_embed(self):
         embed = discord.Embed(
             title="🔔 **СИСТЕМА ОПОВЕЩЕНИЙ**",
             description="Управление автоматическими напоминаниями о мероприятиях",
@@ -588,16 +573,33 @@ class ConfirmDeleteView(BaseMenuView):
     
     @discord.ui.button(label="✅ Да, удалить", style=discord.ButtonStyle.danger)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        db.delete_event(self.event_id)
-        db.log_event_action(self.event_id, "deleted", str(interaction.user.id))
-        await interaction.response.edit_message(
-            content=f"🗑️ Мероприятие **{self.event_name}** удалено",
-            embed=None,
-            view=None
-        )
+        # Удаляем мероприятие
+        success = db.delete_event(self.event_id)
+        
+        if success:
+            db.log_event_action(self.event_id, "deleted", str(interaction.user.id))
+            
+            # Возвращаемся к списку мероприятий
+            from admin.views import EventsListView
+            view = EventsListView(
+                self.user_id, 
+                interaction.guild, 
+                page=1, 
+                previous_view=self.previous_view, 
+                previous_embed=self.previous_embed
+            )
+            embed = view.create_embed()
+            await interaction.response.edit_message(embed=embed, view=view)
+        else:
+            await interaction.response.edit_message(
+                content="❌ Не удалось удалить мероприятие",
+                embed=None,
+                view=None
+            )
     
     @discord.ui.button(label="❌ Отмена", style=discord.ButtonStyle.secondary)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Возвращаемся к деталям мероприятия
         await interaction.response.edit_message(
             embed=self.previous_embed,
             view=self.previous_view

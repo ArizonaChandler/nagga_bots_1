@@ -52,7 +52,7 @@ class ScheduleEventModal(discord.ui.Modal, title="📅 ЗАПЛАНИРОВАТ�
             return
         
         # Создаём временное мероприятие
-        event_id = db.add_event(
+        new_event_id = db.add_event(
             name=f"[РАЗОВОЕ] {self.event_name.value}",
             weekday=weekday,
             event_time=self.event_time.value,
@@ -66,13 +66,13 @@ class ScheduleEventModal(discord.ui.Modal, title="📅 ЗАПЛАНИРОВАТ�
                 INSERT OR REPLACE INTO event_schedule 
                 (event_id, scheduled_date, reminder_sent)
                 VALUES (?, ?, 0)
-            ''', (event_id, date_iso))
+            ''', (new_event_id, date_iso))
             conn.commit()
         
         # Генерируем расписание на будущее
         db.generate_schedule(days_ahead=14)
         
-        db.log_event_action(event_id, "scheduled", str(interaction.user.id),
+        db.log_event_action(new_event_id, "scheduled", str(interaction.user.id),
                            f"Разовое на {self.event_date.value} {self.event_time.value}")
         
         await interaction.response.send_message(
