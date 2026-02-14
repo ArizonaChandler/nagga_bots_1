@@ -392,7 +392,7 @@ class EventSettingsView(BaseMenuView):
             row=0
         )
         async def alarm_channels_cb(i):
-            await i.response.send_modal(SetAlarmChannelsModal())
+            await i.response.send_modal(SetAlarmChannelsModal(self.guild))  # ← передаём guild
         alarm_channels_btn.callback = alarm_channels_cb
         self.add_item(alarm_channels_btn)
         
@@ -404,7 +404,7 @@ class EventSettingsView(BaseMenuView):
             row=0
         )
         async def announce_channels_cb(i):
-            await i.response.send_modal(SetAnnounceChannelsModal())
+            await i.response.send_modal(SetAnnounceChannelsModal(self.guild))  # ← передаём guild
         announce_channels_btn.callback = announce_channels_cb
         self.add_item(announce_channels_btn)
         
@@ -416,7 +416,7 @@ class EventSettingsView(BaseMenuView):
             row=1
         )
         async def reminder_roles_cb(i):
-            await i.response.send_modal(SetReminderRolesModal())
+            await i.response.send_modal(SetReminderRolesModal(self.guild))  # ← передаём guild
         reminder_roles_btn.callback = reminder_roles_cb
         self.add_item(reminder_roles_btn)
         
@@ -428,7 +428,7 @@ class EventSettingsView(BaseMenuView):
             row=1
         )
         async def announce_roles_cb(i):
-            await i.response.send_modal(SetAnnounceRolesModal())
+            await i.response.send_modal(SetAnnounceRolesModal(self.guild))  # ← передаём guild
         announce_roles_btn.callback = announce_roles_cb
         self.add_item(announce_roles_btn)
         
