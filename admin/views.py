@@ -384,45 +384,106 @@ class EventSettingsView(BaseMenuView):
     def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
         super().__init__(user_id, guild, previous_view, previous_embed)
         
-        channel_btn = discord.ui.Button(label="🔔 Чат напоминаний", style=discord.ButtonStyle.primary, emoji="🔔", row=0)
-        async def channel_cb(i):
-            await i.response.send_modal(SetAlarmChannelModal())
-        channel_btn.callback = channel_cb
-        self.add_item(channel_btn)
+        # Каналы напоминаний
+        alarm_channels_btn = discord.ui.Button(
+            label="🔔 Каналы напоминаний",
+            style=discord.ButtonStyle.primary,
+            emoji="🔔",
+            row=0
+        )
+        async def alarm_channels_cb(i):
+            await i.response.send_modal(SetAlarmChannelsModal())
+        alarm_channels_btn.callback = alarm_channels_cb
+        self.add_item(alarm_channels_btn)
         
-        announce_btn = discord.ui.Button(label="📢 Канал оповещений", style=discord.ButtonStyle.primary, emoji="📢", row=0)
-        async def announce_cb(i):
-            await i.response.send_modal(SetAnnounceChannelModal())
-        announce_btn.callback = announce_cb
-        self.add_item(announce_btn)
+        # Каналы оповещений
+        announce_channels_btn = discord.ui.Button(
+            label="📢 Каналы оповещений",
+            style=discord.ButtonStyle.primary,
+            emoji="📢",
+            row=0
+        )
+        async def announce_channels_cb(i):
+            await i.response.send_modal(SetAnnounceChannelsModal())
+        announce_channels_btn.callback = announce_channels_cb
+        self.add_item(announce_channels_btn)
         
-        add_btn = discord.ui.Button(label="➕ Добавить МП", style=discord.ButtonStyle.success, emoji="➕", row=1)
+        # Роли для напоминаний
+        reminder_roles_btn = discord.ui.Button(
+            label="🔔 Роли (напоминания)",
+            style=discord.ButtonStyle.secondary,
+            emoji="👥",
+            row=1
+        )
+        async def reminder_roles_cb(i):
+            await i.response.send_modal(SetReminderRolesModal())
+        reminder_roles_btn.callback = reminder_roles_cb
+        self.add_item(reminder_roles_btn)
+        
+        # Роли для оповещений
+        announce_roles_btn = discord.ui.Button(
+            label="📢 Роли (оповещения)",
+            style=discord.ButtonStyle.secondary,
+            emoji="👥",
+            row=1
+        )
+        async def announce_roles_cb(i):
+            await i.response.send_modal(SetAnnounceRolesModal())
+        announce_roles_btn.callback = announce_roles_cb
+        self.add_item(announce_roles_btn)
+        
+        # Добавить МП
+        add_btn = discord.ui.Button(
+            label="➕ Добавить МП",
+            style=discord.ButtonStyle.success,
+            emoji="➕",
+            row=2
+        )
         async def add_cb(i):
             await i.response.send_modal(AddEventModal())
         add_btn.callback = add_cb
         self.add_item(add_btn)
         
-        list_btn = discord.ui.Button(label="📋 Список МП", style=discord.ButtonStyle.secondary, emoji="📋", row=1)
+        # Список МП
+        list_btn = discord.ui.Button(
+            label="📋 Список МП",
+            style=discord.ButtonStyle.secondary,
+            emoji="📋",
+            row=2
+        )
         async def list_cb(i):
             view = EventsListView(self.user_id, self.guild, page=1, previous_view=self, previous_embed=await self.get_current_embed())
             await view.send_initial(i)
         list_btn.callback = list_cb
         self.add_item(list_btn)
         
-        stats_btn = discord.ui.Button(label="📊 Статистика", style=discord.ButtonStyle.secondary, emoji="📊", row=2)
+        # Статистика
+        stats_btn = discord.ui.Button(
+            label="📊 Статистика",
+            style=discord.ButtonStyle.secondary,
+            emoji="📊",
+            row=3
+        )
         async def stats_cb(i):
             await send_event_stats(i, self.guild, self, await self.get_current_embed())
         stats_btn.callback = stats_cb
         self.add_item(stats_btn)
         
-        one_time_btn = discord.ui.Button(label="📅 Разовое МП", style=discord.ButtonStyle.secondary, emoji="📅", row=2)
+        # Разовое МП
+        one_time_btn = discord.ui.Button(
+            label="📅 Разовое МП",
+            style=discord.ButtonStyle.secondary,
+            emoji="📅",
+            row=3
+        )
         async def one_time_cb(i):
             from events.modals import ScheduleEventModal
             await i.response.send_modal(ScheduleEventModal())
         one_time_btn.callback = one_time_cb
         self.add_item(one_time_btn)
         
-        self.add_back_button()
+        # Кнопка "Назад"
+        self.add_back_button(row=4)
     
     async def get_current_embed(self):
         embed = discord.Embed(
@@ -430,6 +491,22 @@ class EventSettingsView(BaseMenuView):
             description="Управление автоматическими напоминаниями о мероприятиях",
             color=0xffa500
         )
+        
+        # Показываем текущие настройки
+        alarm_channels = CONFIG.get('alarm_channels', [])
+        announce_channels = CONFIG.get('announce_channels', [])
+        reminder_roles = CONFIG.get('reminder_roles', [])
+        announce_roles = CONFIG.get('announce_roles', [])
+        
+        if alarm_channels:
+            embed.add_field(name="🔔 Каналы напоминаний", value=f"`{len(alarm_channels)} каналов`", inline=True)
+        if announce_channels:
+            embed.add_field(name="📢 Каналы оповещений", value=f"`{len(announce_channels)} каналов`", inline=True)
+        if reminder_roles:
+            embed.add_field(name="👥 Роли (напоминания)", value=f"`{len(reminder_roles)} ролей`", inline=True)
+        if announce_roles:
+            embed.add_field(name="👥 Роли (оповещения)", value=f"`{len(announce_roles)} ролей`", inline=True)
+        
         return embed
 
 

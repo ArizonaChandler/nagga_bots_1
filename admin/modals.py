@@ -507,3 +507,134 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
             f"🔢 Код группы: {self.group_code.value}",
             ephemeral=True
         )
+
+class SetAlarmChannelsModal(discord.ui.Modal, title="🔔 НАСТРОЙКА КАНАЛОВ НАПОМИНАНИЙ"):
+    channels = discord.ui.TextInput(
+        label="ID каналов (через запятую)",
+        placeholder="123456789,987654321,456123789",
+        style=discord.TextStyle.paragraph,
+        max_length=200
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            channel_ids = [c.strip() for c in self.channels.value.split(',') if c.strip()]
+            CONFIG['alarm_channels'] = channel_ids
+            save_config(str(interaction.user.id))
+            
+            channels_mention = []
+            for cid in channel_ids[:3]:
+                channel = interaction.guild.get_channel(int(cid))
+                if channel:
+                    channels_mention.append(channel.mention)
+                else:
+                    channels_mention.append(f"`{cid}`")
+            
+            if len(channel_ids) > 3:
+                channels_mention.append(f"и ещё {len(channel_ids)-3}")
+            
+            await interaction.response.send_message(
+                f"✅ Каналы напоминаний настроены:\n{', '.join(channels_mention)}",
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
+
+class SetAnnounceChannelsModal(discord.ui.Modal, title="📢 НАСТРОЙКА КАНАЛОВ ОПОВЕЩЕНИЙ"):
+    channels = discord.ui.TextInput(
+        label="ID каналов (через запятую)",
+        placeholder="123456789,987654321,456123789",
+        style=discord.TextStyle.paragraph,
+        max_length=200
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            channel_ids = [c.strip() for c in self.channels.value.split(',') if c.strip()]
+            CONFIG['announce_channels'] = channel_ids
+            save_config(str(interaction.user.id))
+            
+            channels_mention = []
+            for cid in channel_ids[:3]:
+                channel = interaction.guild.get_channel(int(cid))
+                if channel:
+                    channels_mention.append(channel.mention)
+                else:
+                    channels_mention.append(f"`{cid}`")
+            
+            if len(channel_ids) > 3:
+                channels_mention.append(f"и ещё {len(channel_ids)-3}")
+            
+            await interaction.response.send_message(
+                f"✅ Каналы оповещений настроены:\n{', '.join(channels_mention)}",
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
+
+class SetReminderRolesModal(discord.ui.Modal, title="🔔 РОЛИ ДЛЯ НАПОМИНАНИЙ"):
+    roles = discord.ui.TextInput(
+        label="ID ролей (через запятую)",
+        placeholder="123456789,987654321",
+        style=discord.TextStyle.paragraph,
+        max_length=200
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            role_ids = [r.strip() for r in self.roles.value.split(',') if r.strip()]
+            CONFIG['reminder_roles'] = role_ids
+            save_config(str(interaction.user.id))
+            
+            roles_mention = []
+            for rid in role_ids[:3]:
+                role = interaction.guild.get_role(int(rid))
+                if role:
+                    roles_mention.append(role.mention)
+                else:
+                    roles_mention.append(f"`{rid}`")
+            
+            if len(role_ids) > 3:
+                roles_mention.append(f"и ещё {len(role_ids)-3}")
+            
+            await interaction.response.send_message(
+                f"✅ Роли для напоминаний:\n{', '.join(roles_mention)}",
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
+
+class SetAnnounceRolesModal(discord.ui.Modal, title="📢 РОЛИ ДЛЯ ОПОВЕЩЕНИЙ"):
+    roles = discord.ui.TextInput(
+        label="ID ролей (через запятую)",
+        placeholder="123456789,987654321",
+        style=discord.TextStyle.paragraph,
+        max_length=200
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            role_ids = [r.strip() for r in self.roles.value.split(',') if r.strip()]
+            CONFIG['announce_roles'] = role_ids
+            save_config(str(interaction.user.id))
+            
+            roles_mention = []
+            for rid in role_ids[:3]:
+                role = interaction.guild.get_role(int(rid))
+                if role:
+                    roles_mention.append(role.mention)
+                else:
+                    roles_mention.append(f"`{rid}`")
+            
+            if len(role_ids) > 3:
+                roles_mention.append(f"и ещё {len(role_ids)-3}")
+            
+            await interaction.response.send_message(
+                f"✅ Роли для оповещений:\n{', '.join(roles_mention)}",
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)

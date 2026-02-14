@@ -201,30 +201,17 @@ class EventScheduler:
             file_logger.error(traceback.format_exc())
     
     async def send_reminder(self, event, now):
-        """Отправка напоминания"""
+        """Отправка напоминания во все настроенные каналы"""
         file_logger.debug("="*50)
         file_logger.debug("send_reminder START")
-        file_logger.debug(f"event: {event['id']} - {event['name']} - {event['event_time']}")
         
         try:
-            channel_id = CONFIG.get('alarm_channel_id')
-            file_logger.debug(f"channel_id из CONFIG: {channel_id}")
-            
-            if not channel_id:
-                file_logger.error("Канал оповещений не настроен")
-                logger.error("Канал оповещений не настроен")
-                return
-            
-            channel = self.bot.get_channel(int(channel_id))
-            file_logger.debug(f"Получен канал: {channel}")
-            
-            if not channel:
-                file_logger.error(f"Канал {channel_id} не найден")
-                logger.error(f"Канал {channel_id} не найден")
+            channel_ids = CONFIG.get('alarm_channels', [])
+            if not channel_ids:
+                file_logger.error("Каналы напоминаний не настроены")
                 return
             
             event_time = event['event_time']
-            file_logger.debug(f"event_time: {event_time}")
             
             # Время сбора (за 20 минут)
             event_hour, event_min = map(int, event_time.split(':'))
@@ -239,8 +226,8 @@ class EventScheduler:
                 meeting_hour = 23
             
             meeting_time = f"{meeting_hour:02d}:{meeting_min:02d}"
-            file_logger.debug(f"meeting_time: {meeting_time}")
             
+            # Создаём embed
             embed = discord.Embed(
                 title=f"🔔 НАПОМИНАНИЕ О МЕРОПРИЯТИИ: {event['name']}",
                 description=f"Через 1 час начинается мероприятие **{event['name']}**!",
@@ -267,35 +254,55 @@ class EventScheduler:
             
             embed.set_footer(text="Unit Management System by Nagga")
             
+            # Получаем роли для упоминания
+            reminder_roles = CONFIG.get('reminder_roles', [])
+            role_mentions = []
+            for role_id in reminder_roles:
+                role = self.bot.get_guild(int(CONFIG['server_id'])).get_role(int(role_id))
+                if role:
+                    role_mentions.append(role.mention)
+            
+            # Отправляем во все каналы
             from events.views import EventReminderView
-            view = EventReminderView(
-                event_id=event['id'],
-                event_name=event['name'],
-                event_time=event_time,
-                meeting_time=meeting_time,
-                guild=channel.guild
-            )
+            sent_count = 0
             
-            file_logger.debug("Отправка сообщения в канал")
-            message = await channel.send(embed=embed, view=view)
-            view.message = message
+            for channel_id in channel_ids:
+                try:
+                    channel = self.bot.get_channel(int(channel_id))
+                    if not channel:
+                        file_logger.warning(f"Канал {channel_id} не найден")
+                        continue
+                    
+                    # Создаём view для каждого канала
+                    view = EventReminderView(
+                        event_id=event['id'],
+                        event_name=event['name'],
+                        event_time=event_time,
+                        meeting_time=meeting_time,
+                        guild=channel.guild,
+                        reminder_channels=channel_ids  # Передаём список всех каналов
+                    )
+                    
+                    # Отправляем с упоминанием ролей
+                    content = ' '.join(role_mentions) if role_mentions else None
+                    message = await channel.send(content=content, embed=embed, view=view)
+                    view.add_message(message, channel_id)
+                    
+                    sent_count += 1
+                    file_logger.debug(f"Отправлено в канал {channel_id}")
+                    
+                except Exception as e:
+                    file_logger.error(f"Ошибка отправки в канал {channel_id}: {e}")
             
-            today = now.date().isoformat()
-            file_logger.debug(f"today: {today}")
-            
-            db.mark_reminder_sent(event['id'], today)
-            db.log_event_action(event['id'], "reminder_sent")
-            
-            self.reminder_sent_time[(event['id'], today)] = now.timestamp()
-            file_logger.debug(f"Добавлено в reminder_sent_time: {(event['id'], today)}")
-            
-            file_logger.info(f"✅ Напоминание отправлено: {event['name']} в {event_time}")
-            logger.info(f"✅ Напоминание отправлено: {event['name']} в {event_time}")
+            if sent_count > 0:
+                today = now.date().isoformat()
+                db.mark_reminder_sent(event['id'], today)
+                db.log_event_action(event['id'], "reminder_sent")
+                
+                file_logger.info(f"✅ Напоминание отправлено в {sent_count} каналов: {event['name']} в {event_time}")
             
         except Exception as e:
             file_logger.error(f"Ошибка отправки напоминания: {e}")
-            file_logger.error(traceback.format_exc())
-            logger.error(f"Ошибка отправки напоминания: {e}")
     
     async def send_timeout_message(self, event_id: int, event_date: str, event_time: str):
         """Сообщение о таймауте"""
