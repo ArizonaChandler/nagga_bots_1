@@ -241,68 +241,94 @@ class EventReminderView(discord.ui.View):
 class EventInfoView(BaseMenuView):
     """Кнопка информации о мероприятии в !info"""
     def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
-        file_logger.debug("EventInfoView __init__")
         super().__init__(user_id, guild, previous_view, previous_embed)
-        self.add_item(self.create_button())
+        # Создаём кнопку динамически
+        self.add_item(self.create_today_button())
     
-    def create_button(self):
-        btn = discord.ui.Button(label="📅 Мероприятия сегодня", style=discord.ButtonStyle.primary, emoji="📅")
-        async def callback(interaction: discord.Interaction, button: discord.ui.Button):
-            file_logger.debug(f"EventInfoView button clicked by {interaction.user.id}")
-            await self.today_events(interaction, button)
+    def create_today_button(self):
+        """Создать кнопку 'Мероприятия сегодня'"""
+        btn = discord.ui.Button(
+            label="📅 Мероприятия сегодня", 
+            style=discord.ButtonStyle.primary, 
+            emoji="📅"
+        )
+        
+        async def callback(interaction: discord.Interaction):
+            # При нажатии сразу убираем кнопку
+            self.clear_items()
+            self.add_back_button()
+            
+            await self.show_today_events(interaction)
+        
         btn.callback = callback
         return btn
     
-    async def today_events(self, interaction: discord.Interaction, button: discord.ui.Button):
-        file_logger.debug("="*50)
-        file_logger.debug("today_events CALLED")
-        
-        today = datetime.now(MSK_TZ).date()
-        weekday = today.weekday()
-        file_logger.debug(f"today: {today}, weekday: {weekday}")
-        
-        events = db.get_events(enabled_only=True, weekday=weekday)
-        file_logger.debug(f"Найдено мероприятий: {len(events)}")
-        
-        if not events:
-            file_logger.debug("Мероприятий нет")
-            self.clear_items()
-            self.add_back_button()
+    async def show_today_events(self, interaction: discord.Interaction):
+        """Показать мероприятия на сегодня"""
+        try:
+            today = datetime.now(MSK_TZ).date()
+            weekday = today.weekday()
+            
+            # Получаем все мероприятия на сегодня
+            events = db.get_events(enabled_only=True, weekday=weekday)
+            
+            if not events:
+                await interaction.response.edit_message(
+                    content="📅 На сегодня мероприятий нет",
+                    embed=None,
+                    view=self
+                )
+                return
+            
+            # Фильтруем только будущие мероприятия
+            now = datetime.now(MSK_TZ).time()
+            future_events = []
+            
+            for event in events:
+                event_time = datetime.strptime(event['event_time'], "%H:%M").time()
+                # Показываем только мероприятия, которые ещё не начались
+                if event_time >= now:
+                    future_events.append(event)
+            
+            if not future_events:
+                await interaction.response.edit_message(
+                    content="📅 На сегодня все мероприятия уже прошли",
+                    embed=None,
+                    view=self
+                )
+                return
+            
+            embed = discord.Embed(
+                title=f"📅 МЕРОПРИЯТИЯ НА СЕГОДНЯ ({today.strftime('%d.%m.%Y')})",
+                color=0x7289da
+            )
+            
+            for event in future_events:
+                with db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        SELECT taken_by, group_code, meeting_place FROM event_schedule 
+                        WHERE event_id = ? AND scheduled_date = ?
+                    ''', (event['id'], today.isoformat()))
+                    result = cursor.fetchone()
+                
+                if result and result[0]:
+                    status = f"✅ **Взял:** <@{result[0]}>\n📍 {result[2]}\n🔢 {result[1]}"
+                else:
+                    status = "❌ **Свободно**"
+                
+                embed.add_field(
+                    name=f"{event['event_time']} — {event['name']}",
+                    value=status,
+                    inline=False
+                )
+            
+            await interaction.response.edit_message(embed=embed, view=self)
+            
+        except Exception as e:
+            file_logger.error(f"Ошибка в show_today_events: {e}")
             await interaction.response.edit_message(
-                content="📅 На сегодня мероприятий нет",
+                content=f"❌ Ошибка при загрузке мероприятий",
                 embed=None,
                 view=self
             )
-            return
-        
-        embed = discord.Embed(
-            title=f"📅 МЕРОПРИЯТИЯ НА СЕГОДНЯ ({today.strftime('%d.%m.%Y')})",
-            color=0x7289da
-        )
-        
-        for event in events:
-            file_logger.debug(f"Обработка события: {event['id']} - {event['name']} - {event['event_time']}")
-            
-            with db.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT taken_by, group_code, meeting_place FROM event_schedule 
-                    WHERE event_id = ? AND scheduled_date = ?
-                ''', (event['id'], today.isoformat()))
-                result = cursor.fetchone()
-                file_logger.debug(f"Результат из БД: {result}")
-            
-            if result and result[0]:
-                status = f"✅ **Взял:** <@{result[0]}>\n📍 {result[2]}\n🔢 {result[1]}"
-            else:
-                status = "❌ **Свободно**"
-            
-            embed.add_field(
-                name=f"{event['event_time']} — {event['name']}",
-                value=status,
-                inline=False
-            )
-        
-        self.clear_items()
-        self.add_back_button()
-        await interaction.response.edit_message(embed=embed, view=self)
