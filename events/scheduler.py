@@ -48,80 +48,96 @@ class EventScheduler:
     
     async def check_events(self):
         """Проверка предстоящих мероприятий"""
-        now = datetime.now(MSK_TZ)  # aware
-        current_time = now.strftime("%H:%M")
-        current_date = now.date()
-        
-        today_events = db.get_today_events()
-        
-        for event in today_events:
-            event_time = event['event_time']
+        try:
+            now = datetime.now(MSK_TZ)
+            current_date = now.date()
             
-            # Парсим время мероприятия
-            event_hour, event_minute = map(int, event_time.split(':'))
+            today_events = db.get_today_events()
             
-            # Создаем aware datetime для времени мероприятия
-            event_datetime = MSK_TZ.localize(datetime(
-                current_date.year, 
-                current_date.month, 
-                current_date.day, 
-                event_hour, 
-                event_minute
-            ))
-            
-            # Если время мероприятия уже прошло - пропускаем
-            if event_datetime < now:
-                continue
-            
-            # Время напоминания (за 1 час)
-            reminder_datetime = event_datetime - timedelta(hours=1)
-            reminder_str = reminder_datetime.strftime("%H:%M")
-            
-            # Проверяем, нужно ли отправить напоминание
-            if not event['reminder_sent'] and not event['taken_by']:
-                # Если текущее время >= времени напоминания
-                if now >= reminder_datetime:
-                    await self.send_reminder(event, now)
+            for event in today_events:
+                try:
+                    event_time = event['event_time']
+                    
+                    # Парсим время мероприятия
+                    event_hour, event_minute = map(int, event_time.split(':'))
+                    
+                    # Создаем datetime для времени мероприятия (ВСЕГДА через MSK_TZ)
+                    event_datetime = MSK_TZ.localize(datetime(
+                        current_date.year,
+                        current_date.month,
+                        current_date.day,
+                        event_hour,
+                        event_minute
+                    ))
+                    
+                    # Если время мероприятия уже прошло - пропускаем
+                    if event_datetime < now:
+                        continue
+                    
+                    # Время напоминания (за 1 час)
+                    reminder_datetime = event_datetime - timedelta(hours=1)
+                    
+                    # Проверяем, нужно ли отправить напоминание
+                    if not event['reminder_sent'] and not event['taken_by']:
+                        if now >= reminder_datetime:
+                            await self.send_reminder(event, now)
+                            
+                except Exception as e:
+                    logger.error(f"Ошибка обработки события {event.get('id')}: {e}")
+                    continue
+                    
+        except Exception as e:
+            logger.error(f"Ошибка в check_events: {e}")
     
     async def check_timeouts(self):
         """Проверка таймаутов (за 10 минут до начала)"""
-        now = datetime.now(MSK_TZ)
-        current_time = now.time()
-        
-        for key, sent_time in list(self.reminder_sent_time.items()):
-            event_id, event_date = key
+        try:
+            now = datetime.now(MSK_TZ)
             
-            with db.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT e.event_time, s.taken_by 
-                    FROM events e
-                    LEFT JOIN event_schedule s ON e.id = s.event_id AND s.scheduled_date = ?
-                    WHERE e.id = ?
-                ''', (event_date, event_id))
-                result = cursor.fetchone()
-                
-                if not result:
-                    del self.reminder_sent_time[key]
-                    continue
-                
-                event_time_str, taken_by = result
-                event_hour, event_minute = map(int, event_time_str.split(':'))
-                
-                # Создаем datetime для времени мероприятия
-                event_datetime = MSK_TZ.localize(datetime(
-                    now.year, now.month, now.day,
-                    event_hour, event_minute
-                ))
-                
-                # Время отключения кнопки (за 10 минут до)
-                timeout_datetime = event_datetime - timedelta(minutes=10)
-                
-                if now >= timeout_datetime and not taken_by:
-                    await self.send_timeout_message(event_id, event_date, event_time_str)
-                    del self.reminder_sent_time[key]
-                elif taken_by:
-                    del self.reminder_sent_time[key]
+            for key, sent_time in list(self.reminder_sent_time.items()):
+                try:
+                    event_id, event_date = key
+                    
+                    with db.get_connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute('''
+                            SELECT e.event_time, s.taken_by 
+                            FROM events e
+                            LEFT JOIN event_schedule s ON e.id = s.event_id AND s.scheduled_date = ?
+                            WHERE e.id = ?
+                        ''', (event_date, event_id))
+                        result = cursor.fetchone()
+                        
+                        if not result:
+                            del self.reminder_sent_time[key]
+                            continue
+                        
+                        event_time_str, taken_by = result
+                        event_hour, event_minute = map(int, event_time_str.split(':'))
+                        
+                        # Создаем datetime для времени мероприятия
+                        event_datetime = MSK_TZ.localize(datetime(
+                            now.year, now.month, now.day,
+                            event_hour, event_minute
+                        ))
+                        
+                        # Время отключения кнопки (за 10 минут до)
+                        timeout_datetime = event_datetime - timedelta(minutes=10)
+                        
+                        if now >= timeout_datetime and not taken_by:
+                            await self.send_timeout_message(event_id, event_date, event_time_str)
+                            del self.reminder_sent_time[key]
+                        elif taken_by:
+                            del self.reminder_sent_time[key]
+                            
+                except Exception as e:
+                    logger.error(f"Ошибка обработки таймаута для ключа {key}: {e}")
+                    # В случае ошибки удаляем ключ, чтобы не зацикливаться
+                    if key in self.reminder_sent_time:
+                        del self.reminder_sent_time[key]
+                        
+        except Exception as e:
+            logger.error(f"Ошибка в check_timeouts: {e}")
     
     async def send_reminder(self, event, now):
         """Отправка напоминания"""
@@ -236,15 +252,21 @@ class EventScheduler:
             logger.error(f"Ошибка отправки таймаута: {e}")
     
     def cleanup_old_reminders(self):
-        now = datetime.now(MSK_TZ)
-        for key in list(self.reminder_sent_time.keys()):
-            event_id, event_date = key
-            try:
-                date_obj = datetime.strptime(event_date, "%Y-%m-%d").date()
-                if (now.date() - date_obj).days > 7:
-                    del self.reminder_sent_time[key]
-            except:
-                pass
+        """Очистка старых записей"""
+        try:
+            now = datetime.now(MSK_TZ)
+            for key in list(self.reminder_sent_time.keys()):
+                try:
+                    event_id, event_date = key
+                    date_obj = datetime.strptime(event_date, "%Y-%m-%d").date()
+                    if (now.date() - date_obj).days > 7:
+                        del self.reminder_sent_time[key]
+                except:
+                    # Если не можем обработать ключ - удаляем его
+                    if key in self.reminder_sent_time:
+                        del self.reminder_sent_time[key]
+        except Exception as e:
+            logger.error(f"Ошибка в cleanup_old_reminders: {e}")
 
 scheduler = None
 
