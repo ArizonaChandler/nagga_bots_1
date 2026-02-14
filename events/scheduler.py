@@ -52,7 +52,7 @@ class EventScheduler:
             await asyncio.sleep(self.check_interval)
     
     async def check_events(self):
-        """Проверка предстоящих мероприятий"""
+        """Проверка предстоящих мероприятий с учётом времени запуска бота"""
         now = datetime.now(MSK_TZ)
         current_time = now.strftime("%H:%M")
         current_date = now.date()
@@ -61,7 +61,6 @@ class EventScheduler:
         today_events = db.get_today_events()
         
         for event in today_events:
-            # Проверяем, что мероприятие ещё не началось
             event_time = event['event_time']
             event_dt = datetime.strptime(event_time, "%H:%M").time()
             
@@ -69,13 +68,14 @@ class EventScheduler:
             if event_dt < now.time():
                 continue
             
-            # Вычисляем время напоминания (за 1 час до начала)
             reminder_dt = (datetime.combine(current_date, event_dt) - timedelta(hours=1)).time()
             reminder_str = reminder_dt.strftime("%H:%M")
             
-            # Если время напоминания пришло и напоминание ещё не отправлено
-            if current_time >= reminder_str and not event['reminder_sent'] and not event['taken_by']:
-                await self.send_reminder(event, now)
+            # ИСПРАВЛЕНИЕ: Проверяем не только текущее время, но и не отправлено ли
+            # Если reminder_dt уже прошло, но напоминание не отправлено - отправляем сразу
+            if not event['reminder_sent'] and not event['taken_by']:
+                if current_time >= reminder_str or (event_dt > now.time() and now.time() > reminder_dt):
+                    await self.send_reminder(event, now)
     
     async def check_timeouts(self):
         """Проверка, не истекло ли время взятия МП (за 10 минут до начала)"""

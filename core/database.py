@@ -506,12 +506,13 @@ class Database:
     
     # ----- РАСПИСАНИЕ -----
     def generate_schedule(self, days_ahead: int = 14):
-        """Сгенерировать расписание на ближайшие дни"""
+        """Сгенерировать расписание на ближайшие дни, включая сегодня"""
         from datetime import datetime, timedelta
         import pytz
         
         msk_tz = pytz.timezone('Europe/Moscow')
-        today = datetime.now(msk_tz).date()
+        now = datetime.now(msk_tz)
+        today = now.date()
         
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -521,6 +522,13 @@ class Database:
                 for day_offset in range(days_ahead):
                     check_date = today + timedelta(days=day_offset)
                     if check_date.weekday() == event['weekday']:
+                        # Проверяем, не прошло ли уже время сегодня
+                        if day_offset == 0:  # Сегодня
+                            event_time = datetime.strptime(event['event_time'], "%H:%M").time()
+                            event_datetime = datetime.combine(check_date, event_time)
+                            if event_datetime < now:
+                                continue  # Пропускаем, если время уже прошло
+                        
                         cursor.execute('''
                             INSERT OR IGNORE INTO event_schedule 
                             (event_id, scheduled_date)
