@@ -19,30 +19,25 @@ class EventScheduler:
         self.running = True
         self.check_interval = 60
         self.task = None
-        # Словарь для отслеживания времени отправки напоминаний
-        self.reminder_sent_time = {}  # {(event_id, date): timestamp}
+        self.reminder_sent_time = {}
     
     async def start(self):
-        """Запуск планировщика"""
         logger.info("🕐 Event Scheduler запущен")
         self.task = asyncio.create_task(self._run())
     
     async def stop(self):
-        """Остановка планировщика"""
         self.running = False
         if self.task:
             self.task.cancel()
             logger.info("🕐 Event Scheduler остановлен")
     
     async def _run(self):
-        """Основной цикл планировщика"""
         while self.running:
             try:
                 now = datetime.now(MSK_TZ)
                 await self.check_events()
                 await self.check_timeouts()
                 
-                # Генерируем расписание раз в день в 00:00
                 if now.hour == 0 and now.minute == 0:
                     db.generate_schedule(days_ahead=14)
                     self.cleanup_old_reminders()
@@ -52,46 +47,50 @@ class EventScheduler:
             await asyncio.sleep(self.check_interval)
     
     async def check_events(self):
-        """Проверка предстоящих мероприятий с учётом времени запуска бота"""
+        """Проверка предстоящих мероприятий"""
         now = datetime.now(MSK_TZ)  # aware
         current_time = now.strftime("%H:%M")
         current_date = now.date()
         
-        # Получаем мероприятия на сегодня
         today_events = db.get_today_events()
         
         for event in today_events:
             event_time = event['event_time']
             
-            # Парсим время мероприятия (naive)
-            event_dt_naive = datetime.strptime(event_time, "%H:%M").time()
+            # Парсим время мероприятия
+            event_hour, event_minute = map(int, event_time.split(':'))
             
-            # Создаем aware datetime для сегодняшней даты с этим временем
-            event_datetime = MSK_TZ.localize(datetime.combine(current_date, event_dt_naive))
+            # Создаем aware datetime для времени мероприятия
+            event_datetime = MSK_TZ.localize(datetime(
+                current_date.year, 
+                current_date.month, 
+                current_date.day, 
+                event_hour, 
+                event_minute
+            ))
             
-            # Если время мероприятия уже прошло сегодня - пропускаем
+            # Если время мероприятия уже прошло - пропускаем
             if event_datetime < now:
                 continue
             
-            # Время напоминания (за 1 час до)
+            # Время напоминания (за 1 час)
             reminder_datetime = event_datetime - timedelta(hours=1)
             reminder_str = reminder_datetime.strftime("%H:%M")
             
             # Проверяем, нужно ли отправить напоминание
             if not event['reminder_sent'] and not event['taken_by']:
-                # Если время напоминания уже наступило (или прошло, но не больше чем на 1 час)
+                # Если текущее время >= времени напоминания
                 if now >= reminder_datetime:
                     await self.send_reminder(event, now)
     
     async def check_timeouts(self):
-        """Проверка, не истекло ли время взятия МП (за 10 минут до начала)"""
+        """Проверка таймаутов (за 10 минут до начала)"""
         now = datetime.now(MSK_TZ)
         current_time = now.time()
         
         for key, sent_time in list(self.reminder_sent_time.items()):
             event_id, event_date = key
             
-            # Получаем информацию о мероприятии
             with db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
@@ -107,25 +106,25 @@ class EventScheduler:
                     continue
                 
                 event_time_str, taken_by = result
-                event_time = datetime.strptime(event_time_str, "%H:%M").time()
+                event_hour, event_minute = map(int, event_time_str.split(':'))
                 
-                # Вычисляем время, за которое нужно отключить кнопку (за 10 минут до начала)
-                from datetime import timedelta
-                event_dt = datetime.combine(now.date(), event_time)
-                timeout_dt = event_dt - timedelta(minutes=10)
-                timeout_time = timeout_dt.time()
+                # Создаем datetime для времени мероприятия
+                event_datetime = MSK_TZ.localize(datetime(
+                    now.year, now.month, now.day,
+                    event_hour, event_minute
+                ))
                 
-                # Если текущее время >= времени отключения И никто не взял
-                if current_time >= timeout_time and not taken_by:
+                # Время отключения кнопки (за 10 минут до)
+                timeout_datetime = event_datetime - timedelta(minutes=10)
+                
+                if now >= timeout_datetime and not taken_by:
                     await self.send_timeout_message(event_id, event_date, event_time_str)
                     del self.reminder_sent_time[key]
-                
-                # Если кто-то взял - удаляем из отслеживания
                 elif taken_by:
                     del self.reminder_sent_time[key]
     
     async def send_reminder(self, event, now):
-        """Отправка напоминания о мероприятии"""
+        """Отправка напоминания"""
         try:
             channel_id = CONFIG.get('alarm_channel_id')
             if not channel_id:
@@ -138,11 +137,13 @@ class EventScheduler:
                 return
             
             event_time = event['event_time']
+            event_hour, event_minute = map(int, event_time.split(':'))
             
-            # Используем MSK_TZ для всех операций с datetime
-            event_dt_naive = datetime.strptime(event_time, "%H:%M").time()
-            event_datetime = MSK_TZ.localize(datetime.combine(now.date(), event_dt_naive))
-            meeting_datetime = event_datetime - timedelta(minutes=20)
+            # Время сбора (за 20 минут)
+            meeting_datetime = MSK_TZ.localize(datetime(
+                now.year, now.month, now.day,
+                event_hour, event_minute
+            )) - timedelta(minutes=20)
             meeting_time = meeting_datetime.strftime("%H:%M")
             
             embed = discord.Embed(
@@ -171,7 +172,6 @@ class EventScheduler:
             
             embed.set_footer(text="Unit Management System by Nagga")
             
-            from events.views import EventReminderView
             view = EventReminderView(
                 event_id=event['id'],
                 event_name=event['name'],
@@ -189,13 +189,13 @@ class EventScheduler:
             
             self.reminder_sent_time[(event['id'], today)] = now.timestamp()
             
-            logger.info(f"✅ Напоминание отправлено: {event['name']} в {event_time}, сбор в {meeting_time}")
+            logger.info(f"✅ Напоминание отправлено: {event['name']} в {event_time}")
             
         except Exception as e:
             logger.error(f"Ошибка отправки напоминания: {e}")
     
     async def send_timeout_message(self, event_id: int, event_date: str, event_time: str):
-        """Отправка сообщения об истечении времени и отключение кнопки"""
+        """Сообщение о таймауте"""
         try:
             channel_id = CONFIG.get('alarm_channel_id')
             if not channel_id:
@@ -205,54 +205,37 @@ class EventScheduler:
             if not channel:
                 return
             
-            # Получаем информацию о мероприятии
             event = db.get_event(event_id)
             if not event:
                 return
             
-            # Ищем сообщение с напоминанием в истории канала
-            async for message in channel.history(limit=50):
-                if message.author == self.bot.user and message.embeds:
-                    embed = message.embeds[0]
-                    # Проверяем, что это сообщение о нашем мероприятии
-                    if embed.title and event['name'] in embed.title:
-                        # Отключаем кнопки в старом сообщении
-                        for child in message.components:
-                            for component in child.children:
-                                component.disabled = True
-                        
-                        # Создаём новое embed с сообщением о таймауте
-                        new_embed = discord.Embed(
-                            title=f"⏰ ВРЕМЯ ВЫШЛО: {event['name']}",
-                            description=f"Мероприятие в **{event_time}** не состоялось - никто не взял его вовремя.",
-                            color=0xff0000
-                        )
-                        
-                        new_embed.add_field(
-                            name="⏰ Время начала",
-                            value=f"**{event_time}** МСК",
-                            inline=True
-                        )
-                        
-                        new_embed.add_field(
-                            name="📅 Дата",
-                            value=event_date,
-                            inline=True
-                        )
-                        
-                        new_embed.set_footer(text="Unit Management System by Nagga")
-                        
-                        # Редактируем сообщение
-                        await message.edit(embed=new_embed, view=None)
-                        break
+            embed = discord.Embed(
+                title=f"⏰ ВРЕМЯ ВЫШЛО: {event['name']}",
+                description=f"Мероприятие в **{event_time}** не состоялось - никто не взял его вовремя.",
+                color=0xff0000
+            )
             
-            logger.info(f"⏰ Таймаут МП: {event['name']} на {event_date} в {event_time}")
+            embed.add_field(
+                name="⏰ Время начала",
+                value=f"**{event_time}** МСК",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="📅 Дата",
+                value=event_date,
+                inline=True
+            )
+            
+            embed.set_footer(text="Unit Management System by Nagga")
+            
+            await channel.send(embed=embed)
+            logger.info(f"⏰ Таймаут МП: {event['name']} на {event_date}")
             
         except Exception as e:
-            logger.error(f"Ошибка отправки сообщения о таймауте: {e}")
+            logger.error(f"Ошибка отправки таймаута: {e}")
     
     def cleanup_old_reminders(self):
-        """Очистка старых записей о напоминаниях"""
         now = datetime.now(MSK_TZ)
         for key in list(self.reminder_sent_time.keys()):
             event_id, event_date = key
@@ -266,7 +249,6 @@ class EventScheduler:
 scheduler = None
 
 async def setup(bot):
-    """Инициализация планировщика"""
     global scheduler
     scheduler = EventScheduler(bot)
     await scheduler.start()
