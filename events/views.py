@@ -242,33 +242,22 @@ class EventInfoView(BaseMenuView):
     """Кнопка информации о мероприятии в !info"""
     def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
         super().__init__(user_id, guild, previous_view, previous_embed)
-        # Создаём кнопку динамически
         self.add_item(self.create_today_button())
     
     def create_today_button(self):
-        """Создать кнопку 'Мероприятия сегодня'"""
-        btn = discord.ui.Button(
-            label="📅 Мероприятия сегодня", 
-            style=discord.ButtonStyle.primary, 
-            emoji="📅"
-        )
-        
+        btn = discord.ui.Button(label="📅 Мероприятия сегодня", style=discord.ButtonStyle.primary, emoji="📅")
         async def callback(interaction: discord.Interaction):
-            # При нажатии сразу убираем кнопку
             self.clear_items()
             self.add_back_button()
-            
             await self.show_today_events(interaction)
-        
         btn.callback = callback
         return btn
     
     async def show_today_events(self, interaction: discord.Interaction):
-        """Показать мероприятия на сегодня"""
         try:
-            today = datetime.now(MSK_TZ).date()
-            weekday = today.weekday()
             now = datetime.now(MSK_TZ)
+            today = now.date()
+            weekday = today.weekday()
             current_time_str = now.strftime("%H:%M")
             
             # Получаем все мероприятия на сегодня
@@ -282,15 +271,66 @@ class EventInfoView(BaseMenuView):
                 )
                 return
             
-            embed = discord.Embed(
-                title=f"📅 МЕРОПРИЯТИЯ НА СЕГОДНЯ ({today.strftime('%d.%m.%Y')})",
-                color=0x7289da
-            )
-            
+            # Фильтруем мероприятия
+            visible_events = []
             for event in events:
                 event_time = event['event_time']
                 event_hour, event_min = map(int, event_time.split(':'))
-                reminder_time = f"{event_hour-1:02d}:{event_min:02d}" if event_hour > 0 else f"23:{event_min:02d}"
+                
+                # Создаем datetime для времени мероприятия
+                event_datetime = MSK_TZ.localize(datetime(
+                    today.year, today.month, today.day,
+                    event_hour, event_min
+                ))
+                
+                # Проверяем, взято ли мероприятие
+                with db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        SELECT taken_by FROM event_schedule 
+                        WHERE event_id = ? AND scheduled_date = ?
+                    ''', (event['id'], today.isoformat()))
+                    result = cursor.fetchone()
+                    taken_by = result[0] if result else None
+                
+                # Показываем если:
+                # 1. Мероприятие ещё не началось ИЛИ
+                # 2. Мероприятие идёт И ЕГО ВЗЯЛИ (до +1 часа после начала)
+                if now < event_datetime:
+                    # Будущее мероприятие
+                    visible_events.append(event)
+                elif taken_by and now <= event_datetime + timedelta(hours=1):
+                    # Идущее мероприятие (только если взято)
+                    visible_events.append(event)
+            
+            if not visible_events:
+                await interaction.response.edit_message(
+                    content="📅 На сегодня нет актуальных мероприятий",
+                    embed=None,
+                    view=self
+                )
+                return
+            
+            # Сортируем по времени
+            visible_events.sort(key=lambda x: x['event_time'])
+            
+            embed = discord.Embed(
+                title=f"📅 АКТУАЛЬНЫЕ МЕРОПРИЯТИЯ ({today.strftime('%d.%m.%Y')})",
+                description=f"⏰ Текущее время: **{current_time_str}** МСК",
+                color=0x7289da
+            )
+            
+            for event in visible_events:
+                event_time = event['event_time']
+                event_hour, event_min = map(int, event_time.split(':'))
+                event_datetime = MSK_TZ.localize(datetime(
+                    today.year, today.month, today.day,
+                    event_hour, event_min
+                ))
+                
+                # Вычисляем время напоминания (за 1 час)
+                reminder_datetime = event_datetime - timedelta(hours=1)
+                reminder_time = reminder_datetime.strftime("%H:%M")
                 
                 with db.get_connection() as conn:
                     cursor = conn.cursor()
@@ -303,16 +343,21 @@ class EventInfoView(BaseMenuView):
                 
                 # Определяем статус
                 if result and result[0]:  # Взято
-                    status = f"✅ **Проводит:** <@{result[0]}>\n📍 {result[2]}\n🔢 {result[1]}"
+                    if now > event_datetime:
+                        # Идёт сейчас
+                        status = f"🔴 **Проводит:** <@{result[0]}>\n📍 {result[2]}\n🔢 {result[1]}"
+                    else:
+                        # Будет
+                        status = f"✅ **Проводит:** <@{result[0]}>\n📍 {result[2]}\n🔢 {result[1]}"
                 else:
-                    if current_time_str >= event_time:
-                        status = "⌛ **Мероприятие уже идёт или прошло**"
-                    elif current_time_str >= reminder_time:
+                    # Не взято
+                    if now >= reminder_datetime:
                         # Напоминание уже пришло
                         status = "⏳ **Ожидаем информацию от HIGH состава**"
                     else:
                         # Напоминание ещё не пришло
-                        status = "🕒 **Будет проводиться позже**"
+                        minutes_to = int((event_datetime - now).total_seconds() / 60)
+                        status = f"🕒 **Начнётся через {minutes_to} мин**"
                 
                 embed.add_field(
                     name=f"{event_time} — {event['name']}",
