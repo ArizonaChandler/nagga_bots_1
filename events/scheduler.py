@@ -53,7 +53,7 @@ class EventScheduler:
     
     async def check_events(self):
         """Проверка предстоящих мероприятий с учётом времени запуска бота"""
-        now = datetime.now(MSK_TZ)
+        now = datetime.now(MSK_TZ)  # aware
         current_time = now.strftime("%H:%M")
         current_date = now.date()
         
@@ -62,19 +62,25 @@ class EventScheduler:
         
         for event in today_events:
             event_time = event['event_time']
-            event_dt = datetime.strptime(event_time, "%H:%M").time()
+            
+            # Парсим время мероприятия (naive)
+            event_dt_naive = datetime.strptime(event_time, "%H:%M").time()
+            
+            # Создаем aware datetime для сегодняшней даты с этим временем
+            event_datetime = MSK_TZ.localize(datetime.combine(current_date, event_dt_naive))
             
             # Если время мероприятия уже прошло сегодня - пропускаем
-            if event_dt < now.time():
+            if event_datetime < now:
                 continue
             
-            reminder_dt = (datetime.combine(current_date, event_dt) - timedelta(hours=1)).time()
-            reminder_str = reminder_dt.strftime("%H:%M")
+            # Время напоминания (за 1 час до)
+            reminder_datetime = event_datetime - timedelta(hours=1)
+            reminder_str = reminder_datetime.strftime("%H:%M")
             
-            # ИСПРАВЛЕНИЕ: Проверяем не только текущее время, но и не отправлено ли
-            # Если reminder_dt уже прошло, но напоминание не отправлено - отправляем сразу
+            # Проверяем, нужно ли отправить напоминание
             if not event['reminder_sent'] and not event['taken_by']:
-                if current_time >= reminder_str or (event_dt > now.time() and now.time() > reminder_dt):
+                # Если время напоминания уже наступило (или прошло, но не больше чем на 1 час)
+                if now >= reminder_datetime:
                     await self.send_reminder(event, now)
     
     async def check_timeouts(self):
@@ -131,41 +137,40 @@ class EventScheduler:
                 logger.error(f"Канал {channel_id} не найден")
                 return
             
-            # Форматируем время
             event_time = event['event_time']
             
-            # Вычисляем время сбора (за 20 минут до начала)
-            event_dt = datetime.strptime(event_time, "%H:%M")
-            meeting_time = (event_dt - timedelta(minutes=20)).strftime("%H:%M")
+            # Используем MSK_TZ для всех операций с datetime
+            event_dt_naive = datetime.strptime(event_time, "%H:%M").time()
+            event_datetime = MSK_TZ.localize(datetime.combine(now.date(), event_dt_naive))
+            meeting_datetime = event_datetime - timedelta(minutes=20)
+            meeting_time = meeting_datetime.strftime("%H:%M")
             
-            # Создаём embed с напоминанием
             embed = discord.Embed(
                 title=f"🔔 НАПОМИНАНИЕ О МЕРОПРИЯТИИ: {event['name']}",
                 description=f"Через 1 час начинается мероприятие **{event['name']}**!",
                 color=0xffa500
             )
-
+            
             embed.add_field(
                 name="⏰ Время начала",
                 value=f"**{event_time}** МСК",
                 inline=True
             )
-
+            
             embed.add_field(
                 name="⏱️ Сбор в",
                 value=f"**{meeting_time}** МСК",
                 inline=True
             )
-
+            
             embed.add_field(
                 name="👥 Статус",
                 value="❌ Никто не взял",
                 inline=False
             )
-
+            
             embed.set_footer(text="Unit Management System by Nagga")
             
-            # Отправляем с кнопкой взятия
             from events.views import EventReminderView
             view = EventReminderView(
                 event_id=event['id'],
@@ -178,12 +183,10 @@ class EventScheduler:
             message = await channel.send(embed=embed, view=view)
             view.message = message
             
-            # Отмечаем что напоминание отправлено
             today = now.date().isoformat()
             db.mark_reminder_sent(event['id'], today)
             db.log_event_action(event['id'], "reminder_sent")
             
-            # Сохраняем время отправки для отслеживания таймаута
             self.reminder_sent_time[(event['id'], today)] = now.timestamp()
             
             logger.info(f"✅ Напоминание отправлено: {event['name']} в {event_time}, сбор в {meeting_time}")
