@@ -494,27 +494,120 @@ class EventSettingsView(BaseMenuView):
             color=0xffa500
         )
         
-        # Показываем текущие настройки
+        # Получаем текущие настройки
         alarm_channels = CONFIG.get('alarm_channels', [])
         announce_channels = CONFIG.get('announce_channels', [])
         reminder_roles = CONFIG.get('reminder_roles', [])
         announce_roles = CONFIG.get('announce_roles', [])
         
-        # Информация о количестве настроек
-        settings_info = []
+        # Форматируем каналы напоминаний
         if alarm_channels:
-            settings_info.append(f"🔔 Напоминания: {len(alarm_channels)} каналов")
+            channels_list = []
+            for ch_id in alarm_channels[:3]:  # Показываем первые 3
+                channel = self.guild.get_channel(int(ch_id))
+                if channel:
+                    channels_list.append(channel.mention)
+                else:
+                    channels_list.append(f"`{ch_id}`")
+            
+            if len(alarm_channels) > 3:
+                channels_list.append(f"и ещё {len(alarm_channels)-3}")
+            
+            embed.add_field(
+                name="🔔 Каналы напоминаний",
+                value=', '.join(channels_list),
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="🔔 Каналы напоминаний",
+                value="❌ Не установлены",
+                inline=False
+            )
+        
+        # Форматируем каналы оповещений
         if announce_channels:
-            settings_info.append(f"📢 Оповещения: {len(announce_channels)} каналов")
+            channels_list = []
+            for ch_id in announce_channels[:3]:
+                channel = self.guild.get_channel(int(ch_id))
+                if channel:
+                    channels_list.append(channel.mention)
+                else:
+                    channels_list.append(f"`{ch_id}`")
+            
+            if len(announce_channels) > 3:
+                channels_list.append(f"и ещё {len(announce_channels)-3}")
+            
+            embed.add_field(
+                name="📢 Каналы оповещений",
+                value=', '.join(channels_list),
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="📢 Каналы оповещений",
+                value="❌ Не установлены",
+                inline=False
+            )
+        
+        # Форматируем роли для напоминаний
         if reminder_roles:
-            settings_info.append(f"👥 Роли (напоминания): {len(reminder_roles)}")
+            roles_list = []
+            for role_id in reminder_roles[:3]:
+                role = self.guild.get_role(int(role_id))
+                if role:
+                    roles_list.append(role.mention)
+                else:
+                    roles_list.append(f"`{role_id}`")
+            
+            if len(reminder_roles) > 3:
+                roles_list.append(f"и ещё {len(reminder_roles)-3}")
+            
+            embed.add_field(
+                name="👥 Роли (напоминания)",
+                value=', '.join(roles_list),
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="👥 Роли (напоминания)",
+                value="❌ Не установлены",
+                inline=False
+            )
+        
+        # Форматируем роли для оповещений
         if announce_roles:
-            settings_info.append(f"👥 Роли (оповещения): {len(announce_roles)}")
+            roles_list = []
+            for role_id in announce_roles[:3]:
+                role = self.guild.get_role(int(role_id))
+                if role:
+                    roles_list.append(role.mention)
+                else:
+                    roles_list.append(f"`{role_id}`")
+            
+            if len(announce_roles) > 3:
+                roles_list.append(f"и ещё {len(announce_roles)-3}")
+            
+            embed.add_field(
+                name="👥 Роли (оповещения)",
+                value=', '.join(roles_list),
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="👥 Роли (оповещения)",
+                value="❌ Не установлены",
+                inline=False
+            )
         
-        if settings_info:
-            embed.description = "\n".join(settings_info)
+        # Общая статистика
+        events = db.get_events(enabled_only=True)
+        embed.add_field(
+            name="📅 Мероприятия",
+            value=f"Активных: `{len(events)}`",
+            inline=False
+        )
         
-        return embed
         return embed
 
 
