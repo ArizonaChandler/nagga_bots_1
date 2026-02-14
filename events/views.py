@@ -56,6 +56,7 @@ class EventReminderView(discord.ui.View):
         self.messages = {}  # Словарь {channel_id: message}
         self.reminder_channels = reminder_channels or []
         self.timeout_occurred = False
+        self.reminder_channels = reminder_channels or CONFIG.get('alarm_channels', [])
     
     def add_message(self, message, channel_id):
         """Добавить сообщение из конкретного канала"""
@@ -157,6 +158,11 @@ class EventReminderView(discord.ui.View):
     
     async def update_taken_status(self, user_id: str, user_name: str, group_code: str, meeting_place: str):
         """Обновить статус после взятия МП во всех каналах"""
+        file_logger.debug("="*50)
+        file_logger.debug("update_taken_status CALLED")
+        file_logger.debug(f"user_id: {user_id}, user_name: {user_name}")
+        file_logger.debug(f"group_code: {group_code}, meeting_place: {meeting_place}")
+        
         self.taken = True
         for child in self.children:
             child.disabled = True
@@ -164,10 +170,19 @@ class EventReminderView(discord.ui.View):
         # Получаем роли для оповещений
         announce_roles = CONFIG.get('announce_roles', [])
         role_mentions = []
-        for role_id in announce_roles:
-            role = self.guild.get_role(int(role_id))
-            if role:
-                role_mentions.append(role.mention)
+        
+        # Получаем сервер
+        server_id = CONFIG.get('server_id')
+        if server_id:
+            guild = self.guild or self.message.guild
+            if guild:
+                for role_id in announce_roles:
+                    try:
+                        role = guild.get_role(int(role_id))
+                        if role:
+                            role_mentions.append(role.mention)
+                    except:
+                        pass
         
         content = ' '.join(role_mentions) if role_mentions else None
         
@@ -204,7 +219,19 @@ class EventReminderView(discord.ui.View):
         embed.set_footer(text="Unit Management System by Nagga")
         
         # Обновляем все сообщения во всех каналах
-        await self.update_all_messages(embed)
+        for channel_id, message in self.messages.items():
+            try:
+                await message.edit(content=content, embed=embed, view=self)
+                file_logger.debug(f"Обновлено сообщение в канале {channel_id}")
+            except Exception as e:
+                file_logger.error(f"Ошибка обновления сообщения в канале {channel_id}: {e}")
+        
+        # Также обновляем и текущее сообщение, если оно есть
+        if self.message and str(self.message.channel.id) not in self.messages:
+            try:
+                await self.message.edit(content=content, embed=embed, view=self)
+            except:
+                pass
     
     async def on_timeout(self):
         """Когда время вышло (за 10 минут до начала)"""

@@ -368,7 +368,7 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
         self.event_name = event_name
         self.event_time = event_time
         self.meeting_time = meeting_time
-        self.reminder_view = reminder_view  # Сохраняем ссылку на view с напоминанием
+        self.reminder_view = reminder_view
         
     group_code = discord.ui.TextInput(
         label="🔢 Код группы",
@@ -381,20 +381,6 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
         placeholder="Например: У банка, аэропорт, мэрия",
         max_length=100
     )
-    
-    async def update_reminder_message(self, interaction, user_id, group_code, meeting_place):
-        """Мгновенно обновить сообщение с напоминанием"""
-        try:
-            if self.reminder_view and self.reminder_view.message:
-                # Обновляем статус в существующем view
-                await self.reminder_view.update_taken_status(
-                    user_id, 
-                    interaction.user.display_name,
-                    group_code,
-                    meeting_place
-                )
-        except Exception as e:
-            print(f"Ошибка при обновлении сообщения: {e}")
     
     async def on_submit(self, interaction: discord.Interaction):
         from datetime import datetime, timedelta
@@ -441,56 +427,91 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
         db.log_event_action(self.event_id, "taken", str(interaction.user.id),
                            f"Группа: {self.group_code.value}, Место: {self.meeting_place.value}")
         
-        # МГНОВЕННО обновляем сообщение с напоминанием
-        await self.update_reminder_message(
-            interaction, 
-            interaction.user.id,
-            self.group_code.value,
-            self.meeting_place.value
-        )
+        # ===== НОВЫЙ КОД ДЛЯ ОТПРАВКИ ВО ВСЕ КАНАЛЫ =====
+        # Получаем список каналов для оповещений
+        announce_channels = CONFIG.get('announce_channels', [])
         
-        # Отправляем в канал оповещений
-        channel_id = CONFIG.get('announce_channel_id') or CONFIG.get('alarm_channel_id')
-        if channel_id:
-            channel = interaction.guild.get_channel(int(channel_id))
-            if channel:
-                event_dt_today = datetime.strptime(f"{today} {self.event_time}", "%Y-%m-%d %H:%M")
-                meeting_dt_today = event_dt_today - timedelta(minutes=20)
-                meeting_timestamp = int(meeting_dt_today.timestamp())
-                
-                embed = discord.Embed(
-                    title=f"✅ СБОР НА МЕРОПРИЯТИЕ: {self.event_name}",
-                    description=f"Мероприятие проведёт: {interaction.user.mention}",
-                    color=0x00ff00
-                )
-                
-                embed.add_field(
-                    name="⏱️ Сбор в",
-                    value=f"**{meeting_time}** МСК",
-                    inline=False
-                )
-                
-                embed.add_field(
-                    name="📍 Место сбора",
-                    value=self.meeting_place.value,
-                    inline=True
-                )
-                
-                embed.add_field(
-                    name="🔢 Код группы",
-                    value=self.group_code.value,
-                    inline=True
-                )
-                
-                embed.add_field(
-                    name="Участие:",
-                    value="Для участия зайди в игру, в войс и приедь на место сбора",
-                    inline=False
-                )
-                
-                embed.set_footer(text="Unit Management System by Nagga")
-                
-                await channel.send(embed=embed)
+        # Если нет отдельных каналов для оповещений, используем каналы напоминаний
+        if not announce_channels:
+            announce_channels = CONFIG.get('alarm_channels', [])
+        
+        # Получаем роли для упоминания
+        announce_roles = CONFIG.get('announce_roles', [])
+        role_mentions = []
+        
+        # Получаем сервер
+        server_id = CONFIG.get('server_id')
+        guild = None
+        if server_id:
+            guild = interaction.client.get_guild(int(server_id))
+        
+        if guild:
+            for role_id in announce_roles:
+                role = guild.get_role(int(role_id))
+                if role:
+                    role_mentions.append(role.mention)
+        
+        # Отправляем во все каналы
+        if announce_channels:
+            event_dt_today = datetime.strptime(f"{today} {self.event_time}", "%Y-%m-%d %H:%M")
+            meeting_dt_today = event_dt_today - timedelta(minutes=20)
+            meeting_timestamp = int(meeting_dt_today.timestamp())
+            
+            embed = discord.Embed(
+                title=f"✅ СБОР НА МЕРОПРИЯТИЕ: {self.event_name}",
+                description=f"Мероприятие проведёт: {interaction.user.mention}",
+                color=0x00ff00
+            )
+            
+            embed.add_field(
+                name="⏱️ Сбор в",
+                value=f"**{meeting_time}** МСК",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="📍 Место сбора",
+                value=self.meeting_place.value,
+                inline=True
+            )
+            
+            embed.add_field(
+                name="🔢 Код группы",
+                value=self.group_code.value,
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Участие:",
+                value="Для участия зайди в игру, в войс и приедь на место сбора",
+                inline=False
+            )
+            
+            embed.set_footer(text="Unit Management System by Nagga")
+            
+            # Отправляем в каждый канал
+            content = ' '.join(role_mentions) if role_mentions else None
+            sent_count = 0
+            
+            for channel_id in announce_channels:
+                try:
+                    channel = interaction.client.get_channel(int(channel_id))
+                    if channel:
+                        await channel.send(content=content, embed=embed)
+                        sent_count += 1
+                    else:
+                        # Пробуем через guild
+                        if guild:
+                            channel = guild.get_channel(int(channel_id))
+                            if channel:
+                                await channel.send(content=content, embed=embed)
+                                sent_count += 1
+                except Exception as e:
+                    print(f"Ошибка отправки в канал {channel_id}: {e}")
+            
+            print(f"✅ Отправлено в {sent_count} каналов оповещений")
+        
+        # ===== КОНЕЦ НОВОГО КОДА =====
         
         # Определяем время сбора для ответа пользователю
         if meeting_time:
@@ -507,6 +528,15 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
             f"🔢 Код группы: {self.group_code.value}",
             ephemeral=True
         )
+        
+        # Обновляем сообщение с напоминанием
+        if self.reminder_view:
+            await self.reminder_view.update_taken_status(
+                interaction.user.id,
+                interaction.user.display_name,
+                self.group_code.value,
+                self.meeting_place.value
+            )
 
 class SetAlarmChannelsModal(discord.ui.Modal, title="🔔 НАСТРОЙКА КАНАЛОВ НАПОМИНАНИЙ"):
     def __init__(self, guild=None):
