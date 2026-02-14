@@ -142,6 +142,10 @@ class EventScheduler:
     async def send_reminder(self, event, now):
         """Отправка напоминания"""
         try:
+            # ПРИНУДИТЕЛЬНО делаем now offset-aware если он еще нет
+            if now.tzinfo is None:
+                now = MSK_TZ.localize(now)
+            
             channel_id = CONFIG.get('alarm_channel_id')
             if not channel_id:
                 logger.error("Канал оповещений не настроен")
@@ -154,7 +158,7 @@ class EventScheduler:
             
             event_time = event['event_time']
             
-            # Время сбора (за 20 минут) - просто строковая арифметика
+            # Время сбора (за 20 минут) - простая арифметика со строками
             event_hour, event_min = map(int, event_time.split(':'))
             meeting_hour = event_hour
             meeting_min = event_min - 20
@@ -216,6 +220,9 @@ class EventScheduler:
             
         except Exception as e:
             logger.error(f"Ошибка отправки напоминания: {e}")
+            # Добавим детальную информацию
+            import traceback
+            traceback.print_exc()
     
     async def send_timeout_message(self, event_id: int, event_date: str, event_time: str):
         """Сообщение о таймауте"""
