@@ -153,14 +153,20 @@ class EventScheduler:
                 return
             
             event_time = event['event_time']
-            event_hour, event_minute = map(int, event_time.split(':'))
             
-            # Время сбора (за 20 минут)
-            meeting_datetime = MSK_TZ.localize(datetime(
-                now.year, now.month, now.day,
-                event_hour, event_minute
-            )) - timedelta(minutes=20)
-            meeting_time = meeting_datetime.strftime("%H:%M")
+            # Время сбора (за 20 минут) - просто строковая арифметика
+            event_hour, event_min = map(int, event_time.split(':'))
+            meeting_hour = event_hour
+            meeting_min = event_min - 20
+            
+            if meeting_min < 0:
+                meeting_hour -= 1
+                meeting_min += 60
+            
+            if meeting_hour < 0:
+                meeting_hour = 23
+            
+            meeting_time = f"{meeting_hour:02d}:{meeting_min:02d}"
             
             embed = discord.Embed(
                 title=f"🔔 НАПОМИНАНИЕ О МЕРОПРИЯТИИ: {event['name']}",
@@ -188,6 +194,7 @@ class EventScheduler:
             
             embed.set_footer(text="Unit Management System by Nagga")
             
+            from events.views import EventReminderView
             view = EventReminderView(
                 event_id=event['id'],
                 event_name=event['name'],
