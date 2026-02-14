@@ -509,7 +509,7 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
         )
 
 class SetAlarmChannelsModal(discord.ui.Modal, title="🔔 НАСТРОЙКА КАНАЛОВ НАПОМИНАНИЙ"):
-    def __init__(self, guild):
+    def __init__(self, guild=None):
         super().__init__()
         self.guild = guild
     
@@ -522,15 +522,25 @@ class SetAlarmChannelsModal(discord.ui.Modal, title="🔔 НАСТРОЙКА К�
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            # Если guild не передан, используем guild из interaction
-            guild = self.guild or interaction.guild
+            # Получаем сервер из CONFIG
+            server_id = CONFIG.get('server_id')
+            if not server_id:
+                await interaction.response.send_message(
+                    "❌ Сначала установите ID сервера в Глобальных настройках",
+                    ephemeral=True
+                )
+                return
+            
+            guild = interaction.client.get_guild(int(server_id))
             if not guild:
-                await interaction.response.send_message("❌ Не удалось определить сервер", ephemeral=True)
+                await interaction.response.send_message(
+                    f"❌ Сервер с ID {server_id} не найден. Бот не добавлен на этот сервер?",
+                    ephemeral=True
+                )
                 return
             
             channel_ids = [c.strip() for c in self.channels.value.split(',') if c.strip()]
             
-            # Проверяем существование каналов
             valid_channels = []
             invalid_channels = []
             
@@ -540,18 +550,13 @@ class SetAlarmChannelsModal(discord.ui.Modal, title="🔔 НАСТРОЙКА К�
                     if channel:
                         valid_channels.append(cid)
                     else:
-                        # Пробуем найти канал через бота
-                        channel = interaction.client.get_channel(int(cid))
-                        if channel:
-                            valid_channels.append(cid)
-                        else:
-                            invalid_channels.append(cid)
+                        invalid_channels.append(cid)
                 except ValueError:
                     invalid_channels.append(cid)
             
             if invalid_channels:
                 await interaction.response.send_message(
-                    f"❌ Каналы с ID {', '.join(invalid_channels)} не найдены",
+                    f"❌ Каналы с ID {', '.join(invalid_channels)} не найдены на сервере {guild.name}",
                     ephemeral=True
                 )
                 return
@@ -559,10 +564,9 @@ class SetAlarmChannelsModal(discord.ui.Modal, title="🔔 НАСТРОЙКА К�
             CONFIG['alarm_channels'] = valid_channels
             save_config(str(interaction.user.id))
             
-            # Формируем красивое сообщение
             channels_mention = []
             for cid in valid_channels[:3]:
-                channel = guild.get_channel(int(cid)) or interaction.client.get_channel(int(cid))
+                channel = guild.get_channel(int(cid))
                 if channel:
                     channels_mention.append(channel.mention)
                 else:
@@ -572,7 +576,7 @@ class SetAlarmChannelsModal(discord.ui.Modal, title="🔔 НАСТРОЙКА К�
                 channels_mention.append(f"и ещё {len(valid_channels)-3}")
             
             await interaction.response.send_message(
-                f"✅ Каналы напоминаний настроены:\n{', '.join(channels_mention)}",
+                f"✅ Каналы напоминаний настроены на сервере **{guild.name}**:\n{', '.join(channels_mention)}",
                 ephemeral=True
             )
         except Exception as e:
@@ -580,7 +584,7 @@ class SetAlarmChannelsModal(discord.ui.Modal, title="🔔 НАСТРОЙКА К�
 
 
 class SetAnnounceChannelsModal(discord.ui.Modal, title="📢 НАСТРОЙКА КАНАЛОВ ОПОВЕЩЕНИЙ"):
-    def __init__(self, guild):
+    def __init__(self, guild=None):
         super().__init__()
         self.guild = guild
     
@@ -593,9 +597,20 @@ class SetAnnounceChannelsModal(discord.ui.Modal, title="📢 НАСТРОЙКА 
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            guild = self.guild or interaction.guild
+            server_id = CONFIG.get('server_id')
+            if not server_id:
+                await interaction.response.send_message(
+                    "❌ Сначала установите ID сервера в Глобальных настройках",
+                    ephemeral=True
+                )
+                return
+            
+            guild = interaction.client.get_guild(int(server_id))
             if not guild:
-                await interaction.response.send_message("❌ Не удалось определить сервер", ephemeral=True)
+                await interaction.response.send_message(
+                    f"❌ Сервер с ID {server_id} не найден",
+                    ephemeral=True
+                )
                 return
             
             channel_ids = [c.strip() for c in self.channels.value.split(',') if c.strip()]
@@ -605,7 +620,7 @@ class SetAnnounceChannelsModal(discord.ui.Modal, title="📢 НАСТРОЙКА 
             
             for cid in channel_ids:
                 try:
-                    channel = guild.get_channel(int(cid)) or interaction.client.get_channel(int(cid))
+                    channel = guild.get_channel(int(cid))
                     if channel:
                         valid_channels.append(cid)
                     else:
@@ -625,7 +640,7 @@ class SetAnnounceChannelsModal(discord.ui.Modal, title="📢 НАСТРОЙКА 
             
             channels_mention = []
             for cid in valid_channels[:3]:
-                channel = guild.get_channel(int(cid)) or interaction.client.get_channel(int(cid))
+                channel = guild.get_channel(int(cid))
                 if channel:
                     channels_mention.append(channel.mention)
                 else:
@@ -643,7 +658,7 @@ class SetAnnounceChannelsModal(discord.ui.Modal, title="📢 НАСТРОЙКА 
 
 
 class SetReminderRolesModal(discord.ui.Modal, title="🔔 РОЛИ ДЛЯ НАПОМИНАНИЙ"):
-    def __init__(self, guild):
+    def __init__(self, guild=None):
         super().__init__()
         self.guild = guild
     
@@ -656,9 +671,20 @@ class SetReminderRolesModal(discord.ui.Modal, title="🔔 РОЛИ ДЛЯ НАП
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            guild = self.guild or interaction.guild
+            server_id = CONFIG.get('server_id')
+            if not server_id:
+                await interaction.response.send_message(
+                    "❌ Сначала установите ID сервера в Глобальных настройках",
+                    ephemeral=True
+                )
+                return
+            
+            guild = interaction.client.get_guild(int(server_id))
             if not guild:
-                await interaction.response.send_message("❌ Не удалось определить сервер", ephemeral=True)
+                await interaction.response.send_message(
+                    f"❌ Сервер с ID {server_id} не найден",
+                    ephemeral=True
+                )
                 return
             
             role_ids = [r.strip() for r in self.roles.value.split(',') if r.strip()]
@@ -678,7 +704,7 @@ class SetReminderRolesModal(discord.ui.Modal, title="🔔 РОЛИ ДЛЯ НАП
             
             if invalid_roles:
                 await interaction.response.send_message(
-                    f"❌ Роли с ID {', '.join(invalid_roles)} не найдены на этом сервере",
+                    f"❌ Роли с ID {', '.join(invalid_roles)} не найдены",
                     ephemeral=True
                 )
                 return
@@ -706,7 +732,7 @@ class SetReminderRolesModal(discord.ui.Modal, title="🔔 РОЛИ ДЛЯ НАП
 
 
 class SetAnnounceRolesModal(discord.ui.Modal, title="📢 РОЛИ ДЛЯ ОПОВЕЩЕНИЙ"):
-    def __init__(self, guild):
+    def __init__(self, guild=None):
         super().__init__()
         self.guild = guild
     
@@ -719,9 +745,20 @@ class SetAnnounceRolesModal(discord.ui.Modal, title="📢 РОЛИ ДЛЯ ОПО
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            guild = self.guild or interaction.guild
+            server_id = CONFIG.get('server_id')
+            if not server_id:
+                await interaction.response.send_message(
+                    "❌ Сначала установите ID сервера в Глобальных настройках",
+                    ephemeral=True
+                )
+                return
+            
+            guild = interaction.client.get_guild(int(server_id))
             if not guild:
-                await interaction.response.send_message("❌ Не удалось определить сервер", ephemeral=True)
+                await interaction.response.send_message(
+                    f"❌ Сервер с ID {server_id} не найден",
+                    ephemeral=True
+                )
                 return
             
             role_ids = [r.strip() for r in self.roles.value.split(',') if r.strip()]
@@ -741,7 +778,7 @@ class SetAnnounceRolesModal(discord.ui.Modal, title="📢 РОЛИ ДЛЯ ОПО
             
             if invalid_roles:
                 await interaction.response.send_message(
-                    f"❌ Роли с ID {', '.join(invalid_roles)} не найдены на этом сервере",
+                    f"❌ Роли с ID {', '.join(invalid_roles)} не найдены",
                     ephemeral=True
                 )
                 return
