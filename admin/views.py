@@ -384,6 +384,7 @@ class EventSettingsView(BaseMenuView):
     def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
         super().__init__(user_id, guild, previous_view, previous_embed)
         
+        # === КНОПКИ НАСТРОЕК (НОВЫЕ) ===
         # Каналы напоминаний
         alarm_channels_btn = discord.ui.Button(
             label="🔔 Каналы напоминаний",
@@ -392,7 +393,7 @@ class EventSettingsView(BaseMenuView):
             row=0
         )
         async def alarm_channels_cb(i):
-            await i.response.send_modal(SetAlarmChannelsModal(self.guild))  # ← передаём guild
+            await i.response.send_modal(SetAlarmChannelsModal(self.guild))
         alarm_channels_btn.callback = alarm_channels_cb
         self.add_item(alarm_channels_btn)
         
@@ -404,7 +405,7 @@ class EventSettingsView(BaseMenuView):
             row=0
         )
         async def announce_channels_cb(i):
-            await i.response.send_modal(SetAnnounceChannelsModal(self.guild))  # ← передаём guild
+            await i.response.send_modal(SetAnnounceChannelsModal(self.guild))
         announce_channels_btn.callback = announce_channels_cb
         self.add_item(announce_channels_btn)
         
@@ -416,7 +417,7 @@ class EventSettingsView(BaseMenuView):
             row=1
         )
         async def reminder_roles_cb(i):
-            await i.response.send_modal(SetReminderRolesModal(self.guild))  # ← передаём guild
+            await i.response.send_modal(SetReminderRolesModal(self.guild))
         reminder_roles_btn.callback = reminder_roles_cb
         self.add_item(reminder_roles_btn)
         
@@ -428,10 +429,11 @@ class EventSettingsView(BaseMenuView):
             row=1
         )
         async def announce_roles_cb(i):
-            await i.response.send_modal(SetAnnounceRolesModal(self.guild))  # ← передаём guild
+            await i.response.send_modal(SetAnnounceRolesModal(self.guild))
         announce_roles_btn.callback = announce_roles_cb
         self.add_item(announce_roles_btn)
         
+        # === СТАНДАРТНЫЕ КНОПКИ (БЫЛИ РАНЬШЕ) ===
         # Добавить МП
         add_btn = discord.ui.Button(
             label="➕ Добавить МП",
@@ -498,15 +500,21 @@ class EventSettingsView(BaseMenuView):
         reminder_roles = CONFIG.get('reminder_roles', [])
         announce_roles = CONFIG.get('announce_roles', [])
         
+        # Информация о количестве настроек
+        settings_info = []
         if alarm_channels:
-            embed.add_field(name="🔔 Каналы напоминаний", value=f"`{len(alarm_channels)} каналов`", inline=True)
+            settings_info.append(f"🔔 Напоминания: {len(alarm_channels)} каналов")
         if announce_channels:
-            embed.add_field(name="📢 Каналы оповещений", value=f"`{len(announce_channels)} каналов`", inline=True)
+            settings_info.append(f"📢 Оповещения: {len(announce_channels)} каналов")
         if reminder_roles:
-            embed.add_field(name="👥 Роли (напоминания)", value=f"`{len(reminder_roles)} ролей`", inline=True)
+            settings_info.append(f"👥 Роли (напоминания): {len(reminder_roles)}")
         if announce_roles:
-            embed.add_field(name="👥 Роли (оповещения)", value=f"`{len(announce_roles)} ролей`", inline=True)
+            settings_info.append(f"👥 Роли (оповещения): {len(announce_roles)}")
         
+        if settings_info:
+            embed.description = "\n".join(settings_info)
+        
+        return embed
         return embed
 
 
