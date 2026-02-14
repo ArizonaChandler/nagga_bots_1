@@ -494,28 +494,17 @@ class EventSettingsView(BaseMenuView):
             color=0xffa500
         )
         
-        # Получаем текущие настройки
+        # Получаем текущие настройки из CONFIG
         alarm_channels = CONFIG.get('alarm_channels', [])
         announce_channels = CONFIG.get('announce_channels', [])
         reminder_roles = CONFIG.get('reminder_roles', [])
         announce_roles = CONFIG.get('announce_roles', [])
         
-        # Форматируем каналы напоминаний
+        # Каналы напоминаний
         if alarm_channels:
-            channels_list = []
-            for ch_id in alarm_channels[:3]:  # Показываем первые 3
-                channel = self.guild.get_channel(int(ch_id))
-                if channel:
-                    channels_list.append(channel.mention)
-                else:
-                    channels_list.append(f"`{ch_id}`")
-            
-            if len(alarm_channels) > 3:
-                channels_list.append(f"и ещё {len(alarm_channels)-3}")
-            
             embed.add_field(
                 name="🔔 Каналы напоминаний",
-                value=', '.join(channels_list),
+                value=f"`{len(alarm_channels)} каналов`\nID: {', '.join(alarm_channels[:3])}" + (f" и ещё {len(alarm_channels)-3}" if len(alarm_channels) > 3 else ""),
                 inline=False
             )
         else:
@@ -525,22 +514,11 @@ class EventSettingsView(BaseMenuView):
                 inline=False
             )
         
-        # Форматируем каналы оповещений
+        # Каналы оповещений
         if announce_channels:
-            channels_list = []
-            for ch_id in announce_channels[:3]:
-                channel = self.guild.get_channel(int(ch_id))
-                if channel:
-                    channels_list.append(channel.mention)
-                else:
-                    channels_list.append(f"`{ch_id}`")
-            
-            if len(announce_channels) > 3:
-                channels_list.append(f"и ещё {len(announce_channels)-3}")
-            
             embed.add_field(
                 name="📢 Каналы оповещений",
-                value=', '.join(channels_list),
+                value=f"`{len(announce_channels)} каналов`\nID: {', '.join(announce_channels[:3])}" + (f" и ещё {len(announce_channels)-3}" if len(announce_channels) > 3 else ""),
                 inline=False
             )
         else:
@@ -550,22 +528,11 @@ class EventSettingsView(BaseMenuView):
                 inline=False
             )
         
-        # Форматируем роли для напоминаний
+        # Роли для напоминаний
         if reminder_roles:
-            roles_list = []
-            for role_id in reminder_roles[:3]:
-                role = self.guild.get_role(int(role_id))
-                if role:
-                    roles_list.append(role.mention)
-                else:
-                    roles_list.append(f"`{role_id}`")
-            
-            if len(reminder_roles) > 3:
-                roles_list.append(f"и ещё {len(reminder_roles)-3}")
-            
             embed.add_field(
                 name="👥 Роли (напоминания)",
-                value=', '.join(roles_list),
+                value=f"`{len(reminder_roles)} ролей`\nID: {', '.join(reminder_roles[:3])}" + (f" и ещё {len(reminder_roles)-3}" if len(reminder_roles) > 3 else ""),
                 inline=False
             )
         else:
@@ -575,22 +542,11 @@ class EventSettingsView(BaseMenuView):
                 inline=False
             )
         
-        # Форматируем роли для оповещений
+        # Роли для оповещений
         if announce_roles:
-            roles_list = []
-            for role_id in announce_roles[:3]:
-                role = self.guild.get_role(int(role_id))
-                if role:
-                    roles_list.append(role.mention)
-                else:
-                    roles_list.append(f"`{role_id}`")
-            
-            if len(announce_roles) > 3:
-                roles_list.append(f"и ещё {len(announce_roles)-3}")
-            
             embed.add_field(
                 name="👥 Роли (оповещения)",
-                value=', '.join(roles_list),
+                value=f"`{len(announce_roles)} ролей`\nID: {', '.join(announce_roles[:3])}" + (f" и ещё {len(announce_roles)-3}" if len(announce_roles) > 3 else ""),
                 inline=False
             )
         else:
@@ -600,7 +556,7 @@ class EventSettingsView(BaseMenuView):
                 inline=False
             )
         
-        # Общая статистика
+        # Статистика
         events = db.get_events(enabled_only=True)
         embed.add_field(
             name="📅 Мероприятия",
@@ -614,6 +570,14 @@ class EventSettingsView(BaseMenuView):
 class EventsListView(BaseMenuView):
     """Список мероприятий с пагинацией"""
     def __init__(self, user_id: str, guild, page: int = 1, previous_view=None, previous_embed=None):
+        # Если guild = None (ЛС), получаем сервер из CONFIG
+        if guild is None:
+            server_id = CONFIG.get('server_id')
+            if server_id:
+                # Здесь нужно получить guild из bot по ID
+                # Эта проблема решается в методе send_initial
+                pass
+        
         super().__init__(user_id, guild, previous_view, previous_embed)
         self.page = page
         self.message = None
@@ -747,7 +711,12 @@ class EventsListView(BaseMenuView):
         return embed
     
     async def send_initial(self, interaction):
-        """Отправить начальное сообщение"""
+        # Если guild нет, пробуем получить из bot
+        if self.guild is None:
+            server_id = CONFIG.get('server_id')
+            if server_id:
+                self.guild = interaction.client.get_guild(int(server_id))
+        
         embed = self.create_embed()
         await interaction.response.edit_message(embed=embed, view=self)
         self.message = await interaction.original_response()
@@ -940,7 +909,13 @@ class ConfirmDeleteView(BaseMenuView):
 
 async def send_event_stats(interaction, guild, previous_view=None, previous_embed=None):
     """Отправка статистики по мероприятиям"""
-    top = db.get_top_organizers(10, days=30)  # За последние 30 дней
+    # Если guild нет, пробуем получить из CONFIG
+    if guild is None:
+        server_id = CONFIG.get('server_id')
+        if server_id:
+            guild = interaction.client.get_guild(int(server_id))
+    
+    top = db.get_top_organizers(10, days=30)
     stats = db.get_event_stats_summary()
     
     embed = discord.Embed(
@@ -948,6 +923,46 @@ async def send_event_stats(interaction, guild, previous_view=None, previous_embe
         color=0x00ff00,
         timestamp=datetime.now()
     )
+    
+    # Топ организаторов
+    if top:
+        top_text = ""
+        for i, row in enumerate(top[:5], 1):
+            user_id, user_name, count = row
+            # Если есть guild, пытаемся получить упоминание
+            if guild:
+                try:
+                    user = await guild.fetch_member(int(user_id))
+                    mention = user.mention
+                except:
+                    mention = f"**{user_name}**"
+            else:
+                mention = f"**{user_name}** (ID: {user_id})"
+            top_text += f"{i}. {mention} — **{count}** МП\n"
+        
+        embed.add_field(name="🏆 Топ организаторов (30 дней)", value=top_text or "Нет данных", inline=False)
+    else:
+        embed.add_field(name="🏆 Топ организаторов", value="Нет данных за 30 дней", inline=False)
+    
+    # Общая статистика
+    embed.add_field(
+        name="📅 Мероприятия",
+        value=f"Всего: `{stats['total_events']}`\nАктивных: `{stats['active_events']}`",
+        inline=True
+    )
+    
+    embed.add_field(
+        name="✅ Проведено",
+        value=f"За всё время: `{stats['total_takes']}`\nЗа 30 дней: `{stats['takes_30d']}`\nСегодня: `{stats['takes_today']}`",
+        inline=True
+    )
+    
+    class StatsView(BaseMenuView):
+        def __init__(self):
+            super().__init__(str(interaction.user.id), guild, previous_view, previous_embed)
+            self.add_back_button()
+    
+    await interaction.response.edit_message(embed=embed, view=StatsView())
     
     # Топ организаторов за 30 дней
     if top:
