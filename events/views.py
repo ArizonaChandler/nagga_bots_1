@@ -268,6 +268,8 @@ class EventInfoView(BaseMenuView):
         try:
             today = datetime.now(MSK_TZ).date()
             weekday = today.weekday()
+            now = datetime.now(MSK_TZ)
+            current_time_str = now.strftime("%H:%M")
             
             # Получаем все мероприятия на сегодня
             events = db.get_events(enabled_only=True, weekday=weekday)
@@ -280,45 +282,40 @@ class EventInfoView(BaseMenuView):
                 )
                 return
             
-            # Фильтруем только будущие мероприятия
-            now = datetime.now(MSK_TZ).time()
-            future_events = []
-            
-            for event in events:
-                event_time = datetime.strptime(event['event_time'], "%H:%M").time()
-                # Показываем только мероприятия, которые ещё не начались
-                if event_time >= now:
-                    future_events.append(event)
-            
-            if not future_events:
-                await interaction.response.edit_message(
-                    content="📅 На сегодня все мероприятия уже прошли",
-                    embed=None,
-                    view=self
-                )
-                return
-            
             embed = discord.Embed(
                 title=f"📅 МЕРОПРИЯТИЯ НА СЕГОДНЯ ({today.strftime('%d.%m.%Y')})",
                 color=0x7289da
             )
             
-            for event in future_events:
+            for event in events:
+                event_time = event['event_time']
+                event_hour, event_min = map(int, event_time.split(':'))
+                reminder_time = f"{event_hour-1:02d}:{event_min:02d}" if event_hour > 0 else f"23:{event_min:02d}"
+                
                 with db.get_connection() as conn:
                     cursor = conn.cursor()
                     cursor.execute('''
-                        SELECT taken_by, group_code, meeting_place FROM event_schedule 
+                        SELECT taken_by, group_code, meeting_place, reminder_sent 
+                        FROM event_schedule 
                         WHERE event_id = ? AND scheduled_date = ?
                     ''', (event['id'], today.isoformat()))
                     result = cursor.fetchone()
                 
-                if result and result[0]:
-                    status = f"✅ **Взял:** <@{result[0]}>\n📍 {result[2]}\n🔢 {result[1]}"
+                # Определяем статус
+                if result and result[0]:  # Взято
+                    status = f"✅ **Проводит:** <@{result[0]}>\n📍 {result[2]}\n🔢 {result[1]}"
                 else:
-                    status = "❌ **Свободно**"
+                    if current_time_str >= event_time:
+                        status = "⌛ **Мероприятие уже идёт или прошло**"
+                    elif current_time_str >= reminder_time:
+                        # Напоминание уже пришло
+                        status = "⏳ **Ожидаем информацию от HIGH состава**"
+                    else:
+                        # Напоминание ещё не пришло
+                        status = "🕒 **Будет проводиться позже**"
                 
                 embed.add_field(
-                    name=f"{event['event_time']} — {event['name']}",
+                    name=f"{event_time} — {event['name']}",
                     value=status,
                     inline=False
                 )
