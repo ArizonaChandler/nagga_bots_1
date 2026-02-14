@@ -61,6 +61,22 @@ async def on_ready():
     print(f"🆔 ID: {bot.user.id}")
     print(f"🌐 Серверов: {len(bot.guilds)}")
     print(f"📁 Файловое хранилище: {file_manager.storage_path}")
+    
+    # Принудительно загружаем все каналы
+    print("🔍 Загрузка каналов...")
+    for guild in bot.guilds:
+        print(f"  ├─ {guild.name} (ID: {guild.id})")
+        for channel in guild.channels:
+            print(f"  │  └─ #{channel.name} (ID: {channel.id})")
+    
+    # Проверяем проблемный канал
+    channel_id = "1471570430983934099"
+    channel = bot.get_channel(int(channel_id))
+    if channel:
+        print(f"✅ Канал {channel_id} найден: #{channel.name}")
+    else:
+        print(f"❌ Канал {channel_id} НЕ НАЙДЕН в кэше!")
+    
     print("="*60 + "\n")
     
     colors = db.get_dual_colors()
@@ -70,6 +86,25 @@ async def on_ready():
         type=discord.ActivityType.watching,
         name="!info | v1.3"
     ))
+
+@bot.command(name='test_channels')
+async def test_channels(ctx):
+    """Показать все каналы, которые видит бот"""
+    embed = discord.Embed(title="📋 Доступные каналы", color=0x7289da)
+    
+    channels_list = []
+    for guild in bot.guilds:
+        for channel in guild.channels:
+            channels_list.append(f"📌 {guild.name} - {channel.name} (ID: {channel.id})")
+    
+    if channels_list:
+        embed.description = "\n".join(channels_list[:25])
+        if len(channels_list) > 25:
+            embed.set_footer(text=f"Показано 25 из {len(channels_list)} каналов")
+    else:
+        embed.description = "❌ Бот не видит ни одного канала!"
+    
+    await ctx.send(embed=embed)
 
 @bot.event
 async def on_command_error(ctx, error):
