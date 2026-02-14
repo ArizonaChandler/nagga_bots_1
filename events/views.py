@@ -19,9 +19,14 @@ class EventReminderView(discord.ui.View):
         msk_tz = pytz.timezone('Europe/Moscow')
         now = datetime.now(msk_tz)
         
-        # Парсим время мероприятия
-        event_dt = datetime.strptime(event_time, "%H:%M")
-        event_datetime = datetime.combine(now.date(), event_dt.time())
+        # Парсим время мероприятия (работаем со строками, не с datetime)
+        event_hour, event_min = map(int, event_time.split(':'))
+        
+        # Создаем datetime для времени мероприятия today
+        event_datetime = msk_tz.localize(datetime(
+            now.year, now.month, now.day,
+            event_hour, event_min
+        ))
         
         # Если мероприятие уже сегодня, но время прошло - добавляем день
         if event_datetime < now:
