@@ -522,6 +522,12 @@ class SetAlarmChannelsModal(discord.ui.Modal, title="🔔 НАСТРОЙКА К�
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
+            # Если guild не передан, используем guild из interaction
+            guild = self.guild or interaction.guild
+            if not guild:
+                await interaction.response.send_message("❌ Не удалось определить сервер", ephemeral=True)
+                return
+            
             channel_ids = [c.strip() for c in self.channels.value.split(',') if c.strip()]
             
             # Проверяем существование каналов
@@ -529,15 +535,23 @@ class SetAlarmChannelsModal(discord.ui.Modal, title="🔔 НАСТРОЙКА К�
             invalid_channels = []
             
             for cid in channel_ids:
-                channel = self.guild.get_channel(int(cid))
-                if channel:
-                    valid_channels.append(cid)
-                else:
+                try:
+                    channel = guild.get_channel(int(cid))
+                    if channel:
+                        valid_channels.append(cid)
+                    else:
+                        # Пробуем найти канал через бота
+                        channel = interaction.client.get_channel(int(cid))
+                        if channel:
+                            valid_channels.append(cid)
+                        else:
+                            invalid_channels.append(cid)
+                except ValueError:
                     invalid_channels.append(cid)
             
             if invalid_channels:
                 await interaction.response.send_message(
-                    f"❌ Каналы с ID {', '.join(invalid_channels)} не найдены на этом сервере",
+                    f"❌ Каналы с ID {', '.join(invalid_channels)} не найдены",
                     ephemeral=True
                 )
                 return
@@ -545,10 +559,14 @@ class SetAlarmChannelsModal(discord.ui.Modal, title="🔔 НАСТРОЙКА К�
             CONFIG['alarm_channels'] = valid_channels
             save_config(str(interaction.user.id))
             
+            # Формируем красивое сообщение
             channels_mention = []
             for cid in valid_channels[:3]:
-                channel = self.guild.get_channel(int(cid))
-                channels_mention.append(channel.mention)
+                channel = guild.get_channel(int(cid)) or interaction.client.get_channel(int(cid))
+                if channel:
+                    channels_mention.append(channel.mention)
+                else:
+                    channels_mention.append(f"`{cid}`")
             
             if len(valid_channels) > 3:
                 channels_mention.append(f"и ещё {len(valid_channels)-3}")
@@ -557,10 +575,8 @@ class SetAlarmChannelsModal(discord.ui.Modal, title="🔔 НАСТРОЙКА К�
                 f"✅ Каналы напоминаний настроены:\n{', '.join(channels_mention)}",
                 ephemeral=True
             )
-        except ValueError:
-            await interaction.response.send_message("❌ Неверный формат ID каналов", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
 
 
 class SetAnnounceChannelsModal(discord.ui.Modal, title="📢 НАСТРОЙКА КАНАЛОВ ОПОВЕЩЕНИЙ"):
@@ -577,22 +593,29 @@ class SetAnnounceChannelsModal(discord.ui.Modal, title="📢 НАСТРОЙКА 
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
+            guild = self.guild or interaction.guild
+            if not guild:
+                await interaction.response.send_message("❌ Не удалось определить сервер", ephemeral=True)
+                return
+            
             channel_ids = [c.strip() for c in self.channels.value.split(',') if c.strip()]
             
-            # Проверяем существование каналов
             valid_channels = []
             invalid_channels = []
             
             for cid in channel_ids:
-                channel = self.guild.get_channel(int(cid))
-                if channel:
-                    valid_channels.append(cid)
-                else:
+                try:
+                    channel = guild.get_channel(int(cid)) or interaction.client.get_channel(int(cid))
+                    if channel:
+                        valid_channels.append(cid)
+                    else:
+                        invalid_channels.append(cid)
+                except ValueError:
                     invalid_channels.append(cid)
             
             if invalid_channels:
                 await interaction.response.send_message(
-                    f"❌ Каналы с ID {', '.join(invalid_channels)} не найдены на этом сервере",
+                    f"❌ Каналы с ID {', '.join(invalid_channels)} не найдены",
                     ephemeral=True
                 )
                 return
@@ -602,8 +625,11 @@ class SetAnnounceChannelsModal(discord.ui.Modal, title="📢 НАСТРОЙКА 
             
             channels_mention = []
             for cid in valid_channels[:3]:
-                channel = self.guild.get_channel(int(cid))
-                channels_mention.append(channel.mention)
+                channel = guild.get_channel(int(cid)) or interaction.client.get_channel(int(cid))
+                if channel:
+                    channels_mention.append(channel.mention)
+                else:
+                    channels_mention.append(f"`{cid}`")
             
             if len(valid_channels) > 3:
                 channels_mention.append(f"и ещё {len(valid_channels)-3}")
@@ -612,10 +638,8 @@ class SetAnnounceChannelsModal(discord.ui.Modal, title="📢 НАСТРОЙКА 
                 f"✅ Каналы оповещений настроены:\n{', '.join(channels_mention)}",
                 ephemeral=True
             )
-        except ValueError:
-            await interaction.response.send_message("❌ Неверный формат ID каналов", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
 
 
 class SetReminderRolesModal(discord.ui.Modal, title="🔔 РОЛИ ДЛЯ НАПОМИНАНИЙ"):
@@ -632,17 +656,24 @@ class SetReminderRolesModal(discord.ui.Modal, title="🔔 РОЛИ ДЛЯ НАП
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
+            guild = self.guild or interaction.guild
+            if not guild:
+                await interaction.response.send_message("❌ Не удалось определить сервер", ephemeral=True)
+                return
+            
             role_ids = [r.strip() for r in self.roles.value.split(',') if r.strip()]
             
-            # Проверяем существование ролей
             valid_roles = []
             invalid_roles = []
             
             for rid in role_ids:
-                role = self.guild.get_role(int(rid))
-                if role:
-                    valid_roles.append(rid)
-                else:
+                try:
+                    role = guild.get_role(int(rid))
+                    if role:
+                        valid_roles.append(rid)
+                    else:
+                        invalid_roles.append(rid)
+                except ValueError:
                     invalid_roles.append(rid)
             
             if invalid_roles:
@@ -657,8 +688,11 @@ class SetReminderRolesModal(discord.ui.Modal, title="🔔 РОЛИ ДЛЯ НАП
             
             roles_mention = []
             for rid in valid_roles[:3]:
-                role = self.guild.get_role(int(rid))
-                roles_mention.append(role.mention)
+                role = guild.get_role(int(rid))
+                if role:
+                    roles_mention.append(role.mention)
+                else:
+                    roles_mention.append(f"`{rid}`")
             
             if len(valid_roles) > 3:
                 roles_mention.append(f"и ещё {len(valid_roles)-3}")
@@ -667,10 +701,8 @@ class SetReminderRolesModal(discord.ui.Modal, title="🔔 РОЛИ ДЛЯ НАП
                 f"✅ Роли для напоминаний:\n{', '.join(roles_mention)}",
                 ephemeral=True
             )
-        except ValueError:
-            await interaction.response.send_message("❌ Неверный формат ID ролей", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
 
 
 class SetAnnounceRolesModal(discord.ui.Modal, title="📢 РОЛИ ДЛЯ ОПОВЕЩЕНИЙ"):
@@ -687,17 +719,24 @@ class SetAnnounceRolesModal(discord.ui.Modal, title="📢 РОЛИ ДЛЯ ОПО
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
+            guild = self.guild or interaction.guild
+            if not guild:
+                await interaction.response.send_message("❌ Не удалось определить сервер", ephemeral=True)
+                return
+            
             role_ids = [r.strip() for r in self.roles.value.split(',') if r.strip()]
             
-            # Проверяем существование ролей
             valid_roles = []
             invalid_roles = []
             
             for rid in role_ids:
-                role = self.guild.get_role(int(rid))
-                if role:
-                    valid_roles.append(rid)
-                else:
+                try:
+                    role = guild.get_role(int(rid))
+                    if role:
+                        valid_roles.append(rid)
+                    else:
+                        invalid_roles.append(rid)
+                except ValueError:
                     invalid_roles.append(rid)
             
             if invalid_roles:
@@ -712,8 +751,11 @@ class SetAnnounceRolesModal(discord.ui.Modal, title="📢 РОЛИ ДЛЯ ОПО
             
             roles_mention = []
             for rid in valid_roles[:3]:
-                role = self.guild.get_role(int(rid))
-                roles_mention.append(role.mention)
+                role = guild.get_role(int(rid))
+                if role:
+                    roles_mention.append(role.mention)
+                else:
+                    roles_mention.append(f"`{rid}`")
             
             if len(valid_roles) > 3:
                 roles_mention.append(f"и ещё {len(valid_roles)-3}")
@@ -722,7 +764,5 @@ class SetAnnounceRolesModal(discord.ui.Modal, title="📢 РОЛИ ДЛЯ ОПО
                 f"✅ Роли для оповещений:\n{', '.join(roles_mention)}",
                 ephemeral=True
             )
-        except ValueError:
-            await interaction.response.send_message("❌ Неверный формат ID ролей", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
