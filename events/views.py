@@ -21,6 +21,8 @@ MSK_TZ = pytz.timezone('Europe/Moscow')
 
 class EventReminderView(discord.ui.View):
     """Кнопка 'Взять МП' с поддержкой нескольких каналов"""
+    _instances = {}  # Словарь для хранения всех экземпляров по event_id
+    
     def __init__(self, event_id: int, event_name: str, event_time: str, meeting_time: str, guild, reminder_channels=None):
         from datetime import datetime, timedelta
         import pytz
@@ -56,116 +58,22 @@ class EventReminderView(discord.ui.View):
         self.messages = {}  # Словарь {channel_id: message}
         self.reminder_channels = reminder_channels or []
         self.timeout_occurred = False
-        self.reminder_channels = reminder_channels or CONFIG.get('alarm_channels', [])
+        
+        # Регистрируем этот экземпляр в общем словаре
+        if event_id not in EventReminderView._instances:
+            EventReminderView._instances[event_id] = []
+        EventReminderView._instances[event_id].append(self)
+        
+        file_logger.debug(f"Зарегистрирован экземпляр для event_id {event_id}. Всего: {len(EventReminderView._instances[event_id])}")
     
     def add_message(self, message, channel_id):
         """Добавить сообщение из конкретного канала"""
         self.messages[str(channel_id)] = message
+        file_logger.debug(f"Добавлено сообщение для канала {channel_id}")
     
-    async def update_all_messages(self, embed, view=None):
-        """Обновить сообщения во всех каналах"""
-        view = view or self
-        for channel_id, message in self.messages.items():
-            try:
-                await message.edit(embed=embed, view=view)
-            except Exception as e:
-                file_logger.error(f"Ошибка обновления сообщения в канале {channel_id}: {e}")
-    
-    @discord.ui.button(label="🎮 ВЗЯТЬ МП", style=discord.ButtonStyle.success, emoji="🎮")
-    async def take_event(self, interaction: discord.Interaction, button: discord.ui.Button):
-        file_logger.debug("="*50)
-        file_logger.debug("take_event CALLED")
-        
-        if self.timeout_occurred:
-            await interaction.response.send_message("⏰ Время на взятие МП истекло!", ephemeral=True)
-            return
-        
-        if self.taken:
-            await interaction.response.send_message("❌ Уже взято", ephemeral=True)
-            return
-        
-        today = datetime.now(MSK_TZ).date().isoformat()
-        
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT taken_by FROM event_schedule 
-                WHERE event_id = ? AND scheduled_date = ?
-            ''', (self.event_id, today))
-            result = cursor.fetchone()
-            
-            if result and result[0]:
-                self.taken = True
-                button.disabled = True
-                
-                # Обновляем embed
-                announce_roles = CONFIG.get('announce_roles', [])
-                role_mentions = []
-                for role_id in announce_roles:
-                    role = self.guild.get_role(int(role_id))
-                    if role:
-                        role_mentions.append(role.mention)
-                
-                content = ' '.join(role_mentions) if role_mentions else None
-                
-                new_embed = discord.Embed(
-                    title=f"✅ СБОР НА МЕРОПРИЯТИЕ: {self.event_name}",
-                    description=f"Мероприятие проведёт: <@{result[0]}>",
-                    color=0x00ff00
-                )
-                
-                new_embed.add_field(
-                    name="⏱️ Сбор в",
-                    value=f"**{self.meeting_time}** МСК",
-                    inline=False
-                )
-                
-                new_embed.add_field(
-                    name="📍 Место сбора",
-                    value="Будет указано организатором",
-                    inline=True
-                )
-                
-                new_embed.add_field(
-                    name="🔢 Код группы",
-                    value="Будет указан организатором",
-                    inline=True
-                )
-                
-                new_embed.add_field(
-                    name="Участие:",
-                    value="Для участия зайди в игру, в войс и приедь на место сбора",
-                    inline=False
-                )
-                
-                new_embed.set_footer(text="Unit Management System by Nagga")
-                
-                # Обновляем ВСЕ сообщения
-                await self.update_all_messages(new_embed)
-                
-                await interaction.response.send_message(f"❌ Уже взял <@{result[0]}>", ephemeral=True)
-                return
-        
-        from admin.modals import TakeEventModal
-        modal = TakeEventModal(
-            self.event_id, 
-            self.event_name, 
-            self.event_time, 
-            self.meeting_time,
-            self  # Передаем view для обновления всех каналов
-        )
-        await interaction.response.send_modal(modal)
-    
-    async def update_taken_status(self, user_id: str, user_name: str, group_code: str, meeting_place: str):
-        """Обновить статус после взятия МП во всех каналах"""
-        file_logger.debug("="*50)
-        file_logger.debug("update_taken_status CALLED")
-        file_logger.debug(f"user_id: {user_id}, user_name: {user_name}")
-        file_logger.debug(f"group_code: {group_code}, meeting_place: {meeting_place}")
-        
-        self.taken = True
-        for child in self.children:
-            child.disabled = True
+    async def update_all_instances(self, user_id: str, user_name: str, group_code: str, meeting_place: str):
+        """Обновить ВСЕ экземпляры этого мероприятия во всех каналах"""
+        file_logger.debug(f"Обновление всех экземпляров для event_id {self.event_id}")
         
         # Получаем роли для оповещений
         announce_roles = CONFIG.get('announce_roles', [])
@@ -174,7 +82,7 @@ class EventReminderView(discord.ui.View):
         # Получаем сервер
         server_id = CONFIG.get('server_id')
         if server_id:
-            guild = self.guild or self.message.guild
+            guild = self.guild or (list(self.messages.values())[0].guild if self.messages else None)
             if guild:
                 for role_id in announce_roles:
                     try:
@@ -218,20 +126,75 @@ class EventReminderView(discord.ui.View):
         
         embed.set_footer(text="Unit Management System by Nagga")
         
-        # Обновляем все сообщения во всех каналах
-        for channel_id, message in self.messages.items():
-            try:
-                await message.edit(content=content, embed=embed, view=self)
-                file_logger.debug(f"Обновлено сообщение в канале {channel_id}")
-            except Exception as e:
-                file_logger.error(f"Ошибка обновления сообщения в канале {channel_id}: {e}")
+        # Обновляем ВСЕ экземпляры этого мероприятия
+        if self.event_id in EventReminderView._instances:
+            for instance in EventReminderView._instances[self.event_id]:
+                instance.taken = True
+                for child in instance.children:
+                    child.disabled = True
+                
+                # Обновляем все сообщения этого экземпляра
+                for channel_id, message in instance.messages.items():
+                    try:
+                        await message.edit(content=content, embed=embed, view=instance)
+                        file_logger.debug(f"Обновлено сообщение в канале {channel_id} (экземпляр {id(instance)})")
+                    except Exception as e:
+                        file_logger.error(f"Ошибка обновления сообщения в канале {channel_id}: {e}")
         
-        # Также обновляем и текущее сообщение, если оно есть
-        if self.message and str(self.message.channel.id) not in self.messages:
-            try:
-                await self.message.edit(content=content, embed=embed, view=self)
-            except:
-                pass
+        file_logger.info(f"✅ Все экземпляры для event_id {self.event_id} обновлены")
+    
+    @discord.ui.button(label="🎮 ВЗЯТЬ МП", style=discord.ButtonStyle.success, emoji="🎮")
+    async def take_event(self, interaction: discord.Interaction, button: discord.ui.Button):
+        file_logger.debug("="*50)
+        file_logger.debug("take_event CALLED")
+        
+        if self.timeout_occurred:
+            await interaction.response.send_message("⏰ Время на взятие МП истекло!", ephemeral=True)
+            return
+        
+        if self.taken:
+            await interaction.response.send_message("❌ Уже взято", ephemeral=True)
+            return
+        
+        today = datetime.now(MSK_TZ).date().isoformat()
+        
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT taken_by FROM event_schedule 
+                WHERE event_id = ? AND scheduled_date = ?
+            ''', (self.event_id, today))
+            result = cursor.fetchone()
+            
+            if result and result[0]:
+                self.taken = True
+                button.disabled = True
+                
+                # Обновляем ВСЕ экземпляры
+                await self.update_all_instances(
+                    result[0],
+                    "Пользователь",
+                    "Будет указано",
+                    "Будет указано"
+                )
+                
+                await interaction.response.send_message(f"❌ Уже взял <@{result[0]}>", ephemeral=True)
+                return
+        
+        from admin.modals import TakeEventModal
+        modal = TakeEventModal(
+            self.event_id, 
+            self.event_name, 
+            self.event_time, 
+            self.meeting_time,
+            self  # Передаем view для обратного вызова
+        )
+        await interaction.response.send_modal(modal)
+    
+    async def update_taken_status(self, user_id: str, user_name: str, group_code: str, meeting_place: str):
+        """Обновить статус после взятия МП во всех каналах"""
+        # Просто вызываем update_all_instances
+        await self.update_all_instances(user_id, user_name, group_code, meeting_place)
     
     async def on_timeout(self):
         """Когда время вышло (за 10 минут до начала)"""
@@ -262,7 +225,11 @@ class EventReminderView(discord.ui.View):
             embed.set_footer(text="Unit Management System by Nagga")
             
             # Обновляем все сообщения
-            await self.update_all_messages(embed)
+            for channel_id, message in self.messages.items():
+                try:
+                    await message.edit(embed=embed, view=self)
+                except Exception as e:
+                    file_logger.error(f"Ошибка обновления сообщения в канале {channel_id}: {e}")
 
 
 class EventInfoView(BaseMenuView):
