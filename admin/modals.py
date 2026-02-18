@@ -154,19 +154,19 @@ class SetAnnounceChannelModal(discord.ui.Modal, title="📢 УСТАНОВИТЬ
 class AddEventModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕРОПРИЯТИЯ"):
     event_name = discord.ui.TextInput(
         label="Название мероприятия",
-        placeholder="Например: DROP, Штурм, Каньон",
+        placeholder="Например: Arena перед каптами",
         max_length=100
     )
     
     weekdays = discord.ui.TextInput(
         label="Дни недели (0-6 через запятую или диапазон)",
-        placeholder="2 (среда) или 1,3,5 или 1-5 (Вт-Сб)",
+        placeholder="0,2,4,6",
         max_length=20
     )
     
     event_times = discord.ui.TextInput(
         label="Время (ЧЧ:ММ через запятую)",
-        placeholder="20:00 или 08:00,12:00,20:00",
+        placeholder="14:20",
         max_length=50
     )
     
@@ -176,7 +176,7 @@ class AddEventModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕРОПРИ
             return
         
         try:
-            # ===== ПАРСИМ ДНИ НЕДЕЛИ =====
+            # Парсим дни недели
             weekdays = []
             days_input = self.weekdays.value.replace(' ', '')
             
@@ -184,63 +184,30 @@ class AddEventModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕРОПРИ
                 await interaction.response.send_message("❌ Укажите дни недели", ephemeral=True)
                 return
             
-            # Проверяем, есть ли диапазон (например "1-5")
-            if '-' in days_input:
-                parts = days_input.split('-')
-                if len(parts) == 2:
-                    try:
-                        start = int(parts[0])
-                        end = int(parts[1])
-                        if 0 <= start <= 6 and 0 <= end <= 6 and start <= end:
-                            weekdays = list(range(start, end + 1))
-                        else:
-                            await interaction.response.send_message(
-                                "❌ Диапазон должен быть от 0 до 6 и начало <= конец", 
-                                ephemeral=True
-                            )
-                            return
-                    except ValueError:
+            # Разбираем дни (как в вашем примере: 0,2,4,6)
+            for d in days_input.split(','):
+                try:
+                    day = int(d)
+                    if 0 <= day <= 6:
+                        weekdays.append(day)
+                    else:
                         await interaction.response.send_message(
-                            "❌ Неверный формат диапазона. Используйте например 1-5", 
+                            f"❌ День {day} должен быть от 0 до 6", 
                             ephemeral=True
                         )
                         return
-                else:
+                except ValueError:
                     await interaction.response.send_message(
-                        "❌ Неверный формат диапазона. Используйте например 1-5", 
+                        f"❌ Неверный день: {d}", 
                         ephemeral=True
                     )
                     return
-            else:
-                # Разбираем через запятую (может быть одно число или несколько)
-                for d in days_input.split(','):
-                    try:
-                        day = int(d)
-                        if 0 <= day <= 6:
-                            weekdays.append(day)
-                        else:
-                            await interaction.response.send_message(
-                                f"❌ День {day} должен быть от 0 до 6 (0-Пн, 6-Вс)", 
-                                ephemeral=True
-                            )
-                            return
-                    except ValueError:
-                        await interaction.response.send_message(
-                            f"❌ Неверный день: {d}. Должно быть число от 0 до 6", 
-                            ephemeral=True
-                        )
-                        return
             
-            # Убираем дубликаты и сортируем
             weekdays = sorted(set(weekdays))
             
-            # ===== ПАРСИМ ВРЕМЯ =====
+            # Парсим время
             times = []
             times_input = self.event_times.value.replace(' ', '')
-            
-            if not times_input:
-                await interaction.response.send_message("❌ Укажите время", ephemeral=True)
-                return
             
             for t in times_input.split(','):
                 try:
@@ -249,15 +216,14 @@ class AddEventModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕРОПРИ
                     times.append(t)
                 except ValueError:
                     await interaction.response.send_message(
-                        f"❌ Неверный формат времени: {t}. Используйте ЧЧ:ММ (например 20:00)",
+                        f"❌ Неверный формат времени: {t}",
                         ephemeral=True
                     )
                     return
             
-            # Убираем дубликаты времени
             times = sorted(set(times))
             
-            # ===== СОЗДАЁМ МЕРОПРИЯТИЯ =====
+            # Создаём мероприятия
             created_count = 0
             days_names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
             created_ids = []
@@ -276,7 +242,6 @@ class AddEventModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕРОПРИ
             # Генерируем расписание
             db.generate_schedule(days_ahead=14)
             
-            # Формируем красивое описание
             days_str = ', '.join([days_names[d] for d in weekdays])
             times_str = ', '.join(times)
             
@@ -290,7 +255,6 @@ class AddEventModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕРОПРИ
             embed.add_field(name="📅 Дни", value=days_str, inline=True)
             embed.add_field(name="⏰ Времена", value=times_str, inline=False)
             
-            # Логируем первое мероприятие
             if created_ids:
                 db.log_event_action(created_ids[0], "created", str(interaction.user.id), 
                                    f"Название: {self.event_name.value}, Дни: {days_str}, Времена: {times_str}")
@@ -299,6 +263,7 @@ class AddEventModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕРОПРИ
             
         except Exception as e:
             print(f"Ошибка в AddEventModal: {e}")
+            # Здесь может быть ошибка с datetime, но мы её уже отлавливаем выше
             await interaction.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
 
 
