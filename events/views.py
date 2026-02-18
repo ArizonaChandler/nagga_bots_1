@@ -28,19 +28,19 @@ class EventReminderView(discord.ui.View):
         import pytz
         
         msk_tz = pytz.timezone('Europe/Moscow')
-        now = datetime.now(msk_tz)
+        now = datetime.now(msk_tz)  # aware datetime
         
         # Парсим время мероприятия
         event_hour, event_min = map(int, event_time.split(':'))
         
-        # Создаем datetime для времени мероприятия
-        event_datetime = msk_tz.localize(datetime(
-            now.year, now.month, now.day,
-            event_hour, event_min
-        ))
+        # СОЗДАЁМ AWARE DATETIME ПРАВИЛЬНО
+        # 1. Сначала создаем naive datetime
+        naive_event = datetime(now.year, now.month, now.day, event_hour, event_min)
+        # 2. Потом делаем его aware
+        event_datetime = msk_tz.localize(naive_event)
         
         # Если время мероприятия уже прошло - добавляем день
-        if event_datetime < now:
+        if event_datetime < now:  # теперь оба aware - ошибки не будет
             event_datetime += timedelta(days=1)
         
         # Время таймаута (за 10 минут до начала)
@@ -55,7 +55,7 @@ class EventReminderView(discord.ui.View):
         self.meeting_time = meeting_time
         self.guild = guild
         self.taken = False
-        self.messages = {}  # Словарь {channel_id: message}
+        self.messages = {}
         self.reminder_channels = reminder_channels or []
         self.timeout_occurred = False
         
