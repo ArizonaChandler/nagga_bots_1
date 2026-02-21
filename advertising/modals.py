@@ -8,36 +8,45 @@ class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕК�
     def __init__(self, current_settings=None):
         super().__init__()
         self.current_settings = current_settings or {}
-    
-    message_text = discord.ui.TextInput(
-        label="Текст сообщения",
-        placeholder="Введите текст рекламы...",
-        style=discord.TextStyle.paragraph,
-        max_length=2000,
-        required=True
-    )
-    
-    image_url = discord.ui.TextInput(
-        label="URL картинки (необязательно)",
-        placeholder="https://i.imgur.com/example.jpg",
-        max_length=500,
-        required=False
-    )
-    
-    channel_id = discord.ui.TextInput(
-        label="ID канала",
-        placeholder="123456789012345678",
-        max_length=20,
-        required=True
-    )
-    
-    interval = discord.ui.TextInput(
-        label="Интервал (минуты)",
-        placeholder="65",
-        max_length=5,
-        default="65",
-        required=True
-    )
+        
+        # Устанавливаем значения по умолчанию из текущих настроек
+        default_text = current_settings.get('message_text', '') if current_settings else ''
+        default_url = current_settings.get('image_url', '') if current_settings else ''
+        default_channel = current_settings.get('channel_id', '') if current_settings else ''
+        default_interval = str(current_settings.get('interval_minutes', 65)) if current_settings else '65'
+        
+        self.message_text = discord.ui.TextInput(
+            label="Текст сообщения",
+            placeholder="Введите текст рекламы...",
+            style=discord.TextStyle.paragraph,
+            max_length=2000,
+            required=True,
+            default=default_text
+        )
+        
+        self.image_url = discord.ui.TextInput(
+            label="URL картинки (необязательно)",
+            placeholder="https://i.imgur.com/example.jpg",
+            max_length=500,
+            required=False,
+            default=default_url
+        )
+        
+        self.channel_id = discord.ui.TextInput(
+            label="ID канала",
+            placeholder="123456789012345678",
+            max_length=20,
+            required=True,
+            default=default_channel
+        )
+        
+        self.interval = discord.ui.TextInput(
+            label="Интервал (минуты)",
+            placeholder="65",
+            max_length=5,
+            required=True,
+            default=default_interval
+        )
     
     async def on_submit(self, interaction: discord.Interaction):
         if not await is_admin(str(interaction.user.id)):
@@ -45,17 +54,55 @@ class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕК�
             return
         
         try:
+            # ПОЛУЧАЕМ СЕРВЕР ИЗ CONFIG (если в ЛС)
+            server_id = CONFIG.get('server_id')
+            guild = None
+            
+            if server_id:
+                guild = interaction.client.get_guild(int(server_id))
+            
+            # Если сервер не найден через CONFIG, пробуем из interaction
+            if not guild and interaction.guild:
+                guild = interaction.guild
+            
+            if not guild:
+                await interaction.response.send_message(
+                    "❌ Не удалось определить сервер. Сначала установите ID сервера в Глобальных настройках.",
+                    ephemeral=True
+                )
+                return
+            
             # Проверяем канал
-            channel = interaction.guild.get_channel(int(self.channel_id.value))
-            if not channel:
-                await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
+            try:
+                channel = guild.get_channel(int(self.channel_id.value))
+                if not channel:
+                    # Пробуем найти через бота
+                    channel = interaction.client.get_channel(int(self.channel_id.value))
+                
+                if not channel:
+                    await interaction.response.send_message(
+                        f"❌ Канал с ID {self.channel_id.value} не найден на сервере {guild.name}",
+                        ephemeral=True
+                    )
+                    return
+            except ValueError:
+                await interaction.response.send_message("❌ Неверный формат ID канала", ephemeral=True)
                 return
             
             # Проверяем интервал
-            interval = int(self.interval.value)
-            if interval < 1:
-                await interaction.response.send_message("❌ Интервал должен быть больше 0", ephemeral=True)
+            try:
+                interval = int(self.interval.value)
+                if interval < 1:
+                    await interaction.response.send_message("❌ Интервал должен быть больше 0", ephemeral=True)
+                    return
+            except ValueError:
+                await interaction.response.send_message("❌ Неверный формат интервала", ephemeral=True)
                 return
+            
+            # Получаем текущие настройки для сохранения времени сна
+            current_settings = db.get_active_ad()
+            sleep_start = current_settings.get('sleep_start', '02:00') if current_settings else '02:00'
+            sleep_end = current_settings.get('sleep_end', '06:30') if current_settings else '06:30'
             
             # Сохраняем настройки
             success = db.save_ad_settings(
@@ -63,6 +110,8 @@ class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕК�
                 image_url=self.image_url.value if self.image_url.value else None,
                 channel_id=self.channel_id.value,
                 interval=interval,
+                sleep_start=sleep_start,
+                sleep_end=sleep_end,
                 updated_by=str(interaction.user.id)
             )
             
@@ -74,16 +123,16 @@ class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕК�
                 )
                 embed.add_field(name="📢 Канал", value=channel.mention, inline=True)
                 embed.add_field(name="⏱️ Интервал", value=f"{interval} мин", inline=True)
-                embed.add_field(name="📝 Текст", value=self.message_text.value[:100] + "...", inline=False)
+                embed.add_field(name="😴 Режим сна", value=f"{sleep_start} - {sleep_end}", inline=True)
+                embed.add_field(name="📝 Текст", value=self.message_text.value[:100] + "..." if len(self.message_text.value) > 100 else self.message_text.value, inline=False)
                 
                 await interaction.response.send_message(embed=embed, ephemeral=True)
             else:
                 await interaction.response.send_message("❌ Ошибка сохранения", ephemeral=True)
                 
-        except ValueError:
-            await interaction.response.send_message("❌ Неверный формат интервала", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+            print(f"Ошибка в SetAdMessageModal: {e}")
+            await interaction.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
 
 
 class SetSleepTimeModal(discord.ui.Modal, title="😴 НАСТРОЙКА РЕЖИМА СНА"):
