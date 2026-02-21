@@ -121,7 +121,32 @@ class Database:
                     UNIQUE(event_id, scheduled_date)
                 )
             ''')
-            
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS auto_ad (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    message_text TEXT NOT NULL,
+                    image_url TEXT,
+                    channel_id TEXT NOT NULL,
+                    interval_minutes INTEGER DEFAULT 65,
+                    sleep_start TEXT DEFAULT '02:00',
+                    sleep_end TEXT DEFAULT '06:30',
+                    last_sent TIMESTAMP,
+                    is_active BOOLEAN DEFAULT 1,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS auto_ad_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    success BOOLEAN,
+                    error TEXT
+                )
+            ''')
+
             conn.commit()
     
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
@@ -586,6 +611,54 @@ class Database:
                 INSERT INTO event_logs (event_id, action, user_id, details)
                 VALUES (?, ?, ?, ?)
             ''', (event_id, action, user_id, details))
+            conn.commit()
+
+        # ===== АВТО-РЕКЛАМА =====
+    def save_ad_settings(self, message_text: str, image_url: str, channel_id: str, 
+                        interval: int = 65, sleep_start: str = "02:00", 
+                        sleep_end: str = "06:30", updated_by: str = None) -> bool:
+        """Сохранить настройки авто-рекламы"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            # Сначала деактивируем старые записи
+            cursor.execute('UPDATE auto_ad SET is_active = 0')
+            # Создаём новую
+            cursor.execute('''
+                INSERT INTO auto_ad 
+                (message_text, image_url, channel_id, interval_minutes, 
+                sleep_start, sleep_end, created_by, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+            ''', (message_text, image_url, channel_id, interval, 
+                sleep_start, sleep_end, updated_by))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def get_active_ad(self):
+        """Получить активные настройки авто-рекламы"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM auto_ad WHERE is_active = 1 ORDER BY created_at DESC LIMIT 1')
+            row = cursor.fetchone()
+            if row:
+                columns = [description[0] for description in cursor.description]
+                return dict(zip(columns, row))
+            return None
+
+    def update_last_sent(self, ad_id: int):
+        """Обновить время последней отправки"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE auto_ad SET last_sent = CURRENT_TIMESTAMP WHERE id = ?', (ad_id,))
+            conn.commit()
+
+    def log_ad_sent(self, success: bool, error: str = None):
+        """Записать в лог отправку рекламы"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO auto_ad_logs (success, error)
+                VALUES (?, ?)
+            ''', (1 if success else 0, error))
             conn.commit()
 
 db = Database()

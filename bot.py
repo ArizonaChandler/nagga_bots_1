@@ -25,6 +25,9 @@ from files.core import file_manager
 # Импорт планировщика мероприятий
 from events.scheduler import setup as setup_scheduler
 
+# Авто-реклама
+from advertising.core import setup as setup_advertising
+
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -116,6 +119,8 @@ async def main():
     async with bot:
         # Запускаем планировщик мероприятий
         await setup_scheduler(bot)
+        # Запускаем авто-рекламу
+        await setup_advertising(bot)
         await bot.start(BOT_TOKEN)
 
 if __name__ == '__main__':

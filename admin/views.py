@@ -214,13 +214,27 @@ class GlobalSettingsView(BaseMenuView):
     def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
         super().__init__(user_id, guild, previous_view, previous_embed)
         
-        server_btn = discord.ui.Button(label="🌍 Установить сервер", style=discord.ButtonStyle.secondary)
+        # === КНОПКИ ГЛОБАЛЬНЫХ НАСТРОЕК ===
+        
+        # 🌍 Установить сервер
+        server_btn = discord.ui.Button(
+            label="🌍 Установить сервер",
+            style=discord.ButtonStyle.secondary,
+            emoji="🌍",
+            row=0
+        )
         async def server_cb(i):
             await i.response.send_modal(SetServerModal())
         server_btn.callback = server_cb
         self.add_item(server_btn)
         
-        users_btn = discord.ui.Button(label="👥 Управление доступом", style=discord.ButtonStyle.secondary)
+        # 👥 Управление доступом
+        users_btn = discord.ui.Button(
+            label="👥 Управление доступом",
+            style=discord.ButtonStyle.secondary,
+            emoji="👥",
+            row=0
+        )
         async def users_cb(i):
             view = AccessView(self.user_id, self.guild, self, await self.get_current_embed())
             embed = discord.Embed(title="👥 **УПРАВЛЕНИЕ ДОСТУПОМ**", color=0x7289da)
@@ -228,7 +242,13 @@ class GlobalSettingsView(BaseMenuView):
         users_btn.callback = users_cb
         self.add_item(users_btn)
         
-        admin_btn = discord.ui.Button(label="👑 Управление админами", style=discord.ButtonStyle.secondary)
+        # 👑 Управление админами
+        admin_btn = discord.ui.Button(
+            label="👑 Управление админами",
+            style=discord.ButtonStyle.secondary,
+            emoji="👑",
+            row=0
+        )
         async def admin_cb(i):
             if not await is_super_admin(str(i.user.id)):
                 await i.response.send_message("❌ Только супер-администратор", ephemeral=True)
@@ -239,6 +259,7 @@ class GlobalSettingsView(BaseMenuView):
         admin_btn.callback = admin_cb
         self.add_item(admin_btn)
         
+        # 🔔 Настройка оповещений (МП)
         alarm_btn = discord.ui.Button(
             label="🔔 Настройка оповещений",
             style=discord.ButtonStyle.secondary,
@@ -246,39 +267,75 @@ class GlobalSettingsView(BaseMenuView):
             row=1
         )
         async def alarm_cb(i):
+            from admin.views import EventSettingsView
             view = EventSettingsView(self.user_id, self.guild, self, await self.get_current_embed())
             embed = discord.Embed(
                 title="🔔 **СИСТЕМА ОПОВЕЩЕНИЙ**",
                 description="Управление автоматическими напоминаниями о мероприятиях",
                 color=0xffa500
             )
-            
-            alarm_channel = CONFIG.get('alarm_channel_id')
-            channel_info = format_mention(self.guild, alarm_channel, 'channel') if alarm_channel else "`Не установлен`"
-            embed.add_field(name="🔔 Чат напоминаний", value=channel_info, inline=False)
-            
-            announce_channel = CONFIG.get('announce_channel_id')
-            channel_info2 = format_mention(self.guild, announce_channel, 'channel') if announce_channel else "`Не установлен (используется чат напоминаний)`"
-            embed.add_field(name="📢 Канал оповещений", value=channel_info2, inline=False)
-            
-            events = db.get_events(enabled_only=True)
-            embed.add_field(name="📅 Активных мероприятий", value=f"`{len(events)}`", inline=True)
-            
             await i.response.edit_message(embed=embed, view=view)
         alarm_btn.callback = alarm_cb
         self.add_item(alarm_btn)
         
-        self.add_back_button()
+        # 📢 АВТО-РЕКЛАМА (НОВАЯ КНОПКА)
+        ad_btn = discord.ui.Button(
+            label="📢 Авто-реклама",
+            style=discord.ButtonStyle.secondary,
+            emoji="📢",
+            row=1
+        )
+        async def ad_cb(i):
+            from advertising.views import AdSettingsView
+            view = AdSettingsView(self.user_id, self.guild, self, await self.get_current_embed())
+            embed = discord.Embed(
+                title="📢 **АВТОМАТИЧЕСКАЯ РЕКЛАМА**",
+                description="Настройка автоматической рассылки рекламных сообщений",
+                color=0x00ff00
+            )
+            await i.response.edit_message(embed=embed, view=view)
+        ad_btn.callback = ad_cb
+        self.add_item(ad_btn)
+        
+        # ◀ Кнопка "Назад"
+        self.add_back_button(row=4)
     
     async def get_current_embed(self):
+        """Создать embed с текущими глобальными настройками"""
         server_name = await get_server_name(self.guild, CONFIG.get('server_id'))
+        
         embed = discord.Embed(
             title="🌍 **ГЛОБАЛЬНЫЕ НАСТРОЙКИ**",
             description=f"**Текущие настройки:**\n🌍 Сервер: {server_name}",
             color=0x7289da
         )
+        
+        # Добавляем информацию о количестве настроек
+        users_count = len(db.get_users())
+        admins_count = len(db.get_admins())
+        
+        embed.add_field(
+            name="👥 Пользователей с доступом",
+            value=f"`{users_count}`",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="👑 Администраторов",
+            value=f"`{admins_count}`",
+            inline=True
+        )
+        
+        # Информация о каналах оповещений (если есть)
+        alarm_channels = CONFIG.get('alarm_channels', [])
+        if alarm_channels:
+            embed.add_field(
+                name="🔔 Каналов оповещений",
+                value=f"`{len(alarm_channels)}`",
+                inline=True
+            )
+        
         return embed
-
 
 class AccessView(BaseMenuView):
     def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
