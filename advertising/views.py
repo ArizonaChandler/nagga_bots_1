@@ -18,8 +18,9 @@ class AdSettingsView(BaseMenuView):
             row=0
         )
         async def msg_cb(i):
-            settings = db.get_active_ad()
-            await i.response.send_modal(SetAdMessageModal(settings))
+            # Открываем модалку БЕЗ загрузки данных перед открытием
+            modal = SetAdMessageModal()
+            await i.response.send_modal(modal)
         msg_btn.callback = msg_cb
         self.add_item(msg_btn)
         

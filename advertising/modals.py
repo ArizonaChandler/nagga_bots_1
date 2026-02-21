@@ -5,18 +5,21 @@ from core.config import CONFIG, save_config
 from core.utils import is_admin
 
 class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕКЛАМЫ"):
-    def __init__(self, current_settings=None):
+    def __init__(self):
         super().__init__()
-        self.current_settings = current_settings or {}
         
-        # Устанавливаем значения по умолчанию из текущих настроек
-        default_text = current_settings.get('message_text', '') if current_settings else ''
-        default_url = current_settings.get('image_url', '') if current_settings else ''
-        default_channel = current_settings.get('channel_id', '') if current_settings else ''
-        default_interval = str(current_settings.get('interval_minutes', 65)) if current_settings else '65'
+        # Загружаем настройки внутри __init__ (это быстро)
+        settings = db.get_active_ad()
         
+        # Устанавливаем значения по умолчанию
+        default_text = settings.get('message_text', '') if settings else ''
+        default_url = settings.get('image_url', '') if settings else ''
+        default_channel = settings.get('channel_id', '') if settings else ''
+        default_interval = str(settings.get('interval_minutes', 65)) if settings else '65'
+        
+        # Создаём поля с значениями по умолчанию
         self.message_text = discord.ui.TextInput(
-            label="Текст сообщения",
+            label="📝 Текст сообщения",
             placeholder="Введите текст рекламы...",
             style=discord.TextStyle.paragraph,
             max_length=2000,
@@ -25,7 +28,7 @@ class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕК�
         )
         
         self.image_url = discord.ui.TextInput(
-            label="URL картинки (необязательно)",
+            label="🖼️ URL картинки (необязательно)",
             placeholder="https://i.imgur.com/example.jpg",
             max_length=500,
             required=False,
@@ -33,7 +36,7 @@ class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕК�
         )
         
         self.channel_id = discord.ui.TextInput(
-            label="ID канала",
+            label="📢 ID канала",
             placeholder="123456789012345678",
             max_length=20,
             required=True,
@@ -41,7 +44,7 @@ class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕК�
         )
         
         self.interval = discord.ui.TextInput(
-            label="Интервал (минуты)",
+            label="⏱️ Интервал (минуты)",
             placeholder="65",
             max_length=5,
             required=True,
