@@ -279,6 +279,7 @@ class GlobalSettingsView(BaseMenuView):
         alarm_btn.callback = alarm_cb
         self.add_item(alarm_btn)
         
+        # 📢 Авто-реклама
         ad_btn = discord.ui.Button(
             label="📢 Авто-реклама",
             style=discord.ButtonStyle.secondary,
@@ -335,6 +336,7 @@ class GlobalSettingsView(BaseMenuView):
             )
         
         return embed
+
 
 class AccessView(BaseMenuView):
     def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
@@ -489,7 +491,7 @@ class EventSettingsView(BaseMenuView):
         announce_roles_btn.callback = announce_roles_cb
         self.add_item(announce_roles_btn)
         
-        # === СТАНДАРТНЫЕ КНОПКИ (БЫЛИ РАНЬШЕ) ===
+        # === СТАНДАРТНЫЕ КНОПКИ ===
         # Добавить МП
         add_btn = discord.ui.Button(
             label="➕ Добавить МП",
@@ -845,44 +847,56 @@ class EventDetailView(BaseMenuView):
         
         self.add_back_button(row=4)
 
+
 class ConfirmDeleteView(BaseMenuView):
     def __init__(self, user_id: str, event_id: int, event_name: str, previous_view=None, previous_embed=None):
         super().__init__(user_id, None, previous_view, previous_embed)
         self.event_id = event_id
         self.event_name = event_name
+        self.message = None  # для сохранения сообщения
     
     @discord.ui.button(label="✅ Да, удалить", style=discord.ButtonStyle.danger)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Полное удаление из БД (не soft delete)
+        # Полное удаление из БД
         success = db.delete_event(self.event_id, soft=False)
         
         if success:
             db.log_event_action(self.event_id, "deleted", str(interaction.user.id))
             
-            # Сначала возвращаемся в EventSettingsView
-            from admin.views import EventSettingsView
+            # Создаём свежее меню списка мероприятий
+            from admin.views import EventsListView, EventSettingsView
+            
+            # Сначала создаём SettingsView как предыдущее меню
             settings_view = EventSettingsView(
                 self.user_id,
                 interaction.guild,
-                None,  # previous_view
-                None   # previous_embed
+                None,
+                None
+            )
+            settings_embed = discord.Embed(
+                title="🔔 **СИСТЕМА ОПОВЕЩЕНИЙ**",
+                description="Управление автоматическими напоминаниями о мероприятиях",
+                color=0xffa500
             )
             
-            # Затем показываем список мероприятий
-            from admin.views import EventsListView
+            # Затем создаём список мероприятий
             list_view = EventsListView(
                 self.user_id,
                 interaction.guild,
                 page=1,
                 previous_view=settings_view,
-                previous_embed=discord.Embed(
-                    title="🔔 **СИСТЕМА ОПОВЕЩЕНИЙ**",
-                    description="Управление автоматическими напоминаниями о мероприятиях",
-                    color=0xffa500
-                )
+                previous_embed=settings_embed
             )
+            
+            # Получаем embed для списка
             embed = list_view.create_embed()
-            await interaction.response.edit_message(embed=embed, view=list_view)
+            
+            # Редактируем сообщение - полностью заменяем контент
+            await interaction.response.edit_message(
+                content=None,  # Убираем текст подтверждения
+                embed=embed,
+                view=list_view
+            )
         else:
             await interaction.response.edit_message(
                 content="❌ Не удалось удалить мероприятие",
@@ -894,9 +908,11 @@ class ConfirmDeleteView(BaseMenuView):
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Возвращаемся к деталям мероприятия
         await interaction.response.edit_message(
+            content=None,  # Убираем текст подтверждения
             embed=self.previous_embed,
             view=self.previous_view
         )
+
 
 async def send_event_stats(interaction, guild, previous_view=None, previous_embed=None):
     """Отправка статистики по мероприятиям"""
@@ -929,43 +945,6 @@ async def send_event_stats(interaction, guild, previous_view=None, previous_embe
                     mention = f"**{user_name}**"
             else:
                 mention = f"**{user_name}** (ID: {user_id})"
-            top_text += f"{i}. {mention} — **{count}** МП\n"
-        
-        embed.add_field(name="🏆 Топ организаторов (30 дней)", value=top_text or "Нет данных", inline=False)
-    else:
-        embed.add_field(name="🏆 Топ организаторов", value="Нет данных за 30 дней", inline=False)
-    
-    # Общая статистика
-    embed.add_field(
-        name="📅 Мероприятия",
-        value=f"Всего: `{stats['total_events']}`\nАктивных: `{stats['active_events']}`",
-        inline=True
-    )
-    
-    embed.add_field(
-        name="✅ Проведено",
-        value=f"За всё время: `{stats['total_takes']}`\nЗа 30 дней: `{stats['takes_30d']}`\nСегодня: `{stats['takes_today']}`",
-        inline=True
-    )
-    
-    class StatsView(BaseMenuView):
-        def __init__(self):
-            super().__init__(str(interaction.user.id), guild, previous_view, previous_embed)
-            self.add_back_button()
-    
-    await interaction.response.edit_message(embed=embed, view=StatsView())
-    
-    # Топ организаторов за 30 дней
-    if top:
-        top_text = ""
-        for i, row in enumerate(top[:5], 1):
-            user_id, user_name, count = row
-            # Пытаемся получить упоминание, если не получается - используем имя
-            try:
-                user = await guild.fetch_member(int(user_id))
-                mention = user.mention
-            except:
-                mention = f"**{user_name}**"
             top_text += f"{i}. {mention} — **{count}** МП\n"
         
         embed.add_field(name="🏆 Топ организаторов (30 дней)", value=top_text or "Нет данных", inline=False)
