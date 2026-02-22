@@ -10,17 +10,15 @@ class AdSettingsView(BaseMenuView):
     def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
         super().__init__(user_id, guild, previous_view, previous_embed)
         
-        # Кнопка настройки сообщения
+        # Кнопка настройки сообщения - УКОРОЧЕННЫЙ LABEL
         msg_btn = discord.ui.Button(
-            label="📝 Настроить сообщение",
+            label="📝 Настроить",  # Было "📝 Настроить сообщение" - слишком длинно
             style=discord.ButtonStyle.primary,
             emoji="📝",
             row=0
         )
         async def msg_cb(i):
             try:
-                # НЕ ЗАГРУЖАЕМ ДАННЫЕ ЗДЕСЬ
-                # Просто отправляем пустую модалку
                 modal = SetAdMessageModal()
                 await i.response.send_modal(modal)
             except Exception as e:
@@ -29,9 +27,9 @@ class AdSettingsView(BaseMenuView):
         msg_btn.callback = msg_cb
         self.add_item(msg_btn)
         
-        # Кнопка настройки режима сна
+        # Кнопка настройки режима сна - УКОРОЧЕННЫЙ LABEL
         sleep_btn = discord.ui.Button(
-            label="😴 Режим сна",
+            label="😴 Режим сна",  # Этот в норме
             style=discord.ButtonStyle.secondary,
             emoji="😴",
             row=0
@@ -58,9 +56,9 @@ class AdSettingsView(BaseMenuView):
         stats_btn.callback = stats_cb
         self.add_item(stats_btn)
         
-        # Кнопка включения/выключения
+        # Кнопка включения/выключения - УКОРОЧЕННЫЙ LABEL
         toggle_btn = discord.ui.Button(
-            label="⏯️ Вкл/Выкл",
+            label="⏯️ Вкл/Выкл",  # Было "⏯️ Вкл/Выкл" - норм, но оставим
             style=discord.ButtonStyle.danger,
             emoji="⏯️",
             row=1
