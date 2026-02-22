@@ -6,13 +6,12 @@ from core.database import db
 from core.config import CONFIG
 from core.utils import is_admin
 
-class SetAdMessageModal(discord.ui.Modal, title="Реклама"):
+class SetAdMessageModal(discord.ui.Modal, title="Реклама"):  # 7 символов
     def __init__(self):
         print("🔵 [SetAdMessageModal] __init__ started")
         super().__init__()
         
         try:
-            # ТОЛЬКО ОДНО ПОЛЕ для начала
             self.message_text = discord.ui.TextInput(
                 label="Текст",
                 style=discord.TextStyle.paragraph,
@@ -38,7 +37,6 @@ class SetAdMessageModal(discord.ui.Modal, title="Реклама"):
             
             await interaction.response.defer(ephemeral=True)
             
-            # Минимальная проверка
             server_id = CONFIG.get('server_id')
             if not server_id:
                 await interaction.followup.send("❌ Сначала установите ID сервера", ephemeral=True)
@@ -49,7 +47,6 @@ class SetAdMessageModal(discord.ui.Modal, title="Реклама"):
                 await interaction.followup.send("❌ Сервер не найден", ephemeral=True)
                 return
             
-            # Сохраняем с минимальными данными
             current = db.get_active_ad() or {}
             sleep_start = current.get('sleep_start', '02:00')
             sleep_end = current.get('sleep_end', '06:30')
@@ -57,7 +54,7 @@ class SetAdMessageModal(discord.ui.Modal, title="Реклама"):
             success = db.save_ad_settings(
                 message_text=self.message_text.value,
                 image_url=None,
-                channel_id="0",  # временно
+                channel_id="0",
                 interval=65,
                 sleep_start=sleep_start,
                 sleep_end=sleep_end,
@@ -75,7 +72,7 @@ class SetAdMessageModal(discord.ui.Modal, title="Реклама"):
             await interaction.followup.send(f"❌ Ошибка: {str(e)}", ephemeral=True)
 
 
-class SetSleepTimeModal(discord.ui.Modal, title="Сон"):
+class SetSleepTimeModal(discord.ui.Modal, title="Сон"):  # 4 символа
     def __init__(self):
         super().__init__()
         
