@@ -5,12 +5,12 @@ from core.database import db
 from core.config import CONFIG
 from core.utils import is_admin
 
-class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА"):  # Укоротил заголовок
+class SetAdMessageModal(discord.ui.Modal, title="Настройка рекламы"):  # БЕЗ эмодзи
     def __init__(self):
         super().__init__()
         
         self.message_text = discord.ui.TextInput(
-            label="Текст рекламы",
+            label="Текст сообщения",
             style=discord.TextStyle.paragraph,
             max_length=2000,
             required=True
@@ -142,19 +142,19 @@ class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА"):  # �
             await interaction.followup.send(f"❌ Ошибка: {str(e)}", ephemeral=True)
 
 
-class SetSleepTimeModal(discord.ui.Modal, title="😴 РЕЖИМ СНА"):  # Укоротил заголовок
+class SetSleepTimeModal(discord.ui.Modal, title="Режим сна"):  # БЕЗ эмодзи
     def __init__(self):
         super().__init__()
         
         self.sleep_start = discord.ui.TextInput(
-            label="Начало сна",
+            label="Начало",
             placeholder="02:00",
             max_length=5,
             required=True
         )
         
         self.sleep_end = discord.ui.TextInput(
-            label="Конец сна",
+            label="Конец",
             placeholder="06:30",
             max_length=5,
             required=True
@@ -208,7 +208,7 @@ class SetSleepTimeModal(discord.ui.Modal, title="😴 РЕЖИМ СНА"):  # У
                     timestamp=datetime.now()
                 )
                 embed.add_field(
-                    name="Время сна",
+                    name="Время",
                     value=f"{self.sleep_start.value} - {self.sleep_end.value}",
                     inline=True
                 )
