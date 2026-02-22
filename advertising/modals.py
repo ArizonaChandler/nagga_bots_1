@@ -16,6 +16,13 @@ class SetAdMessageModal(discord.ui.Modal, title="Настройка"):
             max_length=2000,
             required=True
         )
+
+        self.image_url = discord.ui.TextInput(
+            label="URL картинки",
+            placeholder="https://i.imgur.com/example.jpg",
+            max_length=500,
+            required=False
+        )
     
     async def on_submit(self, interaction: discord.Interaction):
         if not await is_admin(str(interaction.user.id)):
