@@ -12,6 +12,7 @@ from admin.modals import *
 from files.core import file_manager
 from files.views import FilesView
 from events.views import EventInfoView
+from advertising.views import AdSettingsView
 
 
 class MainView(BaseMenuView):
@@ -278,7 +279,6 @@ class GlobalSettingsView(BaseMenuView):
         alarm_btn.callback = alarm_cb
         self.add_item(alarm_btn)
         
-        # 📢 АВТО-РЕКЛАМА (НОВАЯ КНОПКА)
         ad_btn = discord.ui.Button(
             label="📢 Авто-реклама",
             style=discord.ButtonStyle.secondary,
@@ -286,7 +286,6 @@ class GlobalSettingsView(BaseMenuView):
             row=1
         )
         async def ad_cb(i):
-            from advertising.views import AdSettingsView
             view = AdSettingsView(self.user_id, self.guild, self, await self.get_current_embed())
             embed = discord.Embed(
                 title="📢 **АВТОМАТИЧЕСКАЯ РЕКЛАМА**",
