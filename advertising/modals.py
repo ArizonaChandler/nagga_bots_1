@@ -9,9 +9,6 @@ class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕК�
     def __init__(self):
         super().__init__()
         
-        # Загружаем настройки сразу для предзаполнения
-        settings = db.get_active_ad()
-        
         # Поле для текста сообщения
         self.message_text = discord.ui.TextInput(
             label="📝 Текст сообщения",

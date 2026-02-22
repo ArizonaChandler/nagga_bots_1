@@ -18,9 +18,14 @@ class AdSettingsView(BaseMenuView):
             row=0
         )
         async def msg_cb(i):
-            # Открываем модалку БЕЗ загрузки данных перед открытием
-            modal = SetAdMessageModal()
-            await i.response.send_modal(modal)
+            try:
+                # НЕ ЗАГРУЖАЕМ ДАННЫЕ ЗДЕСЬ
+                # Просто отправляем пустую модалку
+                modal = SetAdMessageModal()
+                await i.response.send_modal(modal)
+            except Exception as e:
+                print(f"Ошибка в msg_cb: {e}")
+                await i.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
         msg_btn.callback = msg_cb
         self.add_item(msg_btn)
         
@@ -32,7 +37,12 @@ class AdSettingsView(BaseMenuView):
             row=0
         )
         async def sleep_cb(i):
-            await i.response.send_modal(SetSleepTimeModal())
+            try:
+                modal = SetSleepTimeModal()
+                await i.response.send_modal(modal)
+            except Exception as e:
+                print(f"Ошибка в sleep_cb: {e}")
+                await i.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
         sleep_btn.callback = sleep_cb
         self.add_item(sleep_btn)
         
@@ -63,38 +73,44 @@ class AdSettingsView(BaseMenuView):
         self.add_back_button()
     
     async def show_stats(self, interaction):
-        """Показать статистику отправок"""
-        embed = discord.Embed(
-            title="📊 Статистика авто-рекламы",
-            color=0x00ff00,
-            timestamp=datetime.now()
-        )
-        
-        settings = db.get_active_ad()
-        if settings:
-            embed.add_field(name="📝 Текст", value=settings['message_text'][:100] + "...", inline=False)
-            embed.add_field(name="⏱️ Интервал", value=f"{settings['interval_minutes']} мин", inline=True)
-            embed.add_field(name="😴 Сон", value=f"{settings['sleep_start']} - {settings['sleep_end']}", inline=True)
+        try:
+            embed = discord.Embed(
+                title="📊 Статистика авто-рекламы",
+                color=0x00ff00,
+                timestamp=datetime.now()
+            )
             
-            if settings['last_sent']:
-                embed.add_field(name="🕐 Последняя отправка", value=settings['last_sent'][:16], inline=False)
-        
-        await interaction.response.edit_message(embed=embed, view=self)
+            settings = db.get_active_ad()
+            if settings:
+                embed.add_field(name="📝 Текст", value=settings['message_text'][:100] + "...", inline=False)
+                embed.add_field(name="⏱️ Интервал", value=f"{settings['interval_minutes']} мин", inline=True)
+                embed.add_field(name="😴 Сон", value=f"{settings['sleep_start']} - {settings['sleep_end']}", inline=True)
+                
+                if settings['last_sent']:
+                    embed.add_field(name="🕐 Последняя отправка", value=settings['last_sent'][:16], inline=False)
+            
+            await interaction.response.edit_message(embed=embed, view=self)
+        except Exception as e:
+            print(f"Ошибка в show_stats: {e}")
+            await interaction.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
     
     async def toggle_ad(self, interaction):
-        """Включить/выключить рекламу"""
-        settings = db.get_active_ad()
-        if not settings:
-            await interaction.response.send_message("❌ Сначала настройте рекламу", ephemeral=True)
-            return
-        
-        # Инвертируем статус
-        new_status = 0 if settings['is_active'] else 1
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('UPDATE auto_ad SET is_active = ? WHERE id = ?', 
-                          (new_status, settings['id']))
-            conn.commit()
-        
-        status_text = "✅ Включено" if new_status else "❌ Выключено"
-        await interaction.response.send_message(f"Авто-реклама: {status_text}", ephemeral=True)
+        try:
+            settings = db.get_active_ad()
+            if not settings:
+                await interaction.response.send_message("❌ Сначала настройте рекламу", ephemeral=True)
+                return
+            
+            # Инвертируем статус
+            new_status = 0 if settings['is_active'] else 1
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('UPDATE auto_ad SET is_active = ? WHERE id = ?', 
+                              (new_status, settings['id']))
+                conn.commit()
+            
+            status_text = "✅ Включено" if new_status else "❌ Выключено"
+            await interaction.response.send_message(f"Авто-реклама: {status_text}", ephemeral=True)
+        except Exception as e:
+            print(f"Ошибка в toggle_ad: {e}")
+            await interaction.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
