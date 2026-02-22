@@ -6,7 +6,7 @@ from core.database import db
 from core.config import CONFIG
 from core.utils import is_admin
 
-class SetAdMessageModal(discord.ui.Modal, title="Настройка"):
+class SetAdMessageModal(discord.ui.Modal, title="Реклама"):  # ЕЩЕ КОРОЧЕ!
     def __init__(self):
         print("🔵 [SetAdMessageModal] __init__ started")
         super().__init__()
@@ -170,7 +170,7 @@ class SetAdMessageModal(discord.ui.Modal, title="Настройка"):
             await interaction.followup.send(f"❌ Ошибка: {str(e)}", ephemeral=True)
 
 
-class SetSleepTimeModal(discord.ui.Modal, title="Режим сна"):
+class SetSleepTimeModal(discord.ui.Modal, title="Сон"):  # ЕЩЕ КОРОЧЕ!
     def __init__(self):
         print("🔵 [SetSleepTimeModal] __init__ started")
         super().__init__()
