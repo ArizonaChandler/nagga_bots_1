@@ -5,41 +5,39 @@ from core.database import db
 from core.config import CONFIG
 from core.utils import is_admin
 
-class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕКЛАМЫ"):
+class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА"):  # Укоротил заголовок
     def __init__(self):
         super().__init__()
         
-        # ВСЕ LABEL ТОЧНО В ПРЕДЕЛАХ 40 СИМВОЛОВ
         self.message_text = discord.ui.TextInput(
-            label="Текст рекламы",  # 13 символов ✅
+            label="Текст рекламы",
             style=discord.TextStyle.paragraph,
-            max_length=2000,  # Это максимум для вводимого текста
+            max_length=2000,
             required=True
         )
         
         self.image_url = discord.ui.TextInput(
-            label="URL картинки",  # 14 символов ✅
+            label="URL картинки",
             placeholder="https://i.imgur.com/example.jpg",
             max_length=500,
             required=False
         )
         
         self.channel_id = discord.ui.TextInput(
-            label="ID канала",  # 11 символов ✅
+            label="ID канала",
             placeholder="123456789012345678",
             max_length=20,
             required=True
         )
         
         self.interval = discord.ui.TextInput(
-            label="Интервал (мин)",  # 15 символов ✅
+            label="Интервал (мин)",
             placeholder="65",
             max_length=5,
             required=True
         )
     
     async def on_submit(self, interaction: discord.Interaction):
-        # Проверка прав
         if not await is_admin(str(interaction.user.id)):
             await interaction.response.send_message("❌ Только администраторы", ephemeral=True)
             return
@@ -47,11 +45,10 @@ class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕК�
         await interaction.response.defer(ephemeral=True)
         
         try:
-            # Получаем сервер
             server_id = CONFIG.get('server_id')
             if not server_id:
                 await interaction.followup.send(
-                    "❌ Сначала установите ID сервера в Глобальных настройках",
+                    "❌ Сначала установите ID сервера",
                     ephemeral=True
                 )
                 return
@@ -59,12 +56,11 @@ class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕК�
             guild = interaction.client.get_guild(int(server_id))
             if not guild:
                 await interaction.followup.send(
-                    f"❌ Сервер с ID {server_id} не найден",
+                    f"❌ Сервер не найден",
                     ephemeral=True
                 )
                 return
             
-            # Проверка канала
             try:
                 channel_id = int(self.channel_id.value)
                 channel = guild.get_channel(channel_id)
@@ -74,38 +70,23 @@ class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕК�
                 
                 if not channel:
                     await interaction.followup.send(
-                        f"❌ Канал с ID {channel_id} не найден",
-                        ephemeral=True
-                    )
-                    return
-                
-                permissions = channel.permissions_for(guild.me)
-                if not permissions.send_messages:
-                    await interaction.followup.send(
-                        f"❌ Нет прав на отправку в канал {channel.mention}",
+                        f"❌ Канал не найден",
                         ephemeral=True
                     )
                     return
                     
             except ValueError:
                 await interaction.followup.send(
-                    "❌ Неверный формат ID канала",
+                    "❌ Неверный ID канала",
                     ephemeral=True
                 )
                 return
             
-            # Проверка интервала
             try:
                 interval = int(self.interval.value)
-                if interval < 1:
+                if interval < 1 or interval > 1440:
                     await interaction.followup.send(
-                        "❌ Интервал должен быть больше 0",
-                        ephemeral=True
-                    )
-                    return
-                if interval > 1440:
-                    await interaction.followup.send(
-                        "❌ Интервал не может быть больше 24 часов",
+                        "❌ Интервал от 1 до 1440",
                         ephemeral=True
                     )
                     return
@@ -116,28 +97,20 @@ class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕК�
                 )
                 return
             
-            # Проверка URL картинки
             if self.image_url.value:
                 if not (self.image_url.value.startswith('http://') or self.image_url.value.startswith('https://')):
                     await interaction.followup.send(
-                        "❌ URL должен начинаться с http:// или https://",
+                        "❌ URL должен начинаться с http://",
                         ephemeral=True
                     )
                     return
             
-            # Получаем текущие настройки
-            current_settings = db.get_active_ad()
+            current = db.get_active_ad()
+            sleep_start = current.get('sleep_start', '02:00') if current else '02:00'
+            sleep_end = current.get('sleep_end', '06:30') if current else '06:30'
             
-            sleep_start = '02:00'
-            sleep_end = '06:30'
-            
-            if current_settings:
-                sleep_start = current_settings.get('sleep_start', '02:00')
-                sleep_end = current_settings.get('sleep_end', '06:30')
-            
-            # Сохраняем
             success = db.save_ad_settings(
-                message_text=self.message_text.value,  # Здесь может быть до 2000 символов
+                message_text=self.message_text.value,
                 image_url=self.image_url.value if self.image_url.value else None,
                 channel_id=str(channel_id),
                 interval=interval,
@@ -152,19 +125,13 @@ class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕК�
                     color=0x00ff00,
                     timestamp=datetime.now()
                 )
-                
                 embed.add_field(name="📢 Канал", value=channel.mention, inline=True)
                 embed.add_field(name="⏱️ Интервал", value=f"{interval} мин", inline=True)
-                embed.add_field(name="😴 Сон", value=f"{sleep_start}-{sleep_end}", inline=True)
                 
-                # Показываем только первые 100 символов текста
-                text_preview = self.message_text.value[:100]
+                preview = self.message_text.value[:100]
                 if len(self.message_text.value) > 100:
-                    text_preview += "..."
-                embed.add_field(name="📝 Текст", value=text_preview, inline=False)
-                
-                if self.image_url.value:
-                    embed.set_image(url=self.image_url.value)
+                    preview += "..."
+                embed.add_field(name="📝 Текст", value=preview, inline=False)
                 
                 await interaction.followup.send(embed=embed, ephemeral=True)
             else:
@@ -175,19 +142,19 @@ class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕК�
             await interaction.followup.send(f"❌ Ошибка: {str(e)}", ephemeral=True)
 
 
-class SetSleepTimeModal(discord.ui.Modal, title="😴 НАСТРОЙКА РЕЖИМА СНА"):
+class SetSleepTimeModal(discord.ui.Modal, title="😴 РЕЖИМ СНА"):  # Укоротил заголовок
     def __init__(self):
         super().__init__()
         
         self.sleep_start = discord.ui.TextInput(
-            label="Начало сна",  # 11 символов ✅
+            label="Начало сна",
             placeholder="02:00",
             max_length=5,
             required=True
         )
         
         self.sleep_end = discord.ui.TextInput(
-            label="Конец сна",  # 11 символов ✅
+            label="Конец сна",
             placeholder="06:30",
             max_length=5,
             required=True
@@ -208,7 +175,7 @@ class SetSleepTimeModal(discord.ui.Modal, title="😴 НАСТРОЙКА РЕЖ�
             settings = db.get_active_ad()
             if not settings:
                 await interaction.followup.send(
-                    "❌ Сначала настройте основную рекламу",
+                    "❌ Сначала настройте рекламу",
                     ephemeral=True
                 )
                 return
@@ -257,7 +224,7 @@ class SetSleepTimeModal(discord.ui.Modal, title="😴 НАСТРОЙКА РЕЖ�
                 
         except ValueError:
             await interaction.followup.send(
-                "❌ Неверный формат времени. Используйте ЧЧ:ММ",
+                "❌ Неверный формат времени",
                 ephemeral=True
             )
         except Exception as e:
