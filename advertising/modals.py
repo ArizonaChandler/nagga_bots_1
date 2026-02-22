@@ -5,33 +5,34 @@ from core.database import db
 from core.config import CONFIG
 from core.utils import is_admin
 
-class SetAdMessageModal(discord.ui.Modal, title="Настройка рекламы"):  # БЕЗ эмодзи
+class SetAdMessageModal(discord.ui.Modal, title="Настройка рекламы"):
     def __init__(self):
         super().__init__()
         
+        # УБЕДИМСЯ ЧТО ВСЕ LABEL КОРОТКИЕ
         self.message_text = discord.ui.TextInput(
-            label="Текст сообщения",
+            label="Текст",  # Максимально коротко
             style=discord.TextStyle.paragraph,
             max_length=2000,
             required=True
         )
         
         self.image_url = discord.ui.TextInput(
-            label="URL картинки",
+            label="URL картинки",  # 13 символов
             placeholder="https://i.imgur.com/example.jpg",
             max_length=500,
             required=False
         )
         
         self.channel_id = discord.ui.TextInput(
-            label="ID канала",
+            label="ID канала",  # 10 символов
             placeholder="123456789012345678",
             max_length=20,
             required=True
         )
         
         self.interval = discord.ui.TextInput(
-            label="Интервал (мин)",
+            label="Интервал",  # 9 символов
             placeholder="65",
             max_length=5,
             required=True
@@ -142,19 +143,19 @@ class SetAdMessageModal(discord.ui.Modal, title="Настройка реклам
             await interaction.followup.send(f"❌ Ошибка: {str(e)}", ephemeral=True)
 
 
-class SetSleepTimeModal(discord.ui.Modal, title="Режим сна"):  # БЕЗ эмодзи
+class SetSleepTimeModal(discord.ui.Modal, title="Режим сна"):
     def __init__(self):
         super().__init__()
         
         self.sleep_start = discord.ui.TextInput(
-            label="Начало",
+            label="Начало",  # 6 символов
             placeholder="02:00",
             max_length=5,
             required=True
         )
         
         self.sleep_end = discord.ui.TextInput(
-            label="Конец",
+            label="Конец",  # 5 символов
             placeholder="06:30",
             max_length=5,
             required=True
