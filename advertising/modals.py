@@ -9,30 +9,33 @@ class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕК�
     def __init__(self):
         super().__init__()
         
-        # Просто создаём поля, без загрузки из БД
+        # Текст сообщения
         self.message_text = discord.ui.TextInput(
-            label="📝 Текст сообщения",
+            label="Текст сообщения",  # Укоротил
             style=discord.TextStyle.paragraph,
             max_length=2000,
             required=True
         )
         
+        # URL картинки
         self.image_url = discord.ui.TextInput(
-            label="🖼️ URL картинки (необязательно)",
+            label="URL картинки",  # Укоротил
             placeholder="https://i.imgur.com/example.jpg",
             max_length=500,
             required=False
         )
         
+        # ID канала
         self.channel_id = discord.ui.TextInput(
-            label="📢 ID канала",
+            label="ID канала",  # Укоротил
             placeholder="123456789012345678",
             max_length=20,
             required=True
         )
         
+        # Интервал
         self.interval = discord.ui.TextInput(
-            label="⏱️ Интервал (минуты)",
+            label="Интервал (мин)",  # Укоротил
             placeholder="65",
             max_length=5,
             required=True
@@ -152,14 +155,14 @@ class SetAdMessageModal(discord.ui.Modal, title="📢 НАСТРОЙКА РЕК�
             
             if success:
                 embed = discord.Embed(
-                    title="✅ Настройки рекламы сохранены",
+                    title="✅ Настройки сохранены",
                     color=0x00ff00,
                     timestamp=datetime.now()
                 )
                 
                 embed.add_field(name="📢 Канал", value=channel.mention, inline=True)
                 embed.add_field(name="⏱️ Интервал", value=f"{interval} мин", inline=True)
-                embed.add_field(name="😴 Режим сна", value=f"{sleep_start} - {sleep_end}", inline=True)
+                embed.add_field(name="😴 Сон", value=f"{sleep_start}-{sleep_end}", inline=True)
                 
                 text_preview = self.message_text.value[:100]
                 if len(self.message_text.value) > 100:
@@ -183,14 +186,14 @@ class SetSleepTimeModal(discord.ui.Modal, title="😴 НАСТРОЙКА РЕЖ�
         super().__init__()
         
         self.sleep_start = discord.ui.TextInput(
-            label="⏰ Начало сна (ЧЧ:ММ)",
+            label="Начало сна",
             placeholder="02:00",
             max_length=5,
             required=True
         )
         
         self.sleep_end = discord.ui.TextInput(
-            label="⏰ Конец сна (ЧЧ:ММ)",
+            label="Конец сна",
             placeholder="06:30",
             max_length=5,
             required=True
@@ -249,7 +252,7 @@ class SetSleepTimeModal(discord.ui.Modal, title="😴 НАСТРОЙКА РЕЖ�
                 )
                 embed.add_field(
                     name="Время сна",
-                    value=f"С {self.sleep_start.value} до {self.sleep_end.value}",
+                    value=f"{self.sleep_start.value} - {self.sleep_end.value}",
                     inline=True
                 )
                 embed.add_field(
