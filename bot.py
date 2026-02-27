@@ -25,8 +25,9 @@ from files.core import file_manager
 # Импорт планировщика мероприятий
 from events.scheduler import setup as setup_scheduler
 
-# Авто-реклама
+# Импорт авто-рекламы
 from advertising.core import setup as setup_advertising
+from advertising.slash import AdSlashCommands  # Импортируем класс для слэш-команд
 
 import discord
 from discord.ext import commands
@@ -55,6 +56,12 @@ setup_settings(bot)
 setup_log(bot)
 setup_stats(bot)
 
+# Запуск планировщика мероприятий
+setup_scheduler(bot)
+
+# СОЗДАЕМ ЭКЗЕМПЛЯР СЛЭШ-КОМАНД ДО СИНХРОНИЗАЦИИ
+ad_slash = AdSlashCommands(bot)
+
 @bot.event
 async def on_ready():
     print("\n" + "="*60)
@@ -72,19 +79,6 @@ async def on_ready():
         for channel in guild.channels:
             print(f"  │  └─ #{channel.name} (ID: {channel.id})")
     
-    # Синхронизация слэш-команд
-    try:
-        # Для глобальных команд (доступны везде, включая ЛС)
-        synced = await bot.tree.sync()
-        print(f"✅ Синхронизировано {len(synced)} глобальных слэш-команд")
-        
-        # Выведем названия команд для проверки
-        for cmd in synced:
-            print(f"   - /{cmd.name}")
-            
-    except Exception as e:
-        print(f"❌ Ошибка синхронизации: {e}")
-
     # Проверяем проблемный канал
     channel_id = "1471570430983934099"
     channel = bot.get_channel(int(channel_id))
@@ -93,7 +87,24 @@ async def on_ready():
     else:
         print(f"❌ Канал {channel_id} НЕ НАЙДЕН в кэше!")
     
-    print("="*60 + "\n")
+    # Синхронизация слэш-команд
+    try:
+        print("🔄 Синхронизация слэш-команд...")
+        synced = await bot.tree.sync()
+        print(f"✅ Синхронизировано {len(synced)} глобальных слэш-команд")
+        
+        # Выводим названия команд для проверки
+        if synced:
+            for cmd in synced:
+                if hasattr(cmd, 'name'):
+                    print(f"   - /{cmd.name}")
+                elif hasattr(cmd, 'commands'):
+                    print(f"   - /{cmd.name} (группа с {len(cmd.commands)} командами)")
+        else:
+            print("❌ Нет зарегистрированных слэш-команд!")
+            
+    except Exception as e:
+        print(f"❌ Ошибка синхронизации: {e}")
     
     colors = db.get_dual_colors()
     dual_mcl_core.token_colors = {1: colors[0], 2: colors[1]}
@@ -102,25 +113,8 @@ async def on_ready():
         type=discord.ActivityType.watching,
         name="!info | v1.3"
     ))
-
-@bot.command(name='test_channels')
-async def test_channels(ctx):
-    """Показать все каналы, которые видит бот"""
-    embed = discord.Embed(title="📋 Доступные каналы", color=0x7289da)
     
-    channels_list = []
-    for guild in bot.guilds:
-        for channel in guild.channels:
-            channels_list.append(f"📌 {guild.name} - {channel.name} (ID: {channel.id})")
-    
-    if channels_list:
-        embed.description = "\n".join(channels_list[:25])
-        if len(channels_list) > 25:
-            embed.set_footer(text=f"Показано 25 из {len(channels_list)} каналов")
-    else:
-        embed.description = "❌ Бот не видит ни одного канала!"
-    
-    await ctx.send(embed=embed)
+    print("="*60 + "\n")
 
 @bot.event
 async def on_command_error(ctx, error):
@@ -128,24 +122,37 @@ async def on_command_error(ctx, error):
         return
     print(f"❌ Ошибка: {error}")
 
+# Команда для ручной синхронизации (на всякий случай)
 @bot.command(name='sync')
 async def sync_commands(ctx):
-    """Принудительная синхронизация слэш-команд (только для владельца)"""
-    if ctx.author.id != 287670691707355147:  # Ваш ID
+    """Принудительная синхронизация слэш-команд (только для админов)"""
+    if not await is_admin(str(ctx.author.id)):
+        await ctx.send("❌ Только администраторы")
         return
     
     await ctx.send("🔄 Синхронизация команд...")
     
     try:
-        # Сначала удалим все старые глобальные команды
+        # Очищаем все команды
         bot.tree.clear_commands(guild=None)
         
-        # Перерегистрируем команды из advertising/slash.py
-        # (команды уже должны быть зарегистрированы в bot.tree через ваш код)
+        # Пересоздаем команды
+        from advertising.slash import AdSlashCommands
+        ad_slash = AdSlashCommands(bot)
         
         # Синхронизируем
         synced = await bot.tree.sync()
-        await ctx.send(f"✅ Синхронизировано {len(synced)} команд: {', '.join([f'/{cmd.name}' for cmd in synced])}")
+        
+        if synced:
+            cmd_names = []
+            for cmd in synced:
+                if hasattr(cmd, 'name'):
+                    cmd_names.append(f"/{cmd.name}")
+                elif hasattr(cmd, 'commands'):
+                    cmd_names.append(f"/{cmd.name} (группа)")
+            await ctx.send(f"✅ Синхронизировано {len(synced)} команд: {', '.join(cmd_names)}")
+        else:
+            await ctx.send("❌ Нет зарегистрированных команд")
     except Exception as e:
         await ctx.send(f"❌ Ошибка: {e}")
 
@@ -153,8 +160,10 @@ async def main():
     async with bot:
         # Запускаем планировщик мероприятий
         await setup_scheduler(bot)
+        
         # Запускаем авто-рекламу
         await setup_advertising(bot)
+        
         await bot.start(BOT_TOKEN)
 
 if __name__ == '__main__':
