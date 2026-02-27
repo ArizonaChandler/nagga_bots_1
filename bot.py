@@ -72,6 +72,13 @@ async def on_ready():
         for channel in guild.channels:
             print(f"  │  └─ #{channel.name} (ID: {channel.id})")
     
+    # Синхронизация слэш-команд
+    try:
+        synced = await bot.tree.sync()
+        print(f"✅ Синхронизировано {len(synced)} слэш-команд")
+    except Exception as e:
+        print(f"❌ Ошибка синхронизации: {e}")
+
     # Проверяем проблемный канал
     channel_id = "1471570430983934099"
     channel = bot.get_channel(int(channel_id))
