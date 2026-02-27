@@ -15,7 +15,7 @@ class AdSlashCommands:
         @self.bot.tree.command(name="ad_text", description="Настроить текст рекламы")
         @app_commands.describe(text="Текст рекламы")
         async def ad_text(interaction: discord.Interaction, text: str):
-            print(f"🔵 [slash] ad_text called by {interaction.user.id}")
+            print(f"🔵 [/ad_text] вызвана пользователем {interaction.user.id}")
             
             if not await is_admin(str(interaction.user.id)):
                 await interaction.response.send_message("❌ Только администраторы", ephemeral=True)

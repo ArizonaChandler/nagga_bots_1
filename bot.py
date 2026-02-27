@@ -74,8 +74,14 @@ async def on_ready():
     
     # Синхронизация слэш-команд
     try:
+        # Для глобальных команд (доступны везде, включая ЛС)
         synced = await bot.tree.sync()
-        print(f"✅ Синхронизировано {len(synced)} слэш-команд")
+        print(f"✅ Синхронизировано {len(synced)} глобальных слэш-команд")
+        
+        # Выведем названия команд для проверки
+        for cmd in synced:
+            print(f"   - /{cmd.name}")
+            
     except Exception as e:
         print(f"❌ Ошибка синхронизации: {e}")
 
@@ -121,6 +127,27 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         return
     print(f"❌ Ошибка: {error}")
+
+@bot.command(name='sync')
+async def sync_commands(ctx):
+    """Принудительная синхронизация слэш-команд (только для владельца)"""
+    if ctx.author.id != 287670691707355147:  # Ваш ID
+        return
+    
+    await ctx.send("🔄 Синхронизация команд...")
+    
+    try:
+        # Сначала удалим все старые глобальные команды
+        bot.tree.clear_commands(guild=None)
+        
+        # Перерегистрируем команды из advertising/slash.py
+        # (команды уже должны быть зарегистрированы в bot.tree через ваш код)
+        
+        # Синхронизируем
+        synced = await bot.tree.sync()
+        await ctx.send(f"✅ Синхронизировано {len(synced)} команд: {', '.join([f'/{cmd.name}' for cmd in synced])}")
+    except Exception as e:
+        await ctx.send(f"❌ Ошибка: {e}")
 
 async def main():
     async with bot:
