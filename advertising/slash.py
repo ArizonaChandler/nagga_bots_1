@@ -9,10 +9,13 @@ from core.utils import is_admin
 class AdSlashCommands:
     def __init__(self, bot):
         self.bot = bot
+        print("🔵 [AdSlashCommands] Инициализация...")
         self.setup_commands()
     
     def setup_commands(self):
-        @self.bot.tree.command(name="ad_text", description="Настроить текст рекламы")
+        print("🔵 [AdSlashCommands] Регистрация команд...")
+        
+        @app_commands.command(name="ad_text", description="Настроить текст рекламы")
         @app_commands.describe(text="Текст рекламы")
         async def ad_text(interaction: discord.Interaction, text: str):
             print(f"🔵 [/ad_text] вызвана пользователем {interaction.user.id}")
@@ -38,10 +41,10 @@ class AdSlashCommands:
             else:
                 await interaction.response.send_message("❌ Ошибка сохранения", ephemeral=True)
         
-        @self.bot.tree.command(name="ad_channel", description="Установить канал для рекламы")
+        @app_commands.command(name="ad_channel", description="Установить канал для рекламы")
         @app_commands.describe(channel="Канал для отправки")
         async def ad_channel(interaction: discord.Interaction, channel: discord.TextChannel):
-            print(f"🔵 [slash] ad_channel called by {interaction.user.id}")
+            print(f"🔵 [/ad_channel] вызвана пользователем {interaction.user.id}")
             
             if not await is_admin(str(interaction.user.id)):
                 await interaction.response.send_message("❌ Только администраторы", ephemeral=True)
@@ -64,10 +67,10 @@ class AdSlashCommands:
             else:
                 await interaction.response.send_message("❌ Ошибка сохранения", ephemeral=True)
         
-        @self.bot.tree.command(name="ad_interval", description="Установить интервал отправки")
+        @app_commands.command(name="ad_interval", description="Установить интервал отправки")
         @app_commands.describe(minutes="Интервал в минутах (1-1440)")
         async def ad_interval(interaction: discord.Interaction, minutes: int):
-            print(f"🔵 [slash] ad_interval called by {interaction.user.id}")
+            print(f"🔵 [/ad_interval] вызвана пользователем {interaction.user.id}")
             
             if not await is_admin(str(interaction.user.id)):
                 await interaction.response.send_message("❌ Только администраторы", ephemeral=True)
@@ -94,10 +97,10 @@ class AdSlashCommands:
             else:
                 await interaction.response.send_message("❌ Ошибка сохранения", ephemeral=True)
         
-        @self.bot.tree.command(name="ad_sleep", description="Установить режим сна")
+        @app_commands.command(name="ad_sleep", description="Установить режим сна")
         @app_commands.describe(start="Начало сна (ЧЧ:ММ)", end="Конец сна (ЧЧ:ММ)")
         async def ad_sleep(interaction: discord.Interaction, start: str, end: str):
-            print(f"🔵 [slash] ad_sleep called by {interaction.user.id}")
+            print(f"🔵 [/ad_sleep] вызвана пользователем {interaction.user.id}")
             
             if not await is_admin(str(interaction.user.id)):
                 await interaction.response.send_message("❌ Только администраторы", ephemeral=True)
@@ -128,10 +131,10 @@ class AdSlashCommands:
             else:
                 await interaction.response.send_message("❌ Ошибка сохранения", ephemeral=True)
         
-        @self.bot.tree.command(name="ad_image", description="Установить URL картинки")
+        @app_commands.command(name="ad_image", description="Установить URL картинки")
         @app_commands.describe(url="URL картинки (начинается с http:// или https://)")
         async def ad_image(interaction: discord.Interaction, url: str):
-            print(f"🔵 [slash] ad_image called by {interaction.user.id}")
+            print(f"🔵 [/ad_image] вызвана пользователем {interaction.user.id}")
             
             if not await is_admin(str(interaction.user.id)):
                 await interaction.response.send_message("❌ Только администраторы", ephemeral=True)
@@ -158,9 +161,9 @@ class AdSlashCommands:
             else:
                 await interaction.response.send_message("❌ Ошибка сохранения", ephemeral=True)
         
-        @self.bot.tree.command(name="ad_status", description="Показать статус рекламы")
+        @app_commands.command(name="ad_status", description="Показать статус рекламы")
         async def ad_status(interaction: discord.Interaction):
-            print(f"🔵 [slash] ad_status called by {interaction.user.id}")
+            print(f"🔵 [/ad_status] вызвана пользователем {interaction.user.id}")
             
             settings = db.get_active_ad()
             
@@ -185,9 +188,9 @@ class AdSlashCommands:
             
             await interaction.response.send_message(embed=embed, ephemeral=True)
         
-        @self.bot.tree.command(name="ad_toggle", description="Включить/выключить рекламу")
+        @app_commands.command(name="ad_toggle", description="Включить/выключить рекламу")
         async def ad_toggle(interaction: discord.Interaction):
-            print(f"🔵 [slash] ad_toggle called by {interaction.user.id}")
+            print(f"🔵 [/ad_toggle] вызвана пользователем {interaction.user.id}")
             
             if not await is_admin(str(interaction.user.id)):
                 await interaction.response.send_message("❌ Только администраторы", ephemeral=True)
@@ -207,3 +210,14 @@ class AdSlashCommands:
             
             status_text = "✅ Включена" if new_status else "❌ Выключена"
             await interaction.response.send_message(f"Реклама: {status_text}", ephemeral=True)
+        
+        # Добавляем все команды в bot.tree
+        self.bot.tree.add_command(ad_text)
+        self.bot.tree.add_command(ad_channel)
+        self.bot.tree.add_command(ad_interval)
+        self.bot.tree.add_command(ad_sleep)
+        self.bot.tree.add_command(ad_image)
+        self.bot.tree.add_command(ad_status)
+        self.bot.tree.add_command(ad_toggle)
+        
+        print(f"✅ Зарегистрировано 7 слэш-команд в bot.tree")
