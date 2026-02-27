@@ -287,10 +287,10 @@ class GlobalSettingsView(BaseMenuView):
             row=1
         )
         async def ad_cb(i):
+            from advertising.views import AdSettingsView
             view = AdSettingsView(self.user_id, self.guild, self, await self.get_current_embed())
             embed = discord.Embed(
-                title="📢 **АВТОМАТИЧЕСКАЯ РЕКЛАМА**",
-                description="Настройка автоматической рассылки рекламных сообщений",
+                title="📢 **АВТО-РЕКЛАМА**",
                 color=0x00ff00
             )
             await i.response.edit_message(embed=embed, view=view)
