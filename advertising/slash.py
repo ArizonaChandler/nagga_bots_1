@@ -195,6 +195,13 @@ class AdSlashCommands:
                 embed.description = "❌ Настройки не найдены"
             
             await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        # Test
+        @ad_group.command(name="test", description="Тестовая команда")
+        async def ad_test(interaction: discord.Interaction):
+            print("🔵 [/ad test] ВЫПОЛНЯЕТСЯ")
+            await interaction.response.send_message("✅ Команда работает!", ephemeral=True)
+            print("✅ [/ad test] ЗАВЕРШЕНА")
         
         # Вкл/Выкл
         @ad_group.command(name="toggle", description="Включить/выключить рекламу")

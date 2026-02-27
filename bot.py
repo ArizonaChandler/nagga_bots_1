@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from core.database import db
 from core.config import CONFIG, load_config
-from core.utils import format_mention
+from core.utils import format_mention, is_admin  # 👈 ДОБАВЛЯЕМ is_admin
 
 from commands.info import setup as setup_info
 from commands.settings import setup as setup_settings
@@ -27,7 +27,7 @@ from events.scheduler import setup as setup_scheduler
 
 # Импорт авто-рекламы
 from advertising.core import setup as setup_advertising
-from advertising.slash import AdSlashCommands  # Импортируем класс для слэш-команд
+from advertising.slash import AdSlashCommands
 
 import discord
 from discord.ext import commands
@@ -126,7 +126,7 @@ async def on_command_error(ctx, error):
 @bot.command(name='sync')
 async def sync_commands(ctx):
     """Принудительная синхронизация слэш-команд (только для админов)"""
-    if not await is_admin(str(ctx.author.id)):
+    if not await is_admin(str(ctx.author.id)):  # 👈 Теперь is_admin импортирован
         await ctx.send("❌ Только администраторы")
         return
     
