@@ -7,6 +7,7 @@ from core.utils import is_super_admin
 from core.config import CONFIG
 
 AD_TEXT_FILE = "/home/discordbot/discord-bot/ad_text.txt"
+AD_IMAGE_FILE = "/home/discordbot/discord-bot/ad_image.txt"
 AD_CHANNEL_FILE = "/home/discordbot/discord-bot/ad_channel.txt"
 
 def setup(bot):
@@ -41,6 +42,55 @@ def setup(bot):
         except TimeoutError:
             await ctx.author.send("⏰ Время ожидания истекло. Попробуй еще раз.")
     
+    @bot.command(name='ad_image')
+    async def set_ad_image(ctx, url: str = None):
+        """Установить URL картинки для рекламы (только ЛС, супер-админ)"""
+        if ctx.guild is not None:
+            return
+        
+        if not await is_super_admin(str(ctx.author.id)):
+            return
+        
+        if not url:
+            # Показываем текущую картинку
+            try:
+                with open(AD_IMAGE_FILE, 'r', encoding='utf-8') as f:
+                    current = f.read().strip()
+                if current:
+                    embed = discord.Embed(
+                        title="🖼️ Текущая картинка",
+                        description=current,
+                        color=0x00ff00
+                    )
+                    embed.set_image(url=current)
+                    await ctx.author.send(embed=embed)
+                else:
+                    await ctx.author.send("🖼️ Картинка не установлена. Используй `!ad_image URL`")
+            except:
+                await ctx.author.send("🖼️ Картинка не установлена. Используй `!ad_image URL`")
+            return
+        
+        # Простая проверка URL
+        if not (url.startswith('http://') or url.startswith('https://')):
+            await ctx.author.send("❌ URL должен начинаться с http:// или https://")
+            return
+        
+        # Сохраняем URL картинки
+        try:
+            with open(AD_IMAGE_FILE, 'w', encoding='utf-8') as f:
+                f.write(url)
+            
+            embed = discord.Embed(
+                title="✅ URL картинки сохранен",
+                description=url,
+                color=0x00ff00
+            )
+            embed.set_image(url=url)
+            await ctx.author.send(embed=embed)
+            
+        except Exception as e:
+            await ctx.author.send(f"❌ Ошибка при сохранении: {e}")
+    
     @bot.command(name='ad_channel')
     async def set_ad_channel(ctx, channel_id: str = None):
         """Установить ID канала для рекламы (только ЛС, супер-админ)"""
@@ -62,14 +112,12 @@ def setup(bot):
                 await ctx.author.send("📢 Канал не установлен. Используй `!ad_channel ID_канала`")
             return
         
-        # Проверка формата ID
         try:
             int(channel_id)
         except ValueError:
             await ctx.author.send("❌ Неверный формат ID канала. ID должен состоять только из цифр.")
             return
         
-        # Сохраняем ID канала (без проверки, так как отправка идёт от пользовательского токена)
         try:
             with open(AD_CHANNEL_FILE, 'w', encoding='utf-8') as f:
                 f.write(channel_id)
@@ -100,6 +148,18 @@ def setup(bot):
             embed.add_field(name="📝 Текст", value=f"```\n{text[:200]}{'...' if len(text) > 200 else ''}\n```", inline=False)
         except:
             embed.add_field(name="📝 Текст", value="❌ Не установлен", inline=False)
+        
+        # Картинка
+        try:
+            with open(AD_IMAGE_FILE, 'r', encoding='utf-8') as f:
+                image_url = f.read().strip()
+            if image_url:
+                embed.add_field(name="🖼️ Картинка", value="✅ Есть", inline=True)
+                embed.set_image(url=image_url)
+            else:
+                embed.add_field(name="🖼️ Картинка", value="❌ Нет", inline=True)
+        except:
+            embed.add_field(name="🖼️ Картинка", value="❌ Нет", inline=True)
         
         # Канал
         try:
@@ -147,5 +207,21 @@ def setup(bot):
         try:
             await advertiser.send_ad(datetime.now())
             await ctx.author.send("✅ Реклама отправлена!")
+        except Exception as e:
+            await ctx.author.send(f"❌ Ошибка: {e}")
+
+    @bot.command(name='ad_image_clear')
+    async def clear_ad_image(ctx):
+        """Удалить картинку (только ЛС, супер-админ)"""
+        if ctx.guild is not None:
+            return
+        
+        if not await is_super_admin(str(ctx.author.id)):
+            return
+        
+        try:
+            with open(AD_IMAGE_FILE, 'w', encoding='utf-8') as f:
+                f.write("")
+            await ctx.author.send("✅ Картинка удалена. Теперь реклама будет отправляться без картинки.")
         except Exception as e:
             await ctx.author.send(f"❌ Ошибка: {e}")
