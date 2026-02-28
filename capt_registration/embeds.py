@@ -5,26 +5,29 @@ from datetime import datetime
 def create_registration_embed(main_list: list, reserve_list: list) -> discord.Embed:
     """Создать embed с основным и резервным списками"""
     
-    # Форматируем основной список
-    main_text = ""
+    # Основной список (красный)
     if main_list:
+        main_lines = []
         for i, (user_id, user_name) in enumerate(main_list, 1):
-            main_text += f"{i}. <@{user_id}> — {user_name}\n"
+            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "🔹"
+            main_lines.append(f"{medal} **{i}.** <@{user_id}> — {user_name}")
+        main_text = "\n".join(main_lines)
     else:
-        main_text = "❌ Пока нет участников"
+        main_text = "*Список пуст*"
     
-    # Форматируем резервный список
-    reserve_text = ""
+    # Резервный список (жёлтый)
     if reserve_list:
+        reserve_lines = []
         for i, (user_id, user_name) in enumerate(reserve_list, 1):
-            reserve_text += f"{i}. <@{user_id}> — {user_name}\n"
+            reserve_lines.append(f"🟡 **{i}.** <@{user_id}> — {user_name}")
+        reserve_text = "\n".join(reserve_lines)
     else:
-        reserve_text = "⏳ Пока нет участников"
+        reserve_text = "*Список пуст*"
     
     # Создаём embed
     embed = discord.Embed(
         title="🎯 **РЕГИСТРАЦИЯ НА CAPT**",
-        color=0xff0000,
+        color=0xff0000,  # Красный цвет
         timestamp=datetime.now()
     )
     
@@ -40,15 +43,8 @@ def create_registration_embed(main_list: list, reserve_list: list) -> discord.Em
         inline=False
     )
     
-    # Статистика
+    # Подсчёт участников для футера
     total = len(main_list) + len(reserve_list)
-    embed.add_field(
-        name="📊 **Статистика**",
-        value=f"👥 Всего: **{total}**\n"
-              f"🔴 Основной: **{len(main_list)}**\n"
-              f"🟡 Резерв: **{len(reserve_list)}**",
-        inline=False
-    )
+    embed.set_footer(text=f"👥 Всего участников: {total} • Обновляется автоматически")
     
-    embed.set_footer(text="Обновляется автоматически • Нажмите кнопки для участия")
     return embed
