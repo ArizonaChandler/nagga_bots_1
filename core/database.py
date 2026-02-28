@@ -1,5 +1,7 @@
 """Модуль работы с SQLite базой данных"""
 import sqlite3
+from datetime import datetime
+import pytz
 
 class Database:
     def __init__(self):
@@ -66,7 +68,7 @@ class Database:
                 )
             ''')
             
-            # ===== НОВЫЕ ТАБЛИЦЫ ДЛЯ СИСТЕМЫ ОПОВЕЩЕНИЙ =====
+            # Таблицы для системы мероприятий
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,7 +123,8 @@ class Database:
                     UNIQUE(event_id, scheduled_date)
                 )
             ''')
-
+            
+            # Таблицы для авто-рекламы
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS auto_ad (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -137,7 +140,7 @@ class Database:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
-
+            
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS auto_ad_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -146,8 +149,8 @@ class Database:
                     error TEXT
                 )
             ''')
-
-            # ===== НОВЫЕ ТАБЛИЦЫ ДЛЯ СИСТЕМЫ РЕГИСТРАЦИИ НА CAPT =====
+            
+            # НОВЫЕ ТАБЛИЦЫ ДЛЯ СИСТЕМЫ РЕГИСТРАЦИИ НА CAPT
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS capt_registrations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -158,7 +161,7 @@ class Database:
                     is_active BOOLEAN DEFAULT 1
                 )
             ''')
-
+            
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS capt_sessions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -333,7 +336,7 @@ class Database:
             ''', (command, user_id, 1 if success else 0, recipients, details))
             conn.commit()
     
-    # ===== НОВЫЕ МЕТОДЫ ДЛЯ СИСТЕМЫ ОПОВЕЩЕНИЙ =====
+    # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ОПОВЕЩЕНИЙ =====
     
     # ----- МЕРОПРИЯТИЯ -----
     def add_event(self, name: str, weekday: int, event_time: str, created_by: str) -> int:
@@ -405,24 +408,15 @@ class Database:
             return None
     
     def delete_event(self, event_id: int, soft: bool = False) -> bool:
-        """Удалить мероприятие
-        
-        Args:
-            event_id: ID мероприятия
-            soft: если True - только отключить (enabled=0), если False - полностью удалить
-        """
+        """Удалить мероприятие"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             if soft:
-                # Мягкое удаление - только отключаем
                 cursor.execute('UPDATE events SET enabled = 0 WHERE id = ?', (event_id,))
             else:
-                # Полное удаление
-                # Сначала удаляем связанные записи
                 cursor.execute('DELETE FROM event_takes WHERE event_id = ?', (event_id,))
                 cursor.execute('DELETE FROM event_logs WHERE event_id = ?', (event_id,))
                 cursor.execute('DELETE FROM event_schedule WHERE event_id = ?', (event_id,))
-                # Затем само мероприятие
                 cursor.execute('DELETE FROM events WHERE id = ?', (event_id,))
             conn.commit()
             return cursor.rowcount > 0
@@ -477,12 +471,7 @@ class Database:
             return result
     
     def get_top_organizers(self, limit: int = 10, days: int = 30):
-        """Топ организаторов МП за последние N дней
-        
-        Args:
-            limit: количество записей
-            days: за сколько дней считать (по умолчанию 30)
-        """
+        """Топ организаторов МП за последние N дней"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -497,7 +486,6 @@ class Database:
             
             result = cursor.fetchall()
             
-            # Если за 30 дней нет данных, показываем общую статистику
             if not result:
                 cursor.execute('''
                     SELECT user_id, user_name, COUNT(*) as count
@@ -516,19 +504,15 @@ class Database:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
-            # Общее количество МП
             cursor.execute('SELECT COUNT(*) FROM events')
             total_events = cursor.fetchone()[0]
             
-            # Активные МП
             cursor.execute('SELECT COUNT(*) FROM events WHERE enabled = 1')
             active_events = cursor.fetchone()[0]
             
-            # Всего проведено МП
             cursor.execute('SELECT COUNT(*) FROM event_takes WHERE is_cancelled = 0')
             total_takes = cursor.fetchone()[0]
             
-            # За последние 30 дней
             cursor.execute('''
                 SELECT COUNT(*) FROM event_takes 
                 WHERE is_cancelled = 0 
@@ -536,9 +520,6 @@ class Database:
             ''')
             takes_30d = cursor.fetchone()[0]
             
-            # За сегодня
-            from datetime import datetime
-            import pytz
             msk_tz = pytz.timezone('Europe/Moscow')
             today = datetime.now(msk_tz).date().isoformat()
             
@@ -558,7 +539,7 @@ class Database:
     
     # ----- РАСПИСАНИЕ -----
     def generate_schedule(self, days_ahead: int = 14):
-        """Сгенерировать расписание на ближайшие дни, включая сегодня"""
+        """Сгенерировать расписание на ближайшие дни"""
         from datetime import datetime, timedelta
         import pytz
         
@@ -574,12 +555,11 @@ class Database:
                 for day_offset in range(days_ahead):
                     check_date = today + timedelta(days=day_offset)
                     if check_date.weekday() == event['weekday']:
-                        # Проверяем, не прошло ли уже время сегодня
-                        if day_offset == 0:  # Сегодня
+                        if day_offset == 0:
                             event_time = datetime.strptime(event['event_time'], "%H:%M").time()
                             event_datetime = datetime.combine(check_date, event_time)
                             if event_datetime < now:
-                                continue  # Пропускаем, если время уже прошло
+                                continue
                         
                         cursor.execute('''
                             INSERT OR IGNORE INTO event_schedule 
@@ -639,17 +619,15 @@ class Database:
                 VALUES (?, ?, ?, ?)
             ''', (event_id, action, user_id, details))
             conn.commit()
-
-        # ===== АВТО-РЕКЛАМА =====
+    
+    # ===== АВТО-РЕКЛАМА =====
     def save_ad_settings(self, message_text: str, image_url: str, channel_id: str, 
                         interval: int = 65, sleep_start: str = "02:00", 
                         sleep_end: str = "06:30", updated_by: str = None) -> bool:
         """Сохранить настройки авто-рекламы"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            # Сначала деактивируем старые записи
             cursor.execute('UPDATE auto_ad SET is_active = 0')
-            # Создаём новую
             cursor.execute('''
                 INSERT INTO auto_ad 
                 (message_text, image_url, channel_id, interval_minutes, 

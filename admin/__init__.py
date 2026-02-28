@@ -6,7 +6,8 @@ from admin.views import (
 from admin.modals import (
     SetRoleModal, SetCaptChannelModal, SetServerModal,
     AddUserModal, RemoveUserModal, AddAdminModal, RemoveAdminModal,
-    SetAlarmChannelModal, SetAnnounceChannelModal, AddEventModal, EditEventModal, TakeEventModal
+    SetAlarmChannelModal, SetAnnounceChannelModal, AddEventModal, EditEventModal, TakeEventModal,
+    SetCaptAlertChannelModal, SetCaptRoleModal  # ДОБАВЛЕНЫ новые модалки
 )
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     'EventsListView', 'EventDetailView', 'SetRoleModal', 'SetCaptChannelModal',
     'SetServerModal', 'AddUserModal', 'RemoveUserModal', 'AddAdminModal',
     'RemoveAdminModal', 'SetAlarmChannelModal', 'SetAnnounceChannelModal',
-    'AddEventModal', 'EditEventModal', 'TakeEventModal'
+    'AddEventModal', 'EditEventModal', 'TakeEventModal',
+    'SetCaptAlertChannelModal', 'SetCaptRoleModal'  # ДОБАВЛЕНЫ
 ]
