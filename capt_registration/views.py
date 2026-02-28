@@ -132,80 +132,93 @@ class ModerationView(PermanentView):
 
 
 class MoveToMainModal(discord.ui.Modal, title="➕ Добавить в основной список"):
-    """Модалка для добавления пользователя в основной список"""
+    """Модалка для добавления пользователя в основной список по номеру из резерва"""
     
-    user_identifier = discord.ui.TextInput(
-        label="ID пользователя или @упоминание",
-        placeholder="123456789012345678 или @user",
-        max_length=30,
+    reserve_number = discord.ui.TextInput(
+        label="Номер участника из резервного списка",
+        placeholder="Например: 2",
+        max_length=3,
         required=True
     )
     
     async def on_submit(self, interaction: discord.Interaction):
-        # Извлекаем ID из упоминания
-        identifier = self.user_identifier.value.strip()
-        
-        if identifier.startswith('<@') and identifier.endswith('>'):
-            target_id = identifier.replace('<@', '').replace('>', '').replace('!', '')
-        else:
-            target_id = identifier
-        
-        # Проверяем что ID состоит из цифр
-        if not target_id.isdigit():
+        # Проверяем что ввели число
+        if not self.reserve_number.value.isdigit():
             await interaction.response.send_message(
-                "❌ Неверный формат. Используйте ID или @упоминание",
+                "❌ Введите число",
                 ephemeral=True
             )
             return
         
-        # Отправляем запрос в менеджер
+        number = int(self.reserve_number.value)
+        
+        # Получаем текущие списки
+        main_list, reserve_list = capt_reg_manager.get_lists()
+        
+        # Проверяем, что номер существует в резерве
+        if number < 1 or number > len(reserve_list):
+            await interaction.response.send_message(
+                f"❌ В резерве только {len(reserve_list)} участников. Номер {number} не существует.",
+                ephemeral=True
+            )
+            return
+        
+        # Получаем данные участника по номеру из резерва
+        target_user_id, target_user_name = reserve_list[number - 1]
+        
+        # Перемещаем в основной список
         success, msg = await capt_reg_manager.move_to_main(
             str(interaction.user.id),
-            target_id,
+            target_user_id,
             interaction.client
         )
         
-        # Отвечаем сразу
         await interaction.response.send_message(msg, ephemeral=True)
 
 
 class MoveToReserveModal(discord.ui.Modal, title="➡️ Перевести в резерв"):
-    """Модалка для перевода пользователя в резерв"""
+    """Модалка для перевода пользователя в резерв по номеру из основного списка"""
     
-    user_identifier = discord.ui.TextInput(
-        label="ID пользователя или @упоминание",
-        placeholder="123456789012345678 или @user",
-        max_length=30,
+    main_number = discord.ui.TextInput(
+        label="Номер участника из основного списка",
+        placeholder="Например: 1",
+        max_length=3,
         required=True
     )
     
     async def on_submit(self, interaction: discord.Interaction):
-        # Извлекаем ID из упоминания
-        identifier = self.user_identifier.value.strip()
-        
-        if identifier.startswith('<@') and identifier.endswith('>'):
-            target_id = identifier.replace('<@', '').replace('>', '').replace('!', '')
-        else:
-            target_id = identifier
-        
-        # Проверяем что ID состоит из цифр
-        if not target_id.isdigit():
+        # Проверяем что ввели число
+        if not self.main_number.value.isdigit():
             await interaction.response.send_message(
-                "❌ Неверный формат. Используйте ID или @упоминание",
+                "❌ Введите число",
                 ephemeral=True
             )
             return
         
-        # Отправляем запрос в менеджер
+        number = int(self.main_number.value)
+        
+        # Получаем текущие списки
+        main_list, reserve_list = capt_reg_manager.get_lists()
+        
+        # Проверяем, что номер существует в основном списке
+        if number < 1 or number > len(main_list):
+            await interaction.response.send_message(
+                f"❌ В основном списке только {len(main_list)} участников. Номер {number} не существует.",
+                ephemeral=True
+            )
+            return
+        
+        # Получаем данные участника по номеру из основного списка
+        target_user_id, target_user_name = main_list[number - 1]
+        
+        # Перемещаем в резерв
         success, msg = await capt_reg_manager.move_to_reserve(
             str(interaction.user.id),
-            target_id,
+            target_user_id,
             interaction.client
         )
         
-        # Отвечаем сразу
         await interaction.response.send_message(msg, ephemeral=True)
-
 
 # ===== ЧАТ ДЛЯ ВСЕХ =====
 

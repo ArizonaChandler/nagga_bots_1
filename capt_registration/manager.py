@@ -311,9 +311,10 @@ class CaptRegistrationManager:
             return False, f"❌ Ошибка: {e}"
     
     def get_lists(self):
-        """Получить текущие списки"""
+        """Получить текущие списки, отсортированные по времени регистрации"""
         with db.get_connection() as conn:
             cursor = conn.cursor()
+            # Основной список - сортируем по registered_at (кто раньше зарегистрировался в основном)
             cursor.execute('''
                 SELECT user_id, user_name FROM capt_registrations 
                 WHERE is_active = 1 AND list_type = 'main'
@@ -321,6 +322,7 @@ class CaptRegistrationManager:
             ''')
             main_list = cursor.fetchall()
             
+            # Резервный список - сортируем по registered_at (кто раньше зарегистрировался в резерве)
             cursor.execute('''
                 SELECT user_id, user_name FROM capt_registrations 
                 WHERE is_active = 1 AND list_type = 'reserve'
