@@ -147,6 +147,32 @@ class Database:
                 )
             ''')
 
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS capt_registrations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL UNIQUE,
+                    user_name TEXT NOT NULL,
+                    list_type TEXT NOT NULL CHECK(list_type IN ('main', 'reserve')),
+                    registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_active BOOLEAN DEFAULT 1
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS capt_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    is_active BOOLEAN DEFAULT 0,
+                    started_by TEXT,
+                    started_at TIMESTAMP,
+                    ended_by TEXT,
+                    ended_at TIMESTAMP,
+                    main_message_id TEXT,     # ID сообщения в чате модерации
+                    reserve_message_id TEXT,  # ID сообщения в чате для всех
+                    main_channel_id TEXT,     # ID канала модерации
+                    reserve_channel_id TEXT   # ID канала для всех
+                )
+            ''')
+
             conn.commit()
     
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====

@@ -34,6 +34,11 @@ from discord.ext import commands
 from dotenv import load_dotenv
 import os
 
+# для CAPT регистрации
+from capt_registration.views import ModerationView, PublicView
+from capt_registration.manager import capt_reg_manager
+from capt_registration.embeds import create_registration_embed
+
 load_dotenv()
 BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 
@@ -111,6 +116,34 @@ async def on_ready():
         name="!info | v1.3"
     ))
     
+    # Отправляем постоянные кнопки для CAPT регистрации
+    main_channel_id = CONFIG.get('capt_reg_main_channel')
+    reserve_channel_id = CONFIG.get('capt_reg_reserve_channel')
+
+    if main_channel_id and reserve_channel_id:
+        main_channel = bot.get_channel(int(main_channel_id))
+        reserve_channel = bot.get_channel(int(reserve_channel_id))
+        
+        if main_channel and reserve_channel:
+            # Очищаем старые сообщения (опционально)
+            async for msg in main_channel.history(limit=10):
+                if msg.author == bot.user:
+                    await msg.delete()
+            
+            async for msg in reserve_channel.history(limit=10):
+                if msg.author == bot.user:
+                    await msg.delete()
+            
+            # Получаем текущие списки
+            main_list, reserve_list = capt_reg_manager.get_lists()
+            embed = create_registration_embed(main_list, reserve_list)
+            
+            # Отправляем новые сообщения с кнопками
+            await main_channel.send(embed=embed, view=ModerationView())
+            await reserve_channel.send(embed=embed, view=PublicView())
+            
+            print(f"✅ Постоянные кнопки CAPT регистрации отправлены")
+
     print("="*60 + "\n")
 
 @bot.event

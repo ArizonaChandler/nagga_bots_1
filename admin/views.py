@@ -276,6 +276,18 @@ class GlobalSettingsView(BaseMenuView):
             await i.response.edit_message(embed=embed, view=view)
         alarm_btn.callback = alarm_cb
         self.add_item(alarm_btn)
+
+        # 🎯 Настройка CAPT регистрации
+        capt_reg_btn = discord.ui.Button(
+            label="🎯 Настройка CAPT регистрации",
+            style=discord.ButtonStyle.secondary,
+            emoji="🎯",
+            row=2
+        )
+        async def capt_reg_cb(i):
+            await i.response.send_modal(SetCaptRegChannelsModal())
+        capt_reg_btn.callback = capt_reg_cb
+        self.add_item(capt_reg_btn)
         
         # ◀ Кнопка "Назад"
         self.add_back_button(row=4)
@@ -950,3 +962,29 @@ async def send_event_stats(interaction, guild, previous_view=None, previous_embe
             self.add_back_button()
     
     await interaction.response.edit_message(embed=embed, view=StatsView())
+
+class SetCaptRegChannelsModal(discord.ui.Modal, title="🎯 КАНАЛЫ CAPT РЕГИСТРАЦИИ"):
+    main_channel = discord.ui.TextInput(
+        label="ID канала для модерации",
+        placeholder="123456789012345678",
+        max_length=20
+    )
+    reserve_channel = discord.ui.TextInput(
+        label="ID канала для всех",
+        placeholder="123456789012345678",
+        max_length=20
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        from capt_registration.manager import capt_reg_manager
+        capt_reg_manager.set_channels(
+            self.main_channel.value,
+            self.reserve_channel.value,
+            str(interaction.user.id)
+        )
+        await interaction.response.send_message(
+            f"✅ Каналы CAPT регистрации настроены:\n"
+            f"Модерация: <#{self.main_channel.value}>\n"
+            f"Для всех: <#{self.reserve_channel.value}>",
+            ephemeral=True
+        )
