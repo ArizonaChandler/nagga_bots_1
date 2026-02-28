@@ -5,21 +5,20 @@ from datetime import datetime
 def create_registration_embed(main_list: list, reserve_list: list) -> discord.Embed:
     """Создать embed с основным и резервным списками"""
     
-    # Основной список (красный)
+    # Основной список (красный крестик)
     if main_list:
         main_lines = []
         for i, (user_id, user_name) in enumerate(main_list, 1):
-            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "🔹"
-            main_lines.append(f"{medal} **{i}.** <@{user_id}> — {user_name}")
+            main_lines.append(f"❌ **{i}.** <@{user_id}> — {user_name}")
         main_text = "\n".join(main_lines)
     else:
         main_text = "*Список пуст*"
     
-    # Резервный список (жёлтый)
+    # Резервный список (часы)
     if reserve_list:
         reserve_lines = []
         for i, (user_id, user_name) in enumerate(reserve_list, 1):
-            reserve_lines.append(f"🟡 **{i}.** <@{user_id}> — {user_name}")
+            reserve_lines.append(f"⏳ **{i}.** <@{user_id}> — {user_name}")
         reserve_text = "\n".join(reserve_lines)
     else:
         reserve_text = "*Список пуст*"
@@ -27,18 +26,18 @@ def create_registration_embed(main_list: list, reserve_list: list) -> discord.Em
     # Создаём embed
     embed = discord.Embed(
         title="🎯 **РЕГИСТРАЦИЯ НА CAPT**",
-        color=0xff0000,  # Красный цвет
+        color=0xff0000,
         timestamp=datetime.now()
     )
     
     embed.add_field(
-        name="🔴 **ОСНОВНОЙ СОСТАВ**",
+        name="❌ **ОСНОВНОЙ СОСТАВ**",
         value=main_text,
         inline=False
     )
     
     embed.add_field(
-        name="🟡 **РЕЗЕРВ**",
+        name="⏳ **РЕЗЕРВ**",
         value=reserve_text,
         inline=False
     )

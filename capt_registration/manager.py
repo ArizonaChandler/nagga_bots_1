@@ -147,9 +147,12 @@ class CaptRegistrationManager:
         # Активируем кнопки в публичном чате
         await self._update_public_buttons(bot, active=True)
         
+        # Обновляем кнопки в чате модерации
+        await self._update_moderation_buttons(bot, active=True)
+        
         db.log_action(user_id, "CAPT_REG_START", f"Session {session_id}")
         return True
-    
+
     async def end_registration(self, user_id: str, bot):
         """Завершить регистрацию (очистить всё)"""
         logger.info(f"Завершение регистрации от {user_id}")
@@ -174,12 +177,40 @@ class CaptRegistrationManager:
         # Деактивируем кнопки в публичном чате
         await self._update_public_buttons(bot, active=False)
         
+        # Обновляем кнопки в чате модерации
+        await self._update_moderation_buttons(bot, active=False)
+        
         # Обновляем embed в обоих каналах (пустые списки)
         await self._update_all_embeds(bot, clear=True)
         
         db.log_action(user_id, "CAPT_REG_END")
         logger.info("✅ Регистрация завершена")
         return True
+
+    async def _update_moderation_buttons(self, bot, active: bool):
+        """Обновить состояние кнопок в чате модерации"""
+        if not self.main_channel_id or not self.main_message_id:
+            return
+        
+        try:
+            channel = bot.get_channel(int(self.main_channel_id))
+            if not channel:
+                return
+            
+            msg = await channel.fetch_message(int(self.main_message_id))
+            if not msg:
+                return
+            
+            # Создаём новый view с обновлённым состоянием кнопок
+            from capt_registration.views import ModerationView
+            view = ModerationView()
+            view.update_buttons(active)
+            
+            await msg.edit(view=view)
+            logger.info(f"✅ Кнопки в чате модерации {'активированы' if active else 'деактивированы'}")
+            
+        except Exception as e:
+            logger.error(f"Ошибка обновления кнопок модерации: {e}")
     
     async def add_participant(self, user_id: str, user_name: str, bot):
         """Добавить участника (всегда в резерв)"""
@@ -353,6 +384,10 @@ class CaptRegistrationManager:
                 logger.debug(f"Embed обновлён в канале {channel_id}")
         except Exception as e:
             logger.error(f"Ошибка обновления embed в {channel_id}: {e}")
+
+    def is_registration_active(self) -> bool:
+        """Проверить, активна ли регистрация"""
+        return self.active_session is not None
 
 # Глобальный экземпляр
 capt_reg_manager = CaptRegistrationManager()
