@@ -202,13 +202,17 @@ def setup(bot):
             await ctx.author.send("❌ Ошибка: рекламная система не инициализирована")
             return
         
-        await ctx.author.send("🔄 Отправка рекламы...")
+        await ctx.author.send("🔄 Отправка рекламы... (проверь консоль для деталей)")
         
         try:
             await advertiser.send_ad(datetime.now())
-            await ctx.author.send("✅ Реклама отправлена!")
+            # Не отправляем "✅ Реклама отправлена!" потому что send_ad сам отправит уведомление админу
         except Exception as e:
             await ctx.author.send(f"❌ Ошибка: {e}")
+            # Отправляем ошибку в консоль
+            print(f"❌ Ошибка в !ad_send: {e}")
+            import traceback
+            traceback.print_exc()
 
     @bot.command(name='ad_image_clear')
     async def clear_ad_image(ctx):

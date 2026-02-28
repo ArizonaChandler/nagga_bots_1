@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import os
+import traceback
 from datetime import datetime, timedelta
 import pytz
 import discord
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 MSK_TZ = pytz.timezone('Europe/Moscow')
 
 AD_TEXT_FILE = "/home/discordbot/discord-bot/ad_text.txt"
-AD_IMAGE_FILE = "/home/discordbot/discord-bot/ad_image.txt"  # новый файл для URL картинки
+AD_IMAGE_FILE = "/home/discordbot/discord-bot/ad_image.txt"
 AD_CHANNEL_FILE = "/home/discordbot/discord-bot/ad_channel.txt"
 AD_INTERVAL = 65  # минут
 
@@ -24,6 +25,7 @@ class AutoAdvertiser:
         self.check_interval = 60
         self.task = None
         self.last_sent_time = None
+        self.super_admin_id = CONFIG.get('super_admin_id')
         
         # Создаем файлы если их нет
         if not os.path.exists(AD_TEXT_FILE):
@@ -58,7 +60,8 @@ class AutoAdvertiser:
         try:
             with open(AD_TEXT_FILE, 'r', encoding='utf-8') as f:
                 return f.read().strip()
-        except:
+        except Exception as e:
+            print(f"❌ Ошибка чтения файла текста: {e}")
             return "Рекламный текст не установлен"
     
     def get_ad_image(self):
@@ -67,7 +70,8 @@ class AutoAdvertiser:
             with open(AD_IMAGE_FILE, 'r', encoding='utf-8') as f:
                 url = f.read().strip()
                 return url if url else None
-        except:
+        except Exception as e:
+            print(f"❌ Ошибка чтения файла картинки: {e}")
             return None
     
     def get_ad_channel(self):
@@ -76,15 +80,29 @@ class AutoAdvertiser:
             with open(AD_CHANNEL_FILE, 'r', encoding='utf-8') as f:
                 channel_id = f.read().strip()
                 return channel_id if channel_id else None
-        except:
+        except Exception as e:
+            print(f"❌ Ошибка чтения файла канала: {e}")
             return None
+    
+    async def notify_admin(self, message):
+        """Отправить уведомление супер-админу в ЛС"""
+        if self.super_admin_id:
+            try:
+                user = await self.bot.fetch_user(int(self.super_admin_id))
+                if user:
+                    await user.send(f"📢 [AutoAd] {message}")
+            except:
+                pass
     
     async def _run(self):
         while self.running:
             try:
                 await self.check_and_send()
             except Exception as e:
-                logger.error(f"Ошибка в авто-рекламе: {e}")
+                error_msg = f"Ошибка в авто-рекламе: {e}\n{traceback.format_exc()}"
+                logger.error(error_msg)
+                print(f"❌ {error_msg}")
+                await self.notify_admin(f"❌ Ошибка: {e}")
             await asyncio.sleep(self.check_interval)
     
     async def check_and_send(self):
@@ -105,16 +123,27 @@ class AutoAdvertiser:
         try:
             channel_id = self.get_ad_channel()
             if not channel_id:
-                logger.error("Канал для рекламы не настроен")
+                error_msg = "Канал для рекламы не настроен"
+                logger.error(error_msg)
+                print(f"❌ {error_msg}")
+                await self.notify_admin(f"❌ {error_msg}")
                 return
             
             user_token = CONFIG.get('user_token_1')
             if not user_token:
-                logger.error("Пользовательский токен не найден в CONFIG")
+                error_msg = "Пользовательский токен не найден в CONFIG"
+                logger.error(error_msg)
+                print(f"❌ {error_msg}")
+                await self.notify_admin(f"❌ {error_msg}")
                 return
             
             ad_text = self.get_ad_text()
             image_url = self.get_ad_image()
+            
+            print(f"📤 Отправка рекламы в канал {channel_id}")
+            print(f"📝 Текст: {ad_text[:50]}...")
+            if image_url:
+                print(f"🖼️ Картинка: {image_url}")
             
             url = f"https://discord.com/api/v9/channels/{channel_id}/messages"
             headers = {
@@ -124,32 +153,36 @@ class AutoAdvertiser:
             
             # Формируем данные для отправки
             if image_url:
-                # Если есть картинка, отправляем embed
                 data = {
                     "embeds": [{
                         "description": ad_text,
-                        "color": 0x00ff00,  # зеленый цвет
+                        "color": 0x00ff00,
                         "image": {"url": image_url}
                     }]
                 }
             else:
-                # Если картинки нет, просто текст
                 data = {"content": ad_text}
             
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=headers, json=data) as resp:
+                    response_text = await resp.text()
+                    
                     if resp.status == 200:
                         self.last_sent_time = now
-                        logger.info(f"✅ Реклама отправлена в канал {channel_id}")
-                        print(f"✅ Реклама отправлена в канал {channel_id}")
+                        success_msg = f"✅ Реклама отправлена в канал {channel_id}"
+                        logger.info(success_msg)
+                        print(f"✅ {success_msg}")
                     else:
-                        error_text = await resp.text()
-                        logger.error(f"❌ Ошибка отправки рекламы: {resp.status} - {error_text}")
-                        print(f"❌ Ошибка отправки: {resp.status}")
+                        error_msg = f"❌ Ошибка отправки рекламы: {resp.status}\n{response_text}"
+                        logger.error(error_msg)
+                        print(f"❌ {error_msg}")
+                        await self.notify_admin(f"❌ Ошибка {resp.status}: {response_text[:200]}")
             
         except Exception as e:
-            logger.error(f"Ошибка отправки рекламы: {e}")
-            print(f"❌ Ошибка: {e}")
+            error_msg = f"Ошибка отправки рекламы: {e}\n{traceback.format_exc()}"
+            logger.error(error_msg)
+            print(f"❌ {error_msg}")
+            await self.notify_admin(f"❌ Ошибка: {e}")
 
 advertiser = None
 
