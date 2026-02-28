@@ -1,8 +1,11 @@
 """Менеджер регистрации на CAPT"""
 import discord
+import logging
 from datetime import datetime
 from core.database import db
 from core.config import CONFIG, save_config
+
+logger = logging.getLogger(__name__)
 
 class CaptRegistrationManager:
     def __init__(self):
@@ -12,22 +15,100 @@ class CaptRegistrationManager:
         self.main_message_id = None
         self.reserve_message_id = None
         self._load_config()
+        logger.info("✅ CaptRegistrationManager инициализирован")
     
     def _load_config(self):
         """Загрузка настроек из CONFIG"""
         self.main_channel_id = CONFIG.get('capt_reg_main_channel')
         self.reserve_channel_id = CONFIG.get('capt_reg_reserve_channel')
+        logger.debug(f"Загружены каналы: main={self.main_channel_id}, reserve={self.reserve_channel_id}")
     
     def set_channels(self, main_channel_id: str, reserve_channel_id: str, updated_by: str):
         """Установка каналов для регистрации"""
+        logger.info(f"Установка каналов: main={main_channel_id}, reserve={reserve_channel_id}")
+        
         CONFIG['capt_reg_main_channel'] = main_channel_id
         CONFIG['capt_reg_reserve_channel'] = reserve_channel_id
         save_config(updated_by)
+        
         self.main_channel_id = main_channel_id
         self.reserve_channel_id = reserve_channel_id
+        
+        logger.info(f"✅ Каналы сохранены")
+        return True
+    
+    async def initialize_buttons(self, bot):
+        """Инициализация постоянных кнопок при старте бота"""
+        logger.info("🔄 Инициализация постоянных кнопок CAPT регистрации")
+        
+        if not self.main_channel_id or not self.reserve_channel_id:
+            logger.warning("❌ Каналы не настроены, пропускаем инициализацию")
+            return False
+        
+        try:
+            main_channel = bot.get_channel(int(self.main_channel_id))
+            reserve_channel = bot.get_channel(int(self.reserve_channel_id))
+            
+            if not main_channel:
+                logger.error(f"❌ Канал модерации {self.main_channel_id} не найден")
+                return False
+            
+            if not reserve_channel:
+                logger.error(f"❌ Публичный канал {self.reserve_channel_id} не найден")
+                return False
+            
+            logger.info(f"✅ Каналы найдены: #{main_channel.name} и #{reserve_channel.name}")
+            
+            # Очищаем старые сообщения бота
+            await self._clean_old_messages(main_channel)
+            await self._clean_old_messages(reserve_channel)
+            
+            # Получаем текущие списки
+            from capt_registration.embeds import create_registration_embed
+            from capt_registration.views import ModerationView, PublicView
+            
+            main_list, reserve_list = self.get_lists()
+            embed = create_registration_embed(main_list, reserve_list)
+            
+            # Отправляем новые сообщения
+            main_msg = await main_channel.send(embed=embed, view=ModerationView())
+            reserve_msg = await reserve_channel.send(embed=embed, view=PublicView())
+            
+            self.main_message_id = str(main_msg.id)
+            self.reserve_message_id = str(reserve_msg.id)
+            
+            # Если есть активная сессия, обновляем ID сообщений
+            if self.active_session:
+                with db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        UPDATE capt_sessions 
+                        SET main_message_id = ?, reserve_message_id = ?
+                        WHERE id = ?
+                    ''', (self.main_message_id, self.reserve_message_id, self.active_session))
+                    conn.commit()
+            
+            logger.info(f"✅ Постоянные кнопки отправлены: main_msg={main_msg.id}, reserve_msg={reserve_msg.id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка инициализации кнопок: {e}", exc_info=True)
+            return False
+    
+    async def _clean_old_messages(self, channel):
+        """Очистка старых сообщений бота в канале"""
+        try:
+            async for msg in channel.history(limit=20):
+                if msg.author == channel.guild.me:
+                    await msg.delete()
+            logger.debug(f"Очищены старые сообщения в #{channel.name}")
+        except Exception as e:
+            logger.error(f"Ошибка очистки канала {channel.name}: {e}")
     
     async def start_registration(self, user_id: str, user_name: str, bot):
         """Начать регистрацию"""
+        logger.info(f"Старт регистрации от {user_name} ({user_id})")
+        
         with db.get_connection() as conn:
             cursor = conn.cursor()
             
@@ -45,15 +126,18 @@ class CaptRegistrationManager:
             conn.commit()
         
         self.active_session = session_id
+        logger.info(f"✅ Сессия создана: {session_id}")
         
-        # Отправляем начальные embed в оба канала
-        await self._send_initial_embeds(bot)
+        # Активируем кнопки в публичном чате
+        await self._update_public_buttons(bot, active=True)
         
         db.log_action(user_id, "CAPT_REG_START", f"Session {session_id}")
         return True
     
     async def end_registration(self, user_id: str, bot):
         """Завершить регистрацию (очистить всё)"""
+        logger.info(f"Завершение регистрации от {user_id}")
+        
         with db.get_connection() as conn:
             cursor = conn.cursor()
             
@@ -71,14 +155,20 @@ class CaptRegistrationManager:
         
         self.active_session = None
         
+        # Деактивируем кнопки в публичном чате
+        await self._update_public_buttons(bot, active=False)
+        
         # Обновляем embed в обоих каналах (пустые списки)
         await self._update_all_embeds(bot, clear=True)
         
         db.log_action(user_id, "CAPT_REG_END")
+        logger.info("✅ Регистрация завершена")
         return True
     
     async def add_participant(self, user_id: str, user_name: str, bot):
         """Добавить участника (всегда в резерв)"""
+        logger.debug(f"Добавление участника {user_name} ({user_id})")
+        
         with db.get_connection() as conn:
             cursor = conn.cursor()
             
@@ -99,10 +189,13 @@ class CaptRegistrationManager:
         await self._update_all_embeds(bot)
         
         db.log_action(user_id, "CAPT_REG_JOIN")
+        logger.info(f"✅ Участник {user_name} добавлен в резерв")
         return True, "✅ Ты добавлен в резерв"
     
     async def remove_participant(self, user_id: str, bot):
         """Удалить участника"""
+        logger.debug(f"Удаление участника {user_id}")
+        
         with db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -115,11 +208,16 @@ class CaptRegistrationManager:
         if removed:
             await self._update_all_embeds(bot)
             db.log_action(user_id, "CAPT_REG_LEAVE")
+            logger.info(f"✅ Участник {user_id} удалён")
             return True, "✅ Ты удалён из регистрации"
+        
+        logger.debug(f"❌ Участник {user_id} не найден")
         return False, "❌ Ты не был зарегистрирован"
     
     async def move_to_main(self, user_id: str, target_user_id: str, bot):
         """Перевести пользователя в основной список"""
+        logger.info(f"Перевод {target_user_id} в основной список от {user_id}")
+        
         with db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -133,11 +231,16 @@ class CaptRegistrationManager:
         if moved:
             await self._update_all_embeds(bot)
             db.log_action(user_id, "CAPT_REG_TO_MAIN", f"User {target_user_id}")
+            logger.info(f"✅ {target_user_id} переведён в основной")
             return True, f"✅ <@{target_user_id}> переведён в основной список"
+        
+        logger.warning(f"❌ {target_user_id} не найден")
         return False, "❌ Пользователь не найден"
     
     async def move_to_reserve(self, user_id: str, target_user_id: str, bot):
         """Перевести пользователя в резерв"""
+        logger.info(f"Перевод {target_user_id} в резерв от {user_id}")
+        
         with db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -151,7 +254,10 @@ class CaptRegistrationManager:
         if moved:
             await self._update_all_embeds(bot)
             db.log_action(user_id, "CAPT_REG_TO_RESERVE", f"User {target_user_id}")
+            logger.info(f"✅ {target_user_id} переведён в резерв")
             return True, f"✅ <@{target_user_id}> переведён в резерв"
+        
+        logger.warning(f"❌ {target_user_id} не найден")
         return False, "❌ Пользователь не найден"
     
     def get_lists(self):
@@ -174,36 +280,30 @@ class CaptRegistrationManager:
             
             return main_list, reserve_list
     
-    async def _send_initial_embeds(self, bot):
-        """Отправить начальные embed в оба канала"""
-        from capt_registration.embeds import create_registration_embed
+    async def _update_public_buttons(self, bot, active: bool):
+        """Активировать/деактивировать кнопки в публичном чате"""
+        if not self.reserve_channel_id or not self.reserve_message_id:
+            return
         
-        embed = create_registration_embed([], [])
-        
-        # Отправляем в канал модерации
-        main_channel = bot.get_channel(int(self.main_channel_id))
-        if main_channel:
-            from capt_registration.views import ModerationView
-            msg = await main_channel.send(embed=embed, view=ModerationView())
-            self.main_message_id = str(msg.id)
-        
-        # Отправляем в канал для всех
-        reserve_channel = bot.get_channel(int(self.reserve_channel_id))
-        if reserve_channel:
+        try:
+            channel = bot.get_channel(int(self.reserve_channel_id))
+            if not channel:
+                return
+            
+            msg = await channel.fetch_message(int(self.reserve_message_id))
+            if not msg:
+                return
+            
+            # Создаём новый view с активированными/деактивированными кнопками
             from capt_registration.views import PublicView
-            msg = await reserve_channel.send(embed=embed, view=PublicView())
-            self.reserve_message_id = str(msg.id)
-        
-        # Сохраняем ID сообщений в сессии
-        if self.active_session:
-            with db.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE capt_sessions 
-                    SET main_message_id = ?, reserve_message_id = ?
-                    WHERE id = ?
-                ''', (self.main_message_id, self.reserve_message_id, self.active_session))
-                conn.commit()
+            view = PublicView()
+            view.set_registration_active(active)
+            
+            await msg.edit(view=view)
+            logger.info(f"✅ Кнопки в публичном чате {'активированы' if active else 'деактивированы'}")
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка обновления кнопок: {e}")
     
     async def _update_all_embeds(self, bot, clear=False):
         """Обновить embed в обоих каналах"""
@@ -218,23 +318,25 @@ class CaptRegistrationManager:
         
         # Обновляем в канале модерации
         if self.main_channel_id and self.main_message_id:
-            channel = bot.get_channel(int(self.main_channel_id))
-            if channel:
-                try:
-                    msg = await channel.fetch_message(int(self.main_message_id))
-                    await msg.edit(embed=embed)
-                except:
-                    pass
+            await self._update_embed(bot, self.main_channel_id, self.main_message_id, embed)
         
         # Обновляем в канале для всех
         if self.reserve_channel_id and self.reserve_message_id:
-            channel = bot.get_channel(int(self.reserve_channel_id))
-            if channel:
-                try:
-                    msg = await channel.fetch_message(int(self.reserve_message_id))
-                    await msg.edit(embed=embed)
-                except:
-                    pass
+            await self._update_embed(bot, self.reserve_channel_id, self.reserve_message_id, embed)
+    
+    async def _update_embed(self, bot, channel_id: str, message_id: str, embed):
+        """Обновить embed в конкретном канале"""
+        try:
+            channel = bot.get_channel(int(channel_id))
+            if not channel:
+                return
+            
+            msg = await channel.fetch_message(int(message_id))
+            if msg:
+                await msg.edit(embed=embed)
+                logger.debug(f"Embed обновлён в канале {channel_id}")
+        except Exception as e:
+            logger.error(f"Ошибка обновления embed в {channel_id}: {e}")
 
 # Глобальный экземпляр
 capt_reg_manager = CaptRegistrationManager()

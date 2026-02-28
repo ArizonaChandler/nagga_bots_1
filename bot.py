@@ -111,39 +111,21 @@ async def on_ready():
     colors = db.get_dual_colors()
     dual_mcl_core.token_colors = {1: colors[0], 2: colors[1]}
     
+    # Инициализация постоянных кнопок CAPT регистрации
+    try:
+        from capt_registration.manager import capt_reg_manager
+        print("🔄 Инициализация CAPT регистрации...")
+        await capt_reg_manager.initialize_buttons(bot)
+    except Exception as e:
+        print(f"❌ Ошибка инициализации CAPT регистрации: {e}")
+        import traceback
+        traceback.print_exc()
+    
     await bot.change_presence(activity=discord.Activity(
         type=discord.ActivityType.watching,
         name="!info | v1.3"
     ))
     
-    # Отправляем постоянные кнопки для CAPT регистрации
-    main_channel_id = CONFIG.get('capt_reg_main_channel')
-    reserve_channel_id = CONFIG.get('capt_reg_reserve_channel')
-
-    if main_channel_id and reserve_channel_id:
-        main_channel = bot.get_channel(int(main_channel_id))
-        reserve_channel = bot.get_channel(int(reserve_channel_id))
-        
-        if main_channel and reserve_channel:
-            # Очищаем старые сообщения (опционально)
-            async for msg in main_channel.history(limit=10):
-                if msg.author == bot.user:
-                    await msg.delete()
-            
-            async for msg in reserve_channel.history(limit=10):
-                if msg.author == bot.user:
-                    await msg.delete()
-            
-            # Получаем текущие списки
-            main_list, reserve_list = capt_reg_manager.get_lists()
-            embed = create_registration_embed(main_list, reserve_list)
-            
-            # Отправляем новые сообщения с кнопками
-            await main_channel.send(embed=embed, view=ModerationView())
-            await reserve_channel.send(embed=embed, view=PublicView())
-            
-            print(f"✅ Постоянные кнопки CAPT регистрации отправлены")
-
     print("="*60 + "\n")
 
 @bot.event

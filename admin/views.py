@@ -285,7 +285,7 @@ class GlobalSettingsView(BaseMenuView):
             row=2
         )
         async def capt_reg_cb(i):
-            await i.response.send_modal(SetCaptRegChannelsModal())
+            await i.response.send_modal(SetCaptRegChannelsModal(self.guild))
         capt_reg_btn.callback = capt_reg_cb
         self.add_item(capt_reg_btn)
         
@@ -964,27 +964,67 @@ async def send_event_stats(interaction, guild, previous_view=None, previous_embe
     await interaction.response.edit_message(embed=embed, view=StatsView())
 
 class SetCaptRegChannelsModal(discord.ui.Modal, title="🎯 КАНАЛЫ CAPT РЕГИСТРАЦИИ"):
+    def __init__(self, guild=None):
+        super().__init__()
+        self.guild = guild
+    
     main_channel = discord.ui.TextInput(
         label="ID канала для модерации",
         placeholder="123456789012345678",
-        max_length=20
+        max_length=20,
+        required=True
     )
+    
     reserve_channel = discord.ui.TextInput(
         label="ID канала для всех",
         placeholder="123456789012345678",
-        max_length=20
+        max_length=20,
+        required=True
     )
     
     async def on_submit(self, interaction: discord.Interaction):
         from capt_registration.manager import capt_reg_manager
-        capt_reg_manager.set_channels(
-            self.main_channel.value,
-            self.reserve_channel.value,
-            str(interaction.user.id)
-        )
-        await interaction.response.send_message(
-            f"✅ Каналы CAPT регистрации настроены:\n"
-            f"Модерация: <#{self.main_channel.value}>\n"
-            f"Для всех: <#{self.reserve_channel.value}>",
-            ephemeral=True
-        )
+        
+        try:
+            # Проверяем, что каналы существуют
+            guild = interaction.client.get_guild(int(CONFIG.get('server_id')))
+            if not guild:
+                await interaction.response.send_message(
+                    "❌ Сначала установите ID сервера в Глобальных настройках",
+                    ephemeral=True
+                )
+                return
+            
+            main_channel = guild.get_channel(int(self.main_channel.value))
+            if not main_channel:
+                await interaction.response.send_message(
+                    f"❌ Канал {self.main_channel.value} не найден на сервере",
+                    ephemeral=True
+                )
+                return
+            
+            reserve_channel = guild.get_channel(int(self.reserve_channel.value))
+            if not reserve_channel:
+                await interaction.response.send_message(
+                    f"❌ Канал {self.reserve_channel.value} не найден на сервере",
+                    ephemeral=True
+                )
+                return
+            
+            # Сохраняем каналы
+            capt_reg_manager.set_channels(
+                self.main_channel.value,
+                self.reserve_channel.value,
+                str(interaction.user.id)
+            )
+            
+            await interaction.response.send_message(
+                f"✅ Каналы CAPT регистрации настроены:\n"
+                f"Модерация: {main_channel.mention}\n"
+                f"Для всех: {reserve_channel.mention}\n"
+                f"🔄 Перезапустите бота для активации кнопок",
+                ephemeral=True
+            )
+            
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
