@@ -288,6 +288,17 @@ class GlobalSettingsView(BaseMenuView):
             await i.response.send_modal(SetCaptRegChannelsModal(self.guild))
         capt_reg_btn.callback = capt_reg_cb
         self.add_item(capt_reg_btn)
+
+        capt_alert_btn = discord.ui.Button(
+            label="📢 Канал оповещений CAPT",
+            style=discord.ButtonStyle.secondary,
+            emoji="📢",
+            row=3
+        )
+        async def capt_alert_cb(i):
+            await i.response.send_modal(SetCaptAlertChannelModal(self.guild))
+        capt_alert_btn.callback = capt_alert_cb
+        self.add_item(capt_alert_btn)
         
         # ◀ Кнопка "Назад"
         self.add_back_button(row=4)
@@ -1030,6 +1041,53 @@ class SetCaptRegChannelsModal(discord.ui.Modal, title="🎯 КАНАЛЫ CAPT Р
                 f"Модерация: {main_channel.mention}\n"
                 f"Для всех: {reserve_channel.mention}\n"
                 f"🔄 Перезапустите бота для активации кнопок",
+                ephemeral=True
+            )
+            
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
+class SetCaptAlertChannelModal(discord.ui.Modal, title="📢 КАНАЛ ОПОВЕЩЕНИЙ CAPT"):
+    def __init__(self, guild=None):
+        super().__init__()
+        self.guild = guild
+    
+    channel_id = discord.ui.TextInput(
+        label="ID канала для оповещений",
+        placeholder="123456789012345678",
+        max_length=20,
+        required=True
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        from core.config import CONFIG, save_config
+        from core.database import db
+        
+        try:
+            # Проверяем, что канал существует
+            guild = interaction.client.get_guild(int(CONFIG.get('server_id')))
+            if not guild:
+                await interaction.response.send_message(
+                    "❌ Сначала установите ID сервера в Глобальных настройках",
+                    ephemeral=True
+                )
+                return
+            
+            channel = guild.get_channel(int(self.channel_id.value))
+            if not channel:
+                await interaction.response.send_message(
+                    f"❌ Канал {self.channel_id.value} не найден на сервере",
+                    ephemeral=True
+                )
+                return
+            
+            # Сохраняем в CONFIG и БД
+            CONFIG['capt_alert_channel'] = self.channel_id.value
+            db.set_setting('capt_alert_channel', self.channel_id.value, str(interaction.user.id))
+            save_config(str(interaction.user.id))
+            
+            await interaction.response.send_message(
+                f"✅ Канал оповещений CAPT настроен: {channel.mention}",
                 ephemeral=True
             )
             

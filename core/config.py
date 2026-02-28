@@ -23,7 +23,8 @@ CONFIG = {
     'reminder_roles': [],            # НОВОЕ: список ролей для упоминания в напоминаниях
     'announce_roles': [],             # НОВОЕ: список ролей для упоминания в оповещениях
     'capt_reg_main_channel': None,
-    'capt_reg_reserve_channel': None
+    'capt_reg_reserve_channel': None,
+    'capt_alert_channel': None  # Канал для оповещений о CAPT
 }
 
 def load_config():
@@ -46,7 +47,7 @@ def load_config():
                     CONFIG[key] = None
         else:
             # Если ключа нет в CONFIG, но он есть в БД - добавляем
-            if key in ['capt_reg_main_channel', 'capt_reg_reserve_channel']:
+            if key in ['capt_reg_main_channel', 'capt_reg_reserve_channel', 'capt_alert_channel']:
                 CONFIG[key] = value if value and value.lower() != 'null' else None
     
     colors = db.get_dual_colors()

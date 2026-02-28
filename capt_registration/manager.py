@@ -12,6 +12,7 @@ class CaptRegistrationManager:
         self.active_session = None
         self.main_channel_id = None
         self.reserve_channel_id = None
+        self.alert_channel_id = None
         self.main_message_id = None
         self.reserve_message_id = None
         self.capt_info = None
@@ -22,9 +23,10 @@ class CaptRegistrationManager:
         """Загрузка настроек из CONFIG"""
         self.main_channel_id = CONFIG.get('capt_reg_main_channel')
         self.reserve_channel_id = CONFIG.get('capt_reg_reserve_channel')
+        self.alert_channel_id = CONFIG.get('capt_alert_channel')  # Добавляем
         
         # Если в CONFIG нет, пробуем загрузить из БД напрямую
-        if not self.main_channel_id or not self.reserve_channel_id:
+        if not self.main_channel_id or not self.reserve_channel_id or not self.alert_channel_id:
             from core.database import db
             settings = db.get_all_settings()
             if 'capt_reg_main_channel' in settings:
@@ -33,8 +35,11 @@ class CaptRegistrationManager:
             if 'capt_reg_reserve_channel' in settings:
                 self.reserve_channel_id = settings['capt_reg_reserve_channel']
                 CONFIG['capt_reg_reserve_channel'] = self.reserve_channel_id
+            if 'capt_alert_channel' in settings:  # Добавляем
+                self.alert_channel_id = settings['capt_alert_channel']
+                CONFIG['capt_alert_channel'] = self.alert_channel_id
         
-        logger.debug(f"Загружены каналы: main={self.main_channel_id}, reserve={self.reserve_channel_id}")
+        logger.debug(f"Загружены каналы: main={self.main_channel_id}, reserve={self.reserve_channel_id}, alert={self.alert_channel_id}")
     
     def set_channels(self, main_channel_id: str, reserve_channel_id: str, updated_by: str):
         """Установка каналов для регистрации"""
@@ -167,18 +172,26 @@ class CaptRegistrationManager:
         return True
 
     async def _send_capt_announcement(self, bot):
-        """Отправить оповещение о начале CAPT в публичный канал"""
-        if not self.reserve_channel_id or not self.capt_info:
+        """Отправить оповещение о начале CAPT в настроенный канал"""
+        if not self.capt_info:
+            return
+        
+        # Получаем ID канала для оповещений из CONFIG
+        alert_channel_id = CONFIG.get('capt_alert_channel')
+        if not alert_channel_id:
+            logger.warning("❌ Канал для оповещений CAPT не настроен")
             return
         
         try:
-            channel = bot.get_channel(int(self.reserve_channel_id))
+            channel = bot.get_channel(int(alert_channel_id))
             if not channel:
+                logger.error(f"❌ Канал оповещений {alert_channel_id} не найден")
                 return
             
             # Создаём красивое оповещение
             embed = discord.Embed(
                 title="🎯 **НАБОР НА CAPT**",
+                description=f"Для участия нажми кнопку **ПРИСОЕДИНИТЬСЯ** в канале {channel.mention if channel else 'для регистрации'}",
                 color=0xff0000,
                 timestamp=datetime.now()
             )
@@ -195,7 +208,7 @@ class CaptRegistrationManager:
                 inline=True
             )
             
-            if self.capt_info['additional_info'] != "Нет":
+            if self.capt_info['additional_info'] and self.capt_info['additional_info'] != "Нет":
                 embed.add_field(
                     name="📝 Дополнительно",
                     value=self.capt_info['additional_info'],
@@ -208,13 +221,17 @@ class CaptRegistrationManager:
                 inline=True
             )
             
-            embed.add_field(
-                name="✅ Как участвовать",
-                value=f"Нажми кнопку **ПРИСОЕДИНИТЬСЯ** в этом чате",
-                inline=False
-            )
+            # Получаем публичный канал для ссылки
+            if self.reserve_channel_id:
+                reserve_channel = bot.get_channel(int(self.reserve_channel_id))
+                if reserve_channel:
+                    embed.add_field(
+                        name="📍 Канал регистрации",
+                        value=reserve_channel.mention,
+                        inline=True
+                    )
             
-            embed.set_footer(text="Регистрация активна! Нажми кнопку ниже")
+            embed.set_footer(text="Нажми кнопку в канале регистрации чтобы участвовать")
             
             # Отправляем с @everyone
             await channel.send(
