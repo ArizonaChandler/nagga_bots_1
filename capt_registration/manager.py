@@ -267,6 +267,21 @@ class CaptRegistrationManager:
         
         with db.get_connection() as conn:
             cursor = conn.cursor()
+            
+            # Сначала проверяем, есть ли пользователь в БД
+            cursor.execute('''
+                SELECT list_type FROM capt_registrations 
+                WHERE user_id = ? AND is_active = 1
+            ''', (target_user_id,))
+            result = cursor.fetchone()
+            
+            if not result:
+                return False, "❌ Пользователь не найден в списках"
+            
+            if result[0] == 'main':
+                return False, "❌ Пользователь уже в основном списке"
+            
+            # Переводим в основной
             cursor.execute('''
                 UPDATE capt_registrations 
                 SET list_type = 'main'
@@ -281,8 +296,7 @@ class CaptRegistrationManager:
             logger.info(f"✅ {target_user_id} переведён в основной")
             return True, f"✅ <@{target_user_id}> переведён в основной список"
         
-        logger.warning(f"❌ {target_user_id} не найден")
-        return False, "❌ Пользователь не найден"
+        return False, "❌ Не удалось переместить пользователя"
     
     async def move_to_reserve(self, user_id: str, target_user_id: str, bot):
         """Перевести пользователя в резерв"""
@@ -290,6 +304,21 @@ class CaptRegistrationManager:
         
         with db.get_connection() as conn:
             cursor = conn.cursor()
+            
+            # Сначала проверяем, есть ли пользователь в БД
+            cursor.execute('''
+                SELECT list_type FROM capt_registrations 
+                WHERE user_id = ? AND is_active = 1
+            ''', (target_user_id,))
+            result = cursor.fetchone()
+            
+            if not result:
+                return False, "❌ Пользователь не найден в списках"
+            
+            if result[0] == 'reserve':
+                return False, "❌ Пользователь уже в резерве"
+            
+            # Переводим в резерв
             cursor.execute('''
                 UPDATE capt_registrations 
                 SET list_type = 'reserve'
@@ -304,8 +333,7 @@ class CaptRegistrationManager:
             logger.info(f"✅ {target_user_id} переведён в резерв")
             return True, f"✅ <@{target_user_id}> переведён в резерв"
         
-        logger.warning(f"❌ {target_user_id} не найден")
-        return False, "❌ Пользователь не найден"
+        return False, "❌ Не удалось переместить пользователя"
     
     def get_lists(self):
         """Получить текущие списки"""
