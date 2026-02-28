@@ -21,7 +21,9 @@ CONFIG = {
     'alarm_channels': [],           # НОВОЕ: список каналов для напоминаний
     'announce_channels': [],         # НОВОЕ: список каналов для оповещений
     'reminder_roles': [],            # НОВОЕ: список ролей для упоминания в напоминаниях
-    'announce_roles': []             # НОВОЕ: список ролей для упоминания в оповещениях
+    'announce_roles': [],             # НОВОЕ: список ролей для упоминания в оповещениях
+    'capt_reg_main_channel': None,
+    'capt_reg_reserve_channel': None
 }
 
 def load_config():
@@ -38,7 +40,14 @@ def load_config():
                 else:
                     CONFIG[key] = value
             else:
-                CONFIG[key] = None if key not in ['alarm_channels', 'announce_channels', 'reminder_roles', 'announce_roles'] else []
+                if key in ['alarm_channels', 'announce_channels', 'reminder_roles', 'announce_roles']:
+                    CONFIG[key] = []
+                else:
+                    CONFIG[key] = None
+        else:
+            # Если ключа нет в CONFIG, но он есть в БД - добавляем
+            if key in ['capt_reg_main_channel', 'capt_reg_reserve_channel']:
+                CONFIG[key] = value if value and value.lower() != 'null' else None
     
     colors = db.get_dual_colors()
     CONFIG['message_1'] = f"Unit\n{colors[0]}"

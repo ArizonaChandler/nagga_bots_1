@@ -984,6 +984,8 @@ class SetCaptRegChannelsModal(discord.ui.Modal, title="🎯 КАНАЛЫ CAPT Р
     
     async def on_submit(self, interaction: discord.Interaction):
         from capt_registration.manager import capt_reg_manager
+        from core.config import save_config
+        from core.database import db
         
         try:
             # Проверяем, что каналы существуют
@@ -1011,12 +1013,17 @@ class SetCaptRegChannelsModal(discord.ui.Modal, title="🎯 КАНАЛЫ CAPT Р
                 )
                 return
             
-            # Сохраняем каналы
-            capt_reg_manager.set_channels(
-                self.main_channel.value,
-                self.reserve_channel.value,
-                str(interaction.user.id)
-            )
+            # Сохраняем в CONFIG
+            CONFIG['capt_reg_main_channel'] = self.main_channel.value
+            CONFIG['capt_reg_reserve_channel'] = self.reserve_channel.value
+            
+            # Сохраняем в БД
+            db.set_setting('capt_reg_main_channel', self.main_channel.value, str(interaction.user.id))
+            db.set_setting('capt_reg_reserve_channel', self.reserve_channel.value, str(interaction.user.id))
+            
+            # Обновляем менеджер
+            capt_reg_manager.main_channel_id = self.main_channel.value
+            capt_reg_manager.reserve_channel_id = self.reserve_channel.value
             
             await interaction.response.send_message(
                 f"✅ Каналы CAPT регистрации настроены:\n"

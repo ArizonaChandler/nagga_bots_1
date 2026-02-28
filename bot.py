@@ -13,6 +13,13 @@ from core.database import db
 from core.config import CONFIG, load_config
 from core.utils import format_mention, is_admin
 
+print("🔍 ПРОВЕРКА НАСТРОЕК:")
+settings = db.get_all_settings()
+print("Все настройки из БД:")
+for key, value in settings.items():
+    if 'capt' in key:
+        print(f"  {key} = {value}")
+
 from commands.info import setup as setup_info
 from commands.settings import setup as setup_settings
 from commands.log import setup as setup_log

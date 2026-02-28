@@ -14,27 +14,43 @@ class CaptRegistrationManager:
         self.reserve_channel_id = None
         self.main_message_id = None
         self.reserve_message_id = None
-        self._load_config()
+        self._load_config()  # ← вызов в __init__
         logger.info("✅ CaptRegistrationManager инициализирован")
     
-    def _load_config(self):
+    def _load_config(self):  # ← сам метод
         """Загрузка настроек из CONFIG"""
         self.main_channel_id = CONFIG.get('capt_reg_main_channel')
         self.reserve_channel_id = CONFIG.get('capt_reg_reserve_channel')
+        
+        # Если в CONFIG нет, пробуем загрузить из БД напрямую
+        if not self.main_channel_id or not self.reserve_channel_id:
+            from core.database import db
+            settings = db.get_all_settings()
+            if 'capt_reg_main_channel' in settings:
+                self.main_channel_id = settings['capt_reg_main_channel']
+                CONFIG['capt_reg_main_channel'] = self.main_channel_id
+            if 'capt_reg_reserve_channel' in settings:
+                self.reserve_channel_id = settings['capt_reg_reserve_channel']
+                CONFIG['capt_reg_reserve_channel'] = self.reserve_channel_id
+        
         logger.debug(f"Загружены каналы: main={self.main_channel_id}, reserve={self.reserve_channel_id}")
     
     def set_channels(self, main_channel_id: str, reserve_channel_id: str, updated_by: str):
         """Установка каналов для регистрации"""
         logger.info(f"Установка каналов: main={main_channel_id}, reserve={reserve_channel_id}")
         
+        # Сохраняем в CONFIG
         CONFIG['capt_reg_main_channel'] = main_channel_id
         CONFIG['capt_reg_reserve_channel'] = reserve_channel_id
+        
+        # Сохраняем в БД
         save_config(updated_by)
         
+        # Обновляем локальные переменные
         self.main_channel_id = main_channel_id
         self.reserve_channel_id = reserve_channel_id
         
-        logger.info(f"✅ Каналы сохранены")
+        logger.info(f"✅ Каналы сохранены в CONFIG и БД")
         return True
     
     async def initialize_buttons(self, bot):
