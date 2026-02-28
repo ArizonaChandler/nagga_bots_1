@@ -9,6 +9,7 @@ import discord
 import aiohttp
 from core.database import db
 from core.config import CONFIG
+import json
 
 logger = logging.getLogger(__name__)
 MSK_TZ = pytz.timezone('Europe/Moscow')
@@ -172,11 +173,47 @@ class AutoAdvertiser:
                         success_msg = f"✅ Реклама отправлена в канал {channel_id}"
                         logger.info(success_msg)
                         print(f"✅ {success_msg}")
-                    else:
-                        error_msg = f"❌ Ошибка отправки рекламы: {resp.status}\n{response_text}"
-                        logger.error(error_msg)
+                        await self.notify_admin(f"✅ Реклама отправлена")
+                        
+                    elif resp.status == 429:
+                        # ⏰ ПОПАЛИ В МЕДЛЕННЫЙ РЕЖИМ!
+                        retry_after = 60  # значение по умолчанию
+                        
+                        # Пробуем получить время ожидания из заголовка
+                        if 'Retry-After' in resp.headers:
+                            try:
+                                retry_after = int(resp.headers['Retry-After'])
+                            except:
+                                pass
+                        
+                        # Пробуем получить из JSON
+                        try:
+                            data = json.loads(response_text)
+                            if 'retry_after' in data:
+                                retry_after = data['retry_after']
+                        except:
+                            pass
+                        
+                        error_msg = f"⏳ Канал в медленном режиме! Нужно подождать {retry_after} сек."
+                        logger.error(f"429: {error_msg}")
                         print(f"❌ {error_msg}")
-                        await self.notify_admin(f"❌ Ошибка {resp.status}: {response_text[:200]}")
+                        
+                        # Декодируем сообщение об ошибке
+                        try:
+                            error_data = json.loads(response_text)
+                            discord_msg = error_data.get('message', 'Неизвестная ошибка')
+                            print(f"📢 Discord: {discord_msg}")
+                        except:
+                            pass
+                        
+                        await self.notify_admin(f"❌ Медленный режим: подожди {retry_after} сек.")
+                        
+                    else:
+                        error_msg = f"❌ Ошибка отправки рекламы: {resp.status}"
+                        logger.error(f"{error_msg}\n{response_text}")
+                        print(f"❌ {error_msg}")
+                        print(f"📢 Ответ: {response_text}")
+                        await self.notify_admin(f"❌ Ошибка {resp.status}")
             
         except Exception as e:
             error_msg = f"Ошибка отправки рекламы: {e}\n{traceback.format_exc()}"
