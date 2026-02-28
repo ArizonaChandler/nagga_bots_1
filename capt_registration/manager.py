@@ -14,6 +14,7 @@ class CaptRegistrationManager:
         self.reserve_channel_id = None
         self.main_message_id = None
         self.reserve_message_id = None
+        self.capt_info = None
         self._load_config()
         logger.info("✅ CaptRegistrationManager инициализирован")
     
@@ -121,9 +122,18 @@ class CaptRegistrationManager:
         except Exception as e:
             logger.error(f"Ошибка очистки канала {channel.name}: {e}")
     
-    async def start_registration(self, user_id: str, user_name: str, bot):
-        """Начать регистрацию"""
+    async def start_registration(self, user_id: str, user_name: str, bot, enemy: str = None, teleport_time: str = None, additional_info: str = None):
+        """Начать регистрацию с информацией о CAPT"""
         logger.info(f"Старт регистрации от {user_name} ({user_id})")
+        
+        # Сохраняем информацию о CAPT
+        self.capt_info = {
+            'enemy': enemy,
+            'teleport_time': teleport_time,
+            'additional_info': additional_info or "Нет",
+            'started_by': f"<@{user_id}>",
+            'started_by_name': user_name
+        }
         
         with db.get_connection() as conn:
             cursor = conn.cursor()
@@ -144,6 +154,9 @@ class CaptRegistrationManager:
         self.active_session = session_id
         logger.info(f"✅ Сессия создана: {session_id}")
         
+        # Отправляем оповещение @everyone в публичный канал
+        await self._send_capt_announcement(bot)
+        
         # Активируем кнопки в публичном чате
         await self._update_public_buttons(bot, active=True)
         
@@ -152,6 +165,67 @@ class CaptRegistrationManager:
         
         db.log_action(user_id, "CAPT_REG_START", f"Session {session_id}")
         return True
+
+    async def _send_capt_announcement(self, bot):
+        """Отправить оповещение о начале CAPT в публичный канал"""
+        if not self.reserve_channel_id or not self.capt_info:
+            return
+        
+        try:
+            channel = bot.get_channel(int(self.reserve_channel_id))
+            if not channel:
+                return
+            
+            # Создаём красивое оповещение
+            embed = discord.Embed(
+                title="🎯 **НАБОР НА CAPT**",
+                color=0xff0000,
+                timestamp=datetime.now()
+            )
+            
+            embed.add_field(
+                name="👊 Противник",
+                value=self.capt_info['enemy'],
+                inline=True
+            )
+            
+            embed.add_field(
+                name="⏰ Время телепорта",
+                value=f"{self.capt_info['teleport_time']} МСК",
+                inline=True
+            )
+            
+            if self.capt_info['additional_info'] != "Нет":
+                embed.add_field(
+                    name="📝 Дополнительно",
+                    value=self.capt_info['additional_info'],
+                    inline=False
+                )
+            
+            embed.add_field(
+                name="👤 Набрал",
+                value=self.capt_info['started_by'],
+                inline=True
+            )
+            
+            embed.add_field(
+                name="✅ Как участвовать",
+                value=f"Нажми кнопку **ПРИСОЕДИНИТЬСЯ** в этом чате",
+                inline=False
+            )
+            
+            embed.set_footer(text="Регистрация активна! Нажми кнопку ниже")
+            
+            # Отправляем с @everyone
+            await channel.send(
+                content="@everyone",
+                embed=embed
+            )
+            
+            logger.info(f"✅ Оповещение о CAPT отправлено в {channel.name}")
+            
+        except Exception as e:
+            logger.error(f"Ошибка отправки оповещения: {e}")
     
     async def end_registration(self, user_id: str, bot):
         """Завершить регистрацию (очистить всё)"""
@@ -392,10 +466,12 @@ class CaptRegistrationManager:
         
         if clear:
             main_list, reserve_list = [], []
+            capt_info = None
         else:
             main_list, reserve_list = self.get_lists()
+            capt_info = self.capt_info  # Добавляем информацию о CAPT
         
-        embed = create_registration_embed(main_list, reserve_list)
+        embed = create_registration_embed(main_list, reserve_list, capt_info)
         
         # Обновляем в канале модерации
         if self.main_channel_id and self.main_message_id:

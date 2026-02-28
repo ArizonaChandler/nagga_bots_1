@@ -2,8 +2,8 @@
 import discord
 from datetime import datetime
 
-def create_registration_embed(main_list: list, reserve_list: list) -> discord.Embed:
-    """Создать embed с основным и резервным списками"""
+def create_registration_embed(main_list: list, reserve_list: list, capt_info: dict = None) -> discord.Embed:
+    """Создать embed с основным и резервным списками и информацией о CAPT"""
     
     # Основной список
     if main_list:
@@ -29,6 +29,17 @@ def create_registration_embed(main_list: list, reserve_list: list) -> discord.Em
         color=0xff0000,
         timestamp=datetime.now()
     )
+    
+    # Если есть информация о CAPT, добавляем её в начало
+    if capt_info:
+        info_text = f"👊 **Противник:** {capt_info['enemy']}\n"
+        info_text += f"⏰ **Телепорт:** {capt_info['teleport_time']} МСК\n"
+        if capt_info['additional_info'] != "Нет":
+            info_text += f"📝 **Доп:** {capt_info['additional_info']}\n"
+        info_text += f"👤 **Набрал:** {capt_info['started_by']}"
+        
+        embed.description = info_text
+        embed.add_field(name="\u200b", value="—" * 30, inline=False)  # Разделитель
     
     embed.add_field(
         name="❌ **ОСНОВНОЙ СОСТАВ**",
