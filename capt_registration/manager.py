@@ -14,10 +14,10 @@ class CaptRegistrationManager:
         self.reserve_channel_id = None
         self.main_message_id = None
         self.reserve_message_id = None
-        self._load_config()  # ← вызов в __init__
+        self._load_config()
         logger.info("✅ CaptRegistrationManager инициализирован")
     
-    def _load_config(self):  # ← сам метод
+    def _load_config(self):
         """Загрузка настроек из CONFIG"""
         self.main_channel_id = CONFIG.get('capt_reg_main_channel')
         self.reserve_channel_id = CONFIG.get('capt_reg_reserve_channel')
@@ -152,7 +152,7 @@ class CaptRegistrationManager:
         
         db.log_action(user_id, "CAPT_REG_START", f"Session {session_id}")
         return True
-
+    
     async def end_registration(self, user_id: str, bot):
         """Завершить регистрацию (очистить всё)"""
         logger.info(f"Завершение регистрации от {user_id}")
@@ -186,154 +186,129 @@ class CaptRegistrationManager:
         db.log_action(user_id, "CAPT_REG_END")
         logger.info("✅ Регистрация завершена")
         return True
-
-    async def _update_moderation_buttons(self, bot, active: bool):
-        """Обновить состояние кнопок в чате модерации"""
-        if not self.main_channel_id or not self.main_message_id:
-            return
-        
-        try:
-            channel = bot.get_channel(int(self.main_channel_id))
-            if not channel:
-                return
-            
-            msg = await channel.fetch_message(int(self.main_message_id))
-            if not msg:
-                return
-            
-            # Создаём новый view с обновлённым состоянием кнопок
-            from capt_registration.views import ModerationView
-            view = ModerationView()
-            view.update_buttons(active)
-            
-            await msg.edit(view=view)
-            logger.info(f"✅ Кнопки в чате модерации {'активированы' if active else 'деактивированы'}")
-            
-        except Exception as e:
-            logger.error(f"Ошибка обновления кнопок модерации: {e}")
     
     async def add_participant(self, user_id: str, user_name: str, bot):
         """Добавить участника (всегда в резерв)"""
         logger.debug(f"Добавление участника {user_name} ({user_id})")
         
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
+        try:
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Проверяем, есть ли уже
+                cursor.execute('SELECT 1 FROM capt_registrations WHERE user_id = ? AND is_active = 1', (user_id,))
+                if cursor.fetchone():
+                    return False, "❌ Ты уже зарегистрирован"
+                
+                # Добавляем в резерв
+                cursor.execute('''
+                    INSERT INTO capt_registrations (user_id, user_name, list_type)
+                    VALUES (?, ?, 'reserve')
+                ''', (user_id, user_name))
+                
+                conn.commit()
             
-            # Проверяем, есть ли уже
-            cursor.execute('SELECT 1 FROM capt_registrations WHERE user_id = ? AND is_active = 1', (user_id,))
-            if cursor.fetchone():
-                return False, "Ты уже зарегистрирован"
+            # Обновляем embed
+            await self._update_all_embeds(bot)
             
-            # Добавляем в резерв
-            cursor.execute('''
-                INSERT INTO capt_registrations (user_id, user_name, list_type)
-                VALUES (?, ?, 'reserve')
-            ''', (user_id, user_name))
+            db.log_action(user_id, "CAPT_REG_JOIN")
+            logger.info(f"✅ Участник {user_name} добавлен в резерв")
+            return True, "✅ Ты добавлен в резерв"
             
-            conn.commit()
-        
-        # Обновляем embed
-        await self._update_all_embeds(bot)
-        
-        db.log_action(user_id, "CAPT_REG_JOIN")
-        logger.info(f"✅ Участник {user_name} добавлен в резерв")
-        return True, "✅ Ты добавлен в резерв"
+        except Exception as e:
+            logger.error(f"Ошибка добавления участника: {e}")
+            return False, f"❌ Ошибка: {e}"
     
     async def remove_participant(self, user_id: str, bot):
         """Удалить участника"""
         logger.debug(f"Удаление участника {user_id}")
         
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                DELETE FROM capt_registrations 
-                WHERE user_id = ? AND is_active = 1
-            ''', (user_id,))
-            removed = cursor.rowcount > 0
-            conn.commit()
-        
-        if removed:
-            await self._update_all_embeds(bot)
-            db.log_action(user_id, "CAPT_REG_LEAVE")
-            logger.info(f"✅ Участник {user_id} удалён")
-            return True, "✅ Ты удалён из регистрации"
-        
-        logger.debug(f"❌ Участник {user_id} не найден")
-        return False, "❌ Ты не был зарегистрирован"
+        try:
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    DELETE FROM capt_registrations 
+                    WHERE user_id = ? AND is_active = 1
+                ''', (user_id,))
+                removed = cursor.rowcount > 0
+                conn.commit()
+            
+            if removed:
+                await self._update_all_embeds(bot)
+                db.log_action(user_id, "CAPT_REG_LEAVE")
+                logger.info(f"✅ Участник {user_id} удалён")
+                return True, "✅ Ты удалён из регистрации"
+            
+            logger.debug(f"❌ Участник {user_id} не найден")
+            return False, "❌ Ты не был зарегистрирован"
+            
+        except Exception as e:
+            logger.error(f"Ошибка удаления участника: {e}")
+            return False, f"❌ Ошибка: {e}"
     
     async def move_to_main(self, user_id: str, target_user_id: str, bot):
         """Перевести пользователя в основной список"""
         logger.info(f"Перевод {target_user_id} в основной список от {user_id}")
         
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
+        try:
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Проверяем, есть ли пользователь
+                cursor.execute('SELECT list_type FROM capt_registrations WHERE user_id = ? AND is_active = 1', (target_user_id,))
+                result = cursor.fetchone()
+                
+                if not result:
+                    return False, "❌ Пользователь не найден в списках"
+                
+                if result[0] == 'main':
+                    return False, "❌ Пользователь уже в основном списке"
+                
+                # Обновляем
+                cursor.execute("UPDATE capt_registrations SET list_type = 'main' WHERE user_id = ? AND is_active = 1", (target_user_id,))
+                conn.commit()
             
-            # Сначала проверяем, есть ли пользователь в БД
-            cursor.execute('''
-                SELECT list_type FROM capt_registrations 
-                WHERE user_id = ? AND is_active = 1
-            ''', (target_user_id,))
-            result = cursor.fetchone()
-            
-            if not result:
-                return False, "❌ Пользователь не найден в списках"
-            
-            if result[0] == 'main':
-                return False, "❌ Пользователь уже в основном списке"
-            
-            # Переводим в основной
-            cursor.execute('''
-                UPDATE capt_registrations 
-                SET list_type = 'main'
-                WHERE user_id = ? AND is_active = 1
-            ''', (target_user_id,))
-            moved = cursor.rowcount > 0
-            conn.commit()
-        
-        if moved:
+            # Обновляем embed
             await self._update_all_embeds(bot)
             db.log_action(user_id, "CAPT_REG_TO_MAIN", f"User {target_user_id}")
-            logger.info(f"✅ {target_user_id} переведён в основной")
-            return True, f"✅ <@{target_user_id}> переведён в основной список"
-        
-        return False, "❌ Не удалось переместить пользователя"
+            
+            return True, f"✅ <@{target_user_id}> добавлен в основной список"
+            
+        except Exception as e:
+            logger.error(f"Ошибка в move_to_main: {e}")
+            return False, f"❌ Ошибка: {e}"
     
     async def move_to_reserve(self, user_id: str, target_user_id: str, bot):
         """Перевести пользователя в резерв"""
         logger.info(f"Перевод {target_user_id} в резерв от {user_id}")
         
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
+        try:
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Проверяем, есть ли пользователь
+                cursor.execute('SELECT list_type FROM capt_registrations WHERE user_id = ? AND is_active = 1', (target_user_id,))
+                result = cursor.fetchone()
+                
+                if not result:
+                    return False, "❌ Пользователь не найден в списках"
+                
+                if result[0] == 'reserve':
+                    return False, "❌ Пользователь уже в резерве"
+                
+                # Обновляем
+                cursor.execute("UPDATE capt_registrations SET list_type = 'reserve' WHERE user_id = ? AND is_active = 1", (target_user_id,))
+                conn.commit()
             
-            # Сначала проверяем, есть ли пользователь в БД
-            cursor.execute('''
-                SELECT list_type FROM capt_registrations 
-                WHERE user_id = ? AND is_active = 1
-            ''', (target_user_id,))
-            result = cursor.fetchone()
-            
-            if not result:
-                return False, "❌ Пользователь не найден в списках"
-            
-            if result[0] == 'reserve':
-                return False, "❌ Пользователь уже в резерве"
-            
-            # Переводим в резерв
-            cursor.execute('''
-                UPDATE capt_registrations 
-                SET list_type = 'reserve'
-                WHERE user_id = ? AND is_active = 1
-            ''', (target_user_id,))
-            moved = cursor.rowcount > 0
-            conn.commit()
-        
-        if moved:
+            # Обновляем embed
             await self._update_all_embeds(bot)
             db.log_action(user_id, "CAPT_REG_TO_RESERVE", f"User {target_user_id}")
-            logger.info(f"✅ {target_user_id} переведён в резерв")
+            
             return True, f"✅ <@{target_user_id}> переведён в резерв"
-        
-        return False, "❌ Не удалось переместить пользователя"
+            
+        except Exception as e:
+            logger.error(f"Ошибка в move_to_reserve: {e}")
+            return False, f"❌ Ошибка: {e}"
     
     def get_lists(self):
         """Получить текущие списки"""
@@ -354,6 +329,10 @@ class CaptRegistrationManager:
             reserve_list = cursor.fetchall()
             
             return main_list, reserve_list
+    
+    def is_registration_active(self) -> bool:
+        """Проверить, активна ли регистрация"""
+        return self.active_session is not None
     
     async def _update_public_buttons(self, bot, active: bool):
         """Активировать/деактивировать кнопки в публичном чате"""
@@ -378,7 +357,32 @@ class CaptRegistrationManager:
             logger.info(f"✅ Кнопки в публичном чате {'активированы' if active else 'деактивированы'}")
             
         except Exception as e:
-            logger.error(f"❌ Ошибка обновления кнопок: {e}")
+            logger.error(f"Ошибка обновления кнопок: {e}")
+    
+    async def _update_moderation_buttons(self, bot, active: bool):
+        """Обновить состояние кнопок в чате модерации"""
+        if not self.main_channel_id or not self.main_message_id:
+            return
+        
+        try:
+            channel = bot.get_channel(int(self.main_channel_id))
+            if not channel:
+                return
+            
+            msg = await channel.fetch_message(int(self.main_message_id))
+            if not msg:
+                return
+            
+            # Создаём новый view с обновлённым состоянием кнопок
+            from capt_registration.views import ModerationView
+            view = ModerationView()
+            view.update_buttons(active)
+            
+            await msg.edit(view=view)
+            logger.info(f"✅ Кнопки в чате модерации {'активированы' if active else 'деактивированы'}")
+            
+        except Exception as e:
+            logger.error(f"Ошибка обновления кнопок модерации: {e}")
     
     async def _update_all_embeds(self, bot, clear=False):
         """Обновить embed в обоих каналах"""
@@ -412,10 +416,6 @@ class CaptRegistrationManager:
                 logger.debug(f"Embed обновлён в канале {channel_id}")
         except Exception as e:
             logger.error(f"Ошибка обновления embed в {channel_id}: {e}")
-
-    def is_registration_active(self) -> bool:
-        """Проверить, активна ли регистрация"""
-        return self.active_session is not None
 
 # Глобальный экземпляр
 capt_reg_manager = CaptRegistrationManager()

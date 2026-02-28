@@ -5,7 +5,7 @@ from datetime import datetime
 def create_registration_embed(main_list: list, reserve_list: list) -> discord.Embed:
     """Создать embed с основным и резервным списками"""
     
-    # Основной список (красный крестик)
+    # Основной список
     if main_list:
         main_lines = []
         for i, (user_id, user_name) in enumerate(main_list, 1):
@@ -14,7 +14,7 @@ def create_registration_embed(main_list: list, reserve_list: list) -> discord.Em
     else:
         main_text = "*Список пуст*"
     
-    # Резервный список (часы)
+    # Резервный список
     if reserve_list:
         reserve_lines = []
         for i, (user_id, user_name) in enumerate(reserve_list, 1):
