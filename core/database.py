@@ -147,6 +147,7 @@ class Database:
                 )
             ''')
 
+            # ===== НОВЫЕ ТАБЛИЦЫ ДЛЯ СИСТЕМЫ РЕГИСТРАЦИИ НА CAPT =====
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS capt_registrations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -166,10 +167,10 @@ class Database:
                     started_at TIMESTAMP,
                     ended_by TEXT,
                     ended_at TIMESTAMP,
-                    main_message_id TEXT,     # ID сообщения в чате модерации
-                    reserve_message_id TEXT,  # ID сообщения в чате для всех
-                    main_channel_id TEXT,     # ID канала модерации
-                    reserve_channel_id TEXT   # ID канала для всех
+                    main_message_id TEXT,
+                    reserve_message_id TEXT,
+                    main_channel_id TEXT,
+                    reserve_channel_id TEXT
                 )
             ''')
 
