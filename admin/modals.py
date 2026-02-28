@@ -798,3 +798,109 @@ class SetAnnounceRolesModal(discord.ui.Modal, title="📢 РОЛИ ДЛЯ ОПО
             )
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
+
+# ===== НОВЫЕ МОДАЛКИ ДЛЯ СИСТЕМЫ РЕГИСТРАЦИИ НА CAPT =====
+
+class SetCaptAlertChannelModal(discord.ui.Modal, title="📢 КАНАЛ ОПОВЕЩЕНИЙ CAPT"):
+    def __init__(self, guild=None):
+        super().__init__()
+        self.guild = guild
+    
+    channel_id = discord.ui.TextInput(
+        label="ID канала для оповещений",
+        placeholder="123456789012345678",
+        max_length=20,
+        required=True
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        from core.config import CONFIG, save_config
+        from core.database import db
+        from capt_registration.manager import capt_reg_manager
+        
+        try:
+            # Проверяем, что канал существует
+            guild = interaction.client.get_guild(int(CONFIG.get('server_id')))
+            if not guild:
+                await interaction.response.send_message(
+                    "❌ Сначала установите ID сервера в Глобальных настройках",
+                    ephemeral=True
+                )
+                return
+            
+            channel = guild.get_channel(int(self.channel_id.value))
+            if not channel:
+                await interaction.response.send_message(
+                    f"❌ Канал {self.channel_id.value} не найден на сервере",
+                    ephemeral=True
+                )
+                return
+            
+            # Сохраняем в CONFIG и БД
+            CONFIG['capt_alert_channel'] = self.channel_id.value
+            db.set_setting('capt_alert_channel', self.channel_id.value, str(interaction.user.id))
+            save_config(str(interaction.user.id))
+            
+            # Обновляем в менеджере
+            capt_reg_manager.alert_channel_id = self.channel_id.value
+            
+            await interaction.response.send_message(
+                f"✅ Канал оповещений CAPT настроен: {channel.mention}",
+                ephemeral=True
+            )
+            
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
+
+class SetCaptRoleModal(discord.ui.Modal, title="🎭 РОЛЬ ДЛЯ РАССЫЛКИ CAPT"):
+    def __init__(self, guild=None):
+        super().__init__()
+        self.guild = guild
+    
+    role_id = discord.ui.TextInput(
+        label="ID роли для рассылки",
+        placeholder="123456789012345678",
+        max_length=20,
+        required=True
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        from core.config import CONFIG, save_config
+        from core.database import db
+        from capt_registration.manager import capt_reg_manager
+        
+        try:
+            # Проверяем, что роль существует
+            guild = interaction.client.get_guild(int(CONFIG.get('server_id')))
+            if not guild:
+                await interaction.response.send_message(
+                    "❌ Сначала установите ID сервера в Глобальных настройках",
+                    ephemeral=True
+                )
+                return
+            
+            role = guild.get_role(int(self.role_id.value))
+            if not role:
+                await interaction.response.send_message(
+                    f"❌ Роль {self.role_id.value} не найдена на сервере",
+                    ephemeral=True
+                )
+                return
+            
+            # Сохраняем в CONFIG и БД
+            CONFIG['capt_role_id'] = self.role_id.value
+            db.set_setting('capt_role_id', self.role_id.value, str(interaction.user.id))
+            save_config(str(interaction.user.id))
+            
+            # Обновляем в менеджере
+            capt_reg_manager.capt_role_id = self.role_id.value
+            
+            await interaction.response.send_message(
+                f"✅ Роль для рассылки CAPT настроена: {role.mention}\n"
+                f"Теперь при отправке CAPT сообщения получат все участники с этой ролью",
+                ephemeral=True
+            )
+            
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
