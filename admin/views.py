@@ -197,15 +197,16 @@ class MclSettingsView(BaseMenuView):
 
 
 class GlobalSettingsView(BaseMenuView):
+    """Глобальные настройки - красивое расположение"""
     def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
         super().__init__(user_id, guild, previous_view, previous_embed)
         
-        # === КНОПКИ ГЛОБАЛЬНЫХ НАСТРОЕК ===
+        # ===== РЯД 0: ОСНОВНЫЕ НАСТРОЙКИ СЕРВЕРА =====
         
         # 🌍 Установить сервер
         server_btn = discord.ui.Button(
             label="🌍 Установить сервер",
-            style=discord.ButtonStyle.secondary,
+            style=discord.ButtonStyle.primary,
             emoji="🌍",
             row=0
         )
@@ -214,12 +215,14 @@ class GlobalSettingsView(BaseMenuView):
         server_btn.callback = server_cb
         self.add_item(server_btn)
         
+        # ===== РЯД 1: УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ =====
+        
         # 👥 Управление доступом
         users_btn = discord.ui.Button(
             label="👥 Управление доступом",
             style=discord.ButtonStyle.secondary,
             emoji="👥",
-            row=0
+            row=1
         )
         async def users_cb(i):
             view = AccessView(self.user_id, self.guild, self, await self.get_current_embed())
@@ -233,7 +236,7 @@ class GlobalSettingsView(BaseMenuView):
             label="👑 Управление админами",
             style=discord.ButtonStyle.secondary,
             emoji="👑",
-            row=0
+            row=1
         )
         async def admin_cb(i):
             if not await is_super_admin(str(i.user.id)):
@@ -245,29 +248,45 @@ class GlobalSettingsView(BaseMenuView):
         admin_btn.callback = admin_cb
         self.add_item(admin_btn)
         
+        # ===== РЯД 2: СИСТЕМА МЕРОПРИЯТИЙ =====
+        
         # 🔔 Настройка оповещений (МП)
         alarm_btn = discord.ui.Button(
-            label="🔔 Настройка оповещений",
-            style=discord.ButtonStyle.secondary,
+            label="🔔 Мероприятия",
+            style=discord.ButtonStyle.primary,
             emoji="🔔",
-            row=1
+            row=2
         )
         async def alarm_cb(i):
             from admin.views import EventSettingsView
             view = EventSettingsView(self.user_id, self.guild, self, await self.get_current_embed())
             embed = discord.Embed(
-                title="🔔 **СИСТЕМА ОПОВЕЩЕНИЙ**",
-                description="Управление автоматическими напоминаниями о мероприятиях",
+                title="🔔 **СИСТЕМА МЕРОПРИЯТИЙ**",
+                description="Управление автоматическими напоминаниями",
                 color=0xffa500
             )
             await i.response.edit_message(embed=embed, view=view)
         alarm_btn.callback = alarm_cb
         self.add_item(alarm_btn)
-
-        # 📢 Канал для оповещений CAPT
+        
+        # ===== РЯД 3: СИСТЕМА РЕГИСТРАЦИИ НА CAPT =====
+        
+        # 🎯 Основные каналы CAPT
+        capt_channels_btn = discord.ui.Button(
+            label="🎯 Каналы CAPT",
+            style=discord.ButtonStyle.danger,
+            emoji="🎯",
+            row=3
+        )
+        async def capt_channels_cb(i):
+            await i.response.send_modal(SetCaptRegChannelsModal(self.guild))
+        capt_channels_btn.callback = capt_channels_cb
+        self.add_item(capt_channels_btn)
+        
+        # 📢 Канал оповещений
         capt_alert_btn = discord.ui.Button(
-            label="📢 Канал оповещений CAPT",
-            style=discord.ButtonStyle.secondary,
+            label="📢 Канал @everyone",
+            style=discord.ButtonStyle.danger,
             emoji="📢",
             row=3
         )
@@ -275,18 +294,20 @@ class GlobalSettingsView(BaseMenuView):
             await i.response.send_modal(SetCaptAlertChannelModal(self.guild))
         capt_alert_btn.callback = capt_alert_cb
         self.add_item(capt_alert_btn)
-
-        # 🎭 Роль для рассылки CAPT
+        
+        # 🎭 Роль для рассылки
         capt_role_btn = discord.ui.Button(
-            label="🎭 Роль для рассылки CAPT",
-            style=discord.ButtonStyle.secondary,
+            label="🎭 Роль для ЛС",
+            style=discord.ButtonStyle.danger,
             emoji="🎭",
-            row=4
+            row=3
         )
         async def capt_role_cb(i):
             await i.response.send_modal(SetCaptRoleModal(self.guild))
         capt_role_btn.callback = capt_role_cb
         self.add_item(capt_role_btn)
+        
+        # ===== РЯД 4: НАЗАД =====
         
         # ◀ Кнопка "Назад"
         self.add_back_button(row=4)
@@ -297,35 +318,57 @@ class GlobalSettingsView(BaseMenuView):
         
         embed = discord.Embed(
             title="🌍 **ГЛОБАЛЬНЫЕ НАСТРОЙКИ**",
-            description=f"**Текущие настройки:**\n🌍 Сервер: {server_name}",
+            description="Настройка всех систем бота",
             color=0x7289da
         )
         
-        # Добавляем информацию о количестве настроек
+        # Информация о пользователях
         users_count = len(db.get_users())
         admins_count = len(db.get_admins())
         
         embed.add_field(
-            name="👥 Пользователей с доступом",
-            value=f"`{users_count}`",
+            name="👥 Пользователи",
+            value=f"Доступ: `{users_count}`\nАдмины: `{admins_count}`",
             inline=True
         )
+        
+        # Информация о CAPT регистрации
+        capt_main = CONFIG.get('capt_reg_main_channel')
+        capt_reserve = CONFIG.get('capt_reg_reserve_channel')
+        capt_alert = CONFIG.get('capt_alert_channel')
+        capt_role = CONFIG.get('capt_role_id')
+        
+        capt_status = []
+        if capt_main:
+            capt_status.append("✅ Каналы")
+        else:
+            capt_status.append("❌ Каналы")
+            
+        if capt_alert:
+            capt_status.append("✅ @everyone")
+        else:
+            capt_status.append("❌ @everyone")
+            
+        if capt_role:
+            capt_status.append("✅ Роль")
+        else:
+            capt_status.append("❌ Роль")
         
         embed.add_field(
-            name="👑 Администраторов",
-            value=f"`{admins_count}`",
+            name="🎯 CAPT система",
+            value=" • ".join(capt_status),
             inline=True
         )
         
-        # Информация о каналах оповещений (если есть)
-        alarm_channels = CONFIG.get('alarm_channels', [])
-        if alarm_channels:
-            embed.add_field(
-                name="🔔 Каналов оповещений",
-                value=f"`{len(alarm_channels)}`",
-                inline=True
-            )
+        # Информация о мероприятиях
+        events_count = len(db.get_events(enabled_only=True))
+        embed.add_field(
+            name="🔔 Мероприятия",
+            value=f"Активных: `{events_count}`",
+            inline=True
+        )
         
+        embed.set_footer(text="Выберите раздел для настройки")
         return embed
 
 
