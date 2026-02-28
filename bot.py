@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from core.database import db
 from core.config import CONFIG, load_config
-from core.utils import format_mention, is_admin  # 👈 ДОБАВЛЯЕМ is_admin
+from core.utils import format_mention, is_admin
 
 from commands.info import setup as setup_info
 from commands.settings import setup as setup_settings
@@ -27,7 +27,7 @@ from events.scheduler import setup as setup_scheduler
 
 # Импорт авто-рекламы
 from advertising.core import setup as setup_advertising
-from advertising.slash import AdSlashCommands
+from advertising.commands import setup as setup_ad_commands
 
 import discord
 from discord.ext import commands
@@ -51,16 +51,17 @@ bot = commands.Bot(
     help_command=None
 )
 
+# Настройка команд
 setup_info(bot)
 setup_settings(bot)
 setup_log(bot)
 setup_stats(bot)
 
+# Настройка команд авто-рекламы
+setup_ad_commands(bot)
+
 # Запуск планировщика мероприятий
 setup_scheduler(bot)
-
-# СОЗДАЕМ ЭКЗЕМПЛЯР СЛЭШ-КОМАНД ДО СИНХРОНИЗАЦИИ
-ad_slash = AdSlashCommands(bot)
 
 @bot.event
 async def on_ready():
@@ -87,22 +88,18 @@ async def on_ready():
     else:
         print(f"❌ Канал {channel_id} НЕ НАЙДЕН в кэше!")
     
-    # Синхронизация слэш-команд
+    # Синхронизация слэш-команд (если есть)
     try:
         print("🔄 Синхронизация слэш-команд...")
         synced = await bot.tree.sync()
         print(f"✅ Синхронизировано {len(synced)} глобальных слэш-команд")
         
-        # Выводим названия команд для проверки
         if synced:
             for cmd in synced:
                 if hasattr(cmd, 'name'):
                     print(f"   - /{cmd.name}")
                 elif hasattr(cmd, 'commands'):
                     print(f"   - /{cmd.name} (группа с {len(cmd.commands)} командами)")
-        else:
-            print("❌ Нет зарегистрированных слэш-команд!")
-            
     except Exception as e:
         print(f"❌ Ошибка синхронизации: {e}")
     
@@ -121,40 +118,6 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         return
     print(f"❌ Ошибка: {error}")
-
-# Команда для ручной синхронизации (на всякий случай)
-@bot.command(name='sync')
-async def sync_commands(ctx):
-    """Принудительная синхронизация слэш-команд (только для админов)"""
-    if not await is_admin(str(ctx.author.id)):  # 👈 Теперь is_admin импортирован
-        await ctx.send("❌ Только администраторы")
-        return
-    
-    await ctx.send("🔄 Синхронизация команд...")
-    
-    try:
-        # Очищаем все команды
-        bot.tree.clear_commands(guild=None)
-        
-        # Пересоздаем команды
-        from advertising.slash import AdSlashCommands
-        ad_slash = AdSlashCommands(bot)
-        
-        # Синхронизируем
-        synced = await bot.tree.sync()
-        
-        if synced:
-            cmd_names = []
-            for cmd in synced:
-                if hasattr(cmd, 'name'):
-                    cmd_names.append(f"/{cmd.name}")
-                elif hasattr(cmd, 'commands'):
-                    cmd_names.append(f"/{cmd.name} (группа)")
-            await ctx.send(f"✅ Синхронизировано {len(synced)} команд: {', '.join(cmd_names)}")
-        else:
-            await ctx.send("❌ Нет зарегистрированных команд")
-    except Exception as e:
-        await ctx.send(f"❌ Ошибка: {e}")
 
 async def main():
     async with bot:
