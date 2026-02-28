@@ -1,6 +1,7 @@
 """Auto Advertising Commands - Настройка через ЛС"""
 import discord
 import os
+from datetime import datetime, timedelta
 from core.database import db
 from core.utils import is_super_admin
 
@@ -12,11 +13,9 @@ def setup(bot):
     @bot.command(name='ad_text')
     async def set_ad_text(ctx):
         """Установить текст рекламы (только ЛС, супер-админ)"""
-        # Проверяем что команда в ЛС
         if ctx.guild is not None:
             return
         
-        # Проверяем что супер-админ
         if not await is_super_admin(str(ctx.author.id)):
             return
         
@@ -28,7 +27,6 @@ def setup(bot):
         try:
             msg = await bot.wait_for('message', timeout=120.0, check=check)
             
-            # Сохраняем в файл
             with open(AD_TEXT_FILE, 'w', encoding='utf-8') as f:
                 f.write(msg.content)
             
@@ -45,60 +43,47 @@ def setup(bot):
     @bot.command(name='ad_channel')
     async def set_ad_channel(ctx, channel_id: str = None):
         """Установить ID канала для рекламы (только ЛС, супер-админ)"""
-        # Проверяем что команда в ЛС
         if ctx.guild is not None:
             return
         
-        # Проверяем что супер-админ
         if not await is_super_admin(str(ctx.author.id)):
             return
         
         if not channel_id:
-            # Показываем текущий канал
             try:
                 with open(AD_CHANNEL_FILE, 'r', encoding='utf-8') as f:
                     current = f.read().strip()
                 if current:
-                    await ctx.author.send(f"📢 Текущий канал: <#{current}> (ID: {current})")
+                    await ctx.author.send(f"📢 Текущий канал: ID: `{current}`")
                 else:
                     await ctx.author.send("📢 Канал не установлен. Используй `!ad_channel ID_канала`")
             except:
                 await ctx.author.send("📢 Канал не установлен. Используй `!ad_channel ID_канала`")
             return
         
-        # Проверяем что канал существует
+        # Проверка формата ID
         try:
-            # Пробуем найти канал на любом сервере где есть бот
-            found = False
-            for guild in bot.guilds:
-                channel = guild.get_channel(int(channel_id))
-                if channel:
-                    found = True
-                    break
-            
-            if not found:
-                await ctx.author.send(f"❌ Канал с ID {channel_id} не найден. Убедись что бот есть на этом сервере.")
-                return
-            
-            # Сохраняем ID канала
+            int(channel_id)
+        except ValueError:
+            await ctx.author.send("❌ Неверный формат ID канала. ID должен состоять только из цифр.")
+            return
+        
+        # Сохраняем ID канала (без проверки, так как отправка идёт от пользовательского токена)
+        try:
             with open(AD_CHANNEL_FILE, 'w', encoding='utf-8') as f:
                 f.write(channel_id)
             
-            await ctx.author.send(f"✅ Канал для рекламы установлен: <#{channel_id}>")
+            await ctx.author.send(f"✅ Канал для рекламы установлен. ID: `{channel_id}`\n⚠️ Убедись, что пользовательский токен имеет доступ к этому каналу.")
             
-        except ValueError:
-            await ctx.author.send("❌ Неверный формат ID канала. ID должен состоять только из цифр.")
         except Exception as e:
-            await ctx.author.send(f"❌ Ошибка: {e}")
+            await ctx.author.send(f"❌ Ошибка при сохранении: {e}")
     
     @bot.command(name='ad_show')
     async def show_ad(ctx):
         """Показать текущие настройки рекламы (только ЛС, супер-админ)"""
-        # Проверяем что команда в ЛС
         if ctx.guild is not None:
             return
         
-        # Проверяем что супер-админ
         if not await is_super_admin(str(ctx.author.id)):
             return
         
@@ -120,7 +105,7 @@ def setup(bot):
             with open(AD_CHANNEL_FILE, 'r', encoding='utf-8') as f:
                 channel_id = f.read().strip()
             if channel_id:
-                embed.add_field(name="📢 Канал", value=f"<#{channel_id}> (ID: {channel_id})", inline=True)
+                embed.add_field(name="📢 Канал ID", value=f"`{channel_id}`", inline=True)
             else:
                 embed.add_field(name="📢 Канал", value="❌ Не установлен", inline=True)
         except:
@@ -145,11 +130,9 @@ def setup(bot):
     @bot.command(name='ad_send')
     async def send_ad_now(ctx):
         """Отправить рекламу сейчас (тест) (только ЛС, супер-админ)"""
-        # Проверяем что команда в ЛС
         if ctx.guild is not None:
             return
         
-        # Проверяем что супер-админ
         if not await is_super_admin(str(ctx.author.id)):
             return
         
