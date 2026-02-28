@@ -269,43 +269,8 @@ class GlobalSettingsView(BaseMenuView):
         alarm_btn.callback = alarm_cb
         self.add_item(alarm_btn)
         
-        # ===== РЯД 3: СИСТЕМА РЕГИСТРАЦИИ НА CAPT =====
-        
-        # 🎯 Основные каналы CAPT
-        capt_channels_btn = discord.ui.Button(
-            label="🎯 Каналы CAPT",
-            style=discord.ButtonStyle.danger,
-            emoji="🎯",
-            row=3
-        )
-        async def capt_channels_cb(i):
-            await i.response.send_modal(SetCaptRegChannelsModal(self.guild))
-        capt_channels_btn.callback = capt_channels_cb
-        self.add_item(capt_channels_btn)
-        
-        # 📢 Канал оповещений
-        capt_alert_btn = discord.ui.Button(
-            label="📢 Канал @everyone",
-            style=discord.ButtonStyle.danger,
-            emoji="📢",
-            row=3
-        )
-        async def capt_alert_cb(i):
-            await i.response.send_modal(SetCaptAlertChannelModal(self.guild))
-        capt_alert_btn.callback = capt_alert_cb
-        self.add_item(capt_alert_btn)
-        
-        # 🎭 Роль для рассылки
-        capt_role_btn = discord.ui.Button(
-            label="🎭 Роль для ЛС",
-            style=discord.ButtonStyle.danger,
-            emoji="🎭",
-            row=3
-        )
-        async def capt_role_cb(i):
-            await i.response.send_modal(SetCaptRoleModal(self.guild))
-        capt_role_btn.callback = capt_role_cb
-        self.add_item(capt_role_btn)
+        # ===== РЯД 3: СВОБОДНО (МЕСТО ДЛЯ БУДУЩИХ СИСТЕМ) =====
+        # КНОПКИ CAPT УБРАНЫ - ОНИ ТЕПЕРЬ ТОЛЬКО В НОВОМ РАЗДЕЛЕ
         
         # ===== РЯД 4: НАЗАД =====
         
@@ -332,14 +297,22 @@ class GlobalSettingsView(BaseMenuView):
             inline=True
         )
         
-        # Информация о CAPT регистрации
+        # Информация о мероприятиях
+        events_count = len(db.get_events(enabled_only=True))
+        embed.add_field(
+            name="🔔 Мероприятия",
+            value=f"Активных: `{events_count}`",
+            inline=True
+        )
+        
+        # Информация о CAPT системе (только статус, без кнопок)
         capt_main = CONFIG.get('capt_reg_main_channel')
         capt_reserve = CONFIG.get('capt_reg_reserve_channel')
         capt_alert = CONFIG.get('capt_alert_channel')
         capt_role = CONFIG.get('capt_role_id')
         
         capt_status = []
-        if capt_main:
+        if capt_main and capt_reserve:
             capt_status.append("✅ Каналы")
         else:
             capt_status.append("❌ Каналы")
@@ -360,15 +333,7 @@ class GlobalSettingsView(BaseMenuView):
             inline=True
         )
         
-        # Информация о мероприятиях
-        events_count = len(db.get_events(enabled_only=True))
-        embed.add_field(
-            name="🔔 Мероприятия",
-            value=f"Активных: `{events_count}`",
-            inline=True
-        )
-        
-        embed.set_footer(text="Выберите раздел для настройки")
+        embed.set_footer(text="Настройка CAPT теперь в отдельном разделе")
         return embed
 
 
