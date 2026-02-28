@@ -24,12 +24,10 @@ class ModerationView(PermanentView):
             # Кнопка "Начать регистрацию" всегда активна
             if child.custom_id == "capt_reg_start":
                 child.disabled = False
-            # Кнопка "Завершить регистрацию" активна только когда регистрация идёт
-            elif child.custom_id == "capt_reg_end":
+            # Все остальные кнопки активны только когда регистрация идёт
+            else:
                 child.disabled = not registration_active
-            # Кнопки перемещения активны только когда регистрация идёт
-            elif child.custom_id in ["capt_reg_to_main", "capt_reg_to_reserve"]:
-                child.disabled = not registration_active
+        logger.debug(f"Кнопки модерации {'активированы' if registration_active else 'деактивированы'}")
     
     @discord.ui.button(
         label="▶️ НАЧАТЬ РЕГИСТРАЦИЮ", 
@@ -70,7 +68,7 @@ class ModerationView(PermanentView):
         style=discord.ButtonStyle.danger,
         emoji="⏹️",
         row=0,
-        disabled=True,  # По умолчанию неактивна
+        disabled=True,
         custom_id="capt_reg_end"
     )
     async def end_registration(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -97,22 +95,153 @@ class ModerationView(PermanentView):
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
     
     @discord.ui.button(
-        label="🔢 ПЕРЕМЕСТИТЬ ПО НОМЕРУ", 
+        label="➕ ДОБАВИТЬ В ОСНОВНОЙ", 
         style=discord.ButtonStyle.primary,
-        emoji="🔢",
+        emoji="➕",
         row=1,
-        disabled=True,  # По умолчанию неактивна
-        custom_id="capt_reg_move"
+        disabled=True,
+        custom_id="capt_reg_add_main"
     )
-    async def move_by_number(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Переместить участника по номеру из списка"""
-        logger.info(f"Нажата кнопка 'Переместить по номеру' от {interaction.user}")
+    async def add_to_main(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Добавить пользователя в основной список"""
+        logger.info(f"Нажата кнопка 'Добавить в основной' от {interaction.user}")
         
         if not await is_admin(str(interaction.user.id)):
             await interaction.response.send_message("❌ Только администраторы", ephemeral=True)
             return
         
-        await interaction.response.send_modal(MoveByNumberModal())
+        await interaction.response.send_modal(MoveToMainModal())
+    
+    @discord.ui.button(
+        label="➡️ ПЕРЕВЕСТИ В РЕЗЕРВ", 
+        style=discord.ButtonStyle.secondary,
+        emoji="➡️",
+        row=1,
+        disabled=True,
+        custom_id="capt_reg_move_reserve"
+    )
+    async def move_to_reserve(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Перевести пользователя в резерв"""
+        logger.info(f"Нажата кнопка 'Перевести в резерв' от {interaction.user}")
+        
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы", ephemeral=True)
+            return
+        
+        await interaction.response.send_modal(MoveToReserveModal())
+
+
+class MoveToMainModal(discord.ui.Modal, title="➕ Добавить в основной список"):
+    """Модалка для добавления пользователя в основной список"""
+    
+    user_identifier = discord.ui.TextInput(
+        label="ID пользователя, @упоминание или номер из списка",
+        placeholder="Например: 123456789 или @user или 3",
+        max_length=30,
+        required=True
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        identifier = self.user_identifier.value.strip()
+        
+        # Получаем текущие списки
+        main_list, reserve_list = capt_reg_manager.get_lists()
+        
+        # Проверяем, может это номер из списка
+        if identifier.isdigit() and len(identifier) <= 3:
+            num = int(identifier)
+            user_id = None
+            
+            # Сначала ищем в резерве (чаще всего оттуда добавляют в основной)
+            if 1 <= num <= len(reserve_list):
+                user_id, user_name = reserve_list[num-1]
+            # Потом в основном (на всякий случай)
+            elif 1 <= num <= len(main_list):
+                user_id, user_name = main_list[num-1]
+            
+            if user_id:
+                success, msg = await capt_reg_manager.move_to_main(
+                    str(interaction.user.id),
+                    user_id,
+                    interaction.client
+                )
+                await interaction.response.send_message(msg, ephemeral=True)
+                return
+        
+        # Если не номер, пробуем как ID или упоминание
+        if identifier.startswith('<@') and identifier.endswith('>'):
+            user_id = identifier.replace('<@', '').replace('>', '').replace('!', '')
+        else:
+            user_id = identifier
+        
+        if not user_id.isdigit():
+            await interaction.response.send_message(
+                "❌ Неверный формат. Используйте ID, @упоминание или номер из списка",
+                ephemeral=True
+            )
+            return
+        
+        success, msg = await capt_reg_manager.move_to_main(
+            str(interaction.user.id),
+            user_id,
+            interaction.client
+        )
+        await interaction.response.send_message(msg, ephemeral=True)
+
+
+class MoveToReserveModal(discord.ui.Modal, title="➡️ Перевести в резерв"):
+    """Модалка для перевода пользователя в резерв"""
+    
+    user_identifier = discord.ui.TextInput(
+        label="ID пользователя, @упоминание или номер из списка",
+        placeholder="Например: 123456789 или @user или 3",
+        max_length=30,
+        required=True
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        identifier = self.user_identifier.value.strip()
+        
+        # Получаем текущие списки
+        main_list, reserve_list = capt_reg_manager.get_lists()
+        
+        # Проверяем, может это номер из списка
+        if identifier.isdigit() and len(identifier) <= 3:
+            num = int(identifier)
+            user_id = None
+            
+            # Ищем в основном списке (оттуда чаще всего переводят в резерв)
+            if 1 <= num <= len(main_list):
+                user_id, user_name = main_list[num-1]
+            
+            if user_id:
+                success, msg = await capt_reg_manager.move_to_reserve(
+                    str(interaction.user.id),
+                    user_id,
+                    interaction.client
+                )
+                await interaction.response.send_message(msg, ephemeral=True)
+                return
+        
+        # Если не номер, пробуем как ID или упоминание
+        if identifier.startswith('<@') and identifier.endswith('>'):
+            user_id = identifier.replace('<@', '').replace('>', '').replace('!', '')
+        else:
+            user_id = identifier
+        
+        if not user_id.isdigit():
+            await interaction.response.send_message(
+                "❌ Неверный формат. Используйте ID, @упоминание или номер из списка",
+                ephemeral=True
+            )
+            return
+        
+        success, msg = await capt_reg_manager.move_to_reserve(
+            str(interaction.user.id),
+            user_id,
+            interaction.client
+        )
+        await interaction.response.send_message(msg, ephemeral=True)
 
 
 class MoveByNumberModal(discord.ui.Modal, title="🔢 Переместить участника"):
