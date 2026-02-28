@@ -13,6 +13,7 @@ class CaptRegistrationManager:
         self.main_channel_id = None
         self.reserve_channel_id = None
         self.alert_channel_id = None
+        self.capt_role_id = None
         self.main_message_id = None
         self.reserve_message_id = None
         self.capt_info = None
@@ -23,10 +24,11 @@ class CaptRegistrationManager:
         """Загрузка настроек из CONFIG"""
         self.main_channel_id = CONFIG.get('capt_reg_main_channel')
         self.reserve_channel_id = CONFIG.get('capt_reg_reserve_channel')
-        self.alert_channel_id = CONFIG.get('capt_alert_channel')  # Добавляем
+        self.alert_channel_id = CONFIG.get('capt_alert_channel')
+        self.capt_role_id = CONFIG.get('capt_role_id')
         
         # Если в CONFIG нет, пробуем загрузить из БД напрямую
-        if not self.main_channel_id or not self.reserve_channel_id or not self.alert_channel_id:
+        if not self.main_channel_id or not self.reserve_channel_id or not self.alert_channel_id or not self.capt_role_id:
             from core.database import db
             settings = db.get_all_settings()
             if 'capt_reg_main_channel' in settings:
@@ -35,24 +37,23 @@ class CaptRegistrationManager:
             if 'capt_reg_reserve_channel' in settings:
                 self.reserve_channel_id = settings['capt_reg_reserve_channel']
                 CONFIG['capt_reg_reserve_channel'] = self.reserve_channel_id
-            if 'capt_alert_channel' in settings:  # Добавляем
+            if 'capt_alert_channel' in settings:
                 self.alert_channel_id = settings['capt_alert_channel']
                 CONFIG['capt_alert_channel'] = self.alert_channel_id
+            if 'capt_role_id' in settings:
+                self.capt_role_id = settings['capt_role_id']
+                CONFIG['capt_role_id'] = self.capt_role_id
         
-        logger.debug(f"Загружены каналы: main={self.main_channel_id}, reserve={self.reserve_channel_id}, alert={self.alert_channel_id}")
+        logger.debug(f"Загружены каналы: main={self.main_channel_id}, reserve={self.reserve_channel_id}, alert={self.alert_channel_id}, role={self.capt_role_id}")
     
     def set_channels(self, main_channel_id: str, reserve_channel_id: str, updated_by: str):
         """Установка каналов для регистрации"""
         logger.info(f"Установка каналов: main={main_channel_id}, reserve={reserve_channel_id}")
         
-        # Сохраняем в CONFIG
         CONFIG['capt_reg_main_channel'] = main_channel_id
         CONFIG['capt_reg_reserve_channel'] = reserve_channel_id
-        
-        # Сохраняем в БД
         save_config(updated_by)
         
-        # Обновляем локальные переменные
         self.main_channel_id = main_channel_id
         self.reserve_channel_id = reserve_channel_id
         
@@ -90,7 +91,7 @@ class CaptRegistrationManager:
             from capt_registration.views import ModerationView, PublicView
             
             main_list, reserve_list = self.get_lists()
-            embed = create_registration_embed(main_list, reserve_list)
+            embed = create_registration_embed(main_list, reserve_list, self.capt_info)
             
             # Отправляем новые сообщения
             main_msg = await main_channel.send(embed=embed, view=ModerationView())
@@ -159,7 +160,7 @@ class CaptRegistrationManager:
         self.active_session = session_id
         logger.info(f"✅ Сессия создана: {session_id}")
         
-        # Отправляем оповещение @everyone в публичный канал
+        # Отправляем оповещение @everyone
         await self._send_capt_announcement(bot)
         
         # Активируем кнопки в публичном чате
@@ -168,30 +169,38 @@ class CaptRegistrationManager:
         # Обновляем кнопки в чате модерации
         await self._update_moderation_buttons(bot, active=True)
         
+        # Обновляем embed с информацией
+        await self._update_all_embeds(bot)
+        
         db.log_action(user_id, "CAPT_REG_START", f"Session {session_id}")
         return True
-
+    
     async def _send_capt_announcement(self, bot):
         """Отправить оповещение о начале CAPT в настроенный канал"""
         if not self.capt_info:
             return
         
-        # Получаем ID канала для оповещений из CONFIG
-        alert_channel_id = CONFIG.get('capt_alert_channel')
-        if not alert_channel_id:
+        if not self.alert_channel_id:
             logger.warning("❌ Канал для оповещений CAPT не настроен")
             return
         
         try:
-            channel = bot.get_channel(int(alert_channel_id))
+            channel = bot.get_channel(int(self.alert_channel_id))
             if not channel:
-                logger.error(f"❌ Канал оповещений {alert_channel_id} не найден")
+                logger.error(f"❌ Канал оповещений {self.alert_channel_id} не найден")
                 return
+            
+            # Получаем публичный канал для регистрации
+            reserve_channel_mention = "не настроен"
+            if self.reserve_channel_id:
+                reserve_channel = bot.get_channel(int(self.reserve_channel_id))
+                if reserve_channel:
+                    reserve_channel_mention = reserve_channel.mention
             
             # Создаём красивое оповещение
             embed = discord.Embed(
                 title="🎯 **НАБОР НА CAPT**",
-                description=f"Для участия нажми кнопку **ПРИСОЕДИНИТЬСЯ** в канале {channel.mention if channel else 'для регистрации'}",
+                description=f"Для участия нажми кнопку **ПРИСОЕДИНИТЬСЯ** в канале {reserve_channel_mention}",
                 color=0xff0000,
                 timestamp=datetime.now()
             )
@@ -221,15 +230,11 @@ class CaptRegistrationManager:
                 inline=True
             )
             
-            # Получаем публичный канал для ссылки
-            if self.reserve_channel_id:
-                reserve_channel = bot.get_channel(int(self.reserve_channel_id))
-                if reserve_channel:
-                    embed.add_field(
-                        name="📍 Канал регистрации",
-                        value=reserve_channel.mention,
-                        inline=True
-                    )
+            embed.add_field(
+                name="📍 Канал регистрации",
+                value=reserve_channel_mention,
+                inline=True
+            )
             
             embed.set_footer(text="Нажми кнопку в канале регистрации чтобы участвовать")
             
@@ -264,6 +269,7 @@ class CaptRegistrationManager:
             conn.commit()
         
         self.active_session = None
+        self.capt_info = None
         
         # Деактивируем кнопки в публичном чате
         await self._update_public_buttons(bot, active=False)
@@ -402,10 +408,9 @@ class CaptRegistrationManager:
             return False, f"❌ Ошибка: {e}"
     
     def get_lists(self):
-        """Получить текущие списки, отсортированные по времени регистрации"""
+        """Получить текущие списки"""
         with db.get_connection() as conn:
             cursor = conn.cursor()
-            # Основной список - сортируем по registered_at (кто раньше зарегистрировался в основном)
             cursor.execute('''
                 SELECT user_id, user_name FROM capt_registrations 
                 WHERE is_active = 1 AND list_type = 'main'
@@ -413,7 +418,6 @@ class CaptRegistrationManager:
             ''')
             main_list = cursor.fetchall()
             
-            # Резервный список - сортируем по registered_at (кто раньше зарегистрировался в резерве)
             cursor.execute('''
                 SELECT user_id, user_name FROM capt_registrations 
                 WHERE is_active = 1 AND list_type = 'reserve'
@@ -441,7 +445,6 @@ class CaptRegistrationManager:
             if not msg:
                 return
             
-            # Создаём новый view с активированными/деактивированными кнопками
             from capt_registration.views import PublicView
             view = PublicView()
             view.set_registration_active(active)
@@ -466,7 +469,6 @@ class CaptRegistrationManager:
             if not msg:
                 return
             
-            # Создаём новый view с обновлённым состоянием кнопок
             from capt_registration.views import ModerationView
             view = ModerationView()
             view.update_buttons(active)
@@ -486,7 +488,7 @@ class CaptRegistrationManager:
             capt_info = None
         else:
             main_list, reserve_list = self.get_lists()
-            capt_info = self.capt_info  # Добавляем информацию о CAPT
+            capt_info = self.capt_info
         
         embed = create_registration_embed(main_list, reserve_list, capt_info)
         

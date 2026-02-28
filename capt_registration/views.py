@@ -1,9 +1,12 @@
 """Кнопки для системы регистрации на CAPT"""
 import discord
 import logging
+import re
 from capt_registration.base import PermanentView
-from core.utils import has_access, is_admin
+from core.utils import has_access
 from capt_registration.manager import capt_reg_manager
+from capt_registration.capt_core import capt_core
+from core.config import CONFIG
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +41,6 @@ class StartRegistrationModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИ
     
     async def on_submit(self, interaction: discord.Interaction):
         # Проверяем формат времени
-        import re
         if not re.match(r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$', self.teleport_time.value):
             await interaction.response.send_message(
                 "❌ Неверный формат времени. Используйте ЧЧ:ММ (например 19:30)",
@@ -74,7 +76,191 @@ class StartRegistrationModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИ
         )
 
 
-# ===== ЧАТ МОДЕРАЦИИ (для админов) =====
+# ===== МОДАЛКА ДЛЯ ПЕРЕМЕЩЕНИЯ В ОСНОВНОЙ =====
+
+class MoveToMainModal(discord.ui.Modal, title="➕ Добавить в основной список"):
+    """Модалка для добавления пользователя в основной список по номеру из резерва"""
+    
+    reserve_number = discord.ui.TextInput(
+        label="Номер участника из резервного списка",
+        placeholder="Например: 2",
+        max_length=3,
+        required=True
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        # Проверяем что ввели число
+        if not self.reserve_number.value.isdigit():
+            await interaction.response.send_message(
+                "❌ Введите число",
+                ephemeral=True
+            )
+            return
+        
+        number = int(self.reserve_number.value)
+        
+        # Получаем текущие списки
+        main_list, reserve_list = capt_reg_manager.get_lists()
+        
+        # Проверяем, что номер существует в резерве
+        if number < 1 or number > len(reserve_list):
+            await interaction.response.send_message(
+                f"❌ В резерве только {len(reserve_list)} участников. Номер {number} не существует.",
+                ephemeral=True
+            )
+            return
+        
+        # Получаем данные участника по номеру из резерва
+        target_user_id, target_user_name = reserve_list[number - 1]
+        
+        # Перемещаем в основной список
+        success, msg = await capt_reg_manager.move_to_main(
+            str(interaction.user.id),
+            target_user_id,
+            interaction.client
+        )
+        
+        await interaction.response.send_message(msg, ephemeral=True)
+
+
+# ===== МОДАЛКА ДЛЯ ПЕРЕВОДА В РЕЗЕРВ =====
+
+class MoveToReserveModal(discord.ui.Modal, title="➡️ Перевести в резерв"):
+    """Модалка для перевода пользователя в резерв по номеру из основного списка"""
+    
+    main_number = discord.ui.TextInput(
+        label="Номер участника из основного списка",
+        placeholder="Например: 1",
+        max_length=3,
+        required=True
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        # Проверяем что ввели число
+        if not self.main_number.value.isdigit():
+            await interaction.response.send_message(
+                "❌ Введите число",
+                ephemeral=True
+            )
+            return
+        
+        number = int(self.main_number.value)
+        
+        # Получаем текущие списки
+        main_list, reserve_list = capt_reg_manager.get_lists()
+        
+        # Проверяем, что номер существует в основном списке
+        if number < 1 or number > len(main_list):
+            await interaction.response.send_message(
+                f"❌ В основном списке только {len(main_list)} участников. Номер {number} не существует.",
+                ephemeral=True
+            )
+            return
+        
+        # Получаем данные участника по номеру из основного списка
+        target_user_id, target_user_name = main_list[number - 1]
+        
+        # Перемещаем в резерв
+        success, msg = await capt_reg_manager.move_to_reserve(
+            str(interaction.user.id),
+            target_user_id,
+            interaction.client
+        )
+        
+        await interaction.response.send_message(msg, ephemeral=True)
+
+
+# ===== МОДАЛКА ДЛЯ ОТПРАВКИ CAPT =====
+
+class CaptRegSendModal(discord.ui.Modal, title="🚨 ОТПРАВКА CAPT"):
+    """Модалка для отправки CAPT участникам"""
+    
+    def __init__(self, capt_info):
+        super().__init__()
+        self.capt_info = capt_info
+        
+        # Предзаполняем поля данными из регистрации
+        self.enemy = discord.ui.TextInput(
+            label="👊 Противник",
+            default=capt_info['enemy'],
+            max_length=100,
+            required=True
+        )
+        self.add_item(self.enemy)
+        
+        self.teleport_time = discord.ui.TextInput(
+            label="⏰ Время телепорта",
+            default=capt_info['teleport_time'],
+            max_length=5,
+            required=True
+        )
+        self.add_item(self.teleport_time)
+        
+        self.additional_info = discord.ui.TextInput(
+            label="📝 Дополнительно",
+            default=capt_info['additional_info'] if capt_info['additional_info'] != "Нет" else "",
+            style=discord.TextStyle.paragraph,
+            max_length=500,
+            required=False
+        )
+        self.add_item(self.additional_info)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        # Проверяем наличие роли
+        if not CONFIG['capt_role_id']:
+            await interaction.response.send_message(
+                "❌ Роль для рассылки CAPT не настроена!\n"
+                "Администратор должен настроить её в !settings → Глобальные настройки → 🎭 Роль для рассылки CAPT",
+                ephemeral=True
+            )
+            return
+        
+        if not CONFIG['capt_channel_id']:
+            await interaction.response.send_message(
+                "❌ Канал для ошибок CAPT не настроен!",
+                ephemeral=True
+            )
+            return
+        
+        # Получаем роль
+        guild = interaction.guild
+        if not guild:
+            guild = interaction.client.get_guild(int(CONFIG['server_id']))
+        
+        role = guild.get_role(int(CONFIG['capt_role_id']))
+        if not role:
+            await interaction.response.send_message(
+                "❌ Роль CAPT не найдена на сервере",
+                ephemeral=True
+            )
+            return
+        
+        # Получаем участников с ролью
+        members = [m for m in guild.members if role in m.roles]
+        if not members:
+            await interaction.response.send_message(
+                "⚠️ Нет участников с этой ролью",
+                ephemeral=True
+            )
+            return
+        
+        # Отправляем подтверждение
+        await interaction.response.send_message(
+            f"🚀 **CAPT** | {len(members)} участников с ролью {role.mention} | ⚡ Запуск...",
+            ephemeral=False
+        )
+        
+        # Формируем сообщение из данных
+        time_str = self.teleport_time.value
+        message = f"👊 Противник: {self.enemy.value}"
+        if self.additional_info.value:
+            message += f"\n📝 {self.additional_info.value}"
+        
+        # Запускаем рассылку
+        await capt_core.send_bulk(interaction, members, time_str, message)
+
+
+# ===== ЧАТ МОДЕРАЦИИ (ДЛЯ АДМИНОВ) =====
 
 class ModerationView(PermanentView):
     """View для чата модерации - кнопки управления"""
@@ -107,12 +293,10 @@ class ModerationView(PermanentView):
         """Начать регистрацию (для всех с доступом)"""
         logger.info(f"Нажата кнопка 'Начать регистрацию' от {interaction.user}")
         
-        # Проверяем есть ли доступ к боту (has_access)
         if not await has_access(str(interaction.user.id)):
             await interaction.response.send_message("❌ У вас нет доступа к боту", ephemeral=True)
             return
         
-        # Открываем модалку для ввода информации
         await interaction.response.send_modal(StartRegistrationModal())
     
     @discord.ui.button(
@@ -127,7 +311,6 @@ class ModerationView(PermanentView):
         """Завершить регистрацию (очистить всё)"""
         logger.info(f"Нажата кнопка 'Завершить регистрацию' от {interaction.user}")
         
-        # Проверяем есть ли доступ к боту
         if not await has_access(str(interaction.user.id)):
             await interaction.response.send_message("❌ У вас нет доступа к боту", ephemeral=True)
             return
@@ -182,96 +365,32 @@ class ModerationView(PermanentView):
             return
         
         await interaction.response.send_modal(MoveToReserveModal())
-
-
-class MoveToMainModal(discord.ui.Modal, title="➕ Добавить в основной список"):
-    """Модалка для добавления пользователя в основной список по номеру из резерва"""
     
-    reserve_number = discord.ui.TextInput(
-        label="Номер участника из резервного списка",
-        placeholder="Например: 2",
-        max_length=3,
-        required=True
+    @discord.ui.button(
+        label="📨 РАССЫЛКА В ЛС", 
+        style=discord.ButtonStyle.danger,
+        emoji="📨",
+        row=2,
+        disabled=True,
+        custom_id="capt_reg_send"
     )
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        # Проверяем что ввели число
-        if not self.reserve_number.value.isdigit():
+    async def send_capt(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Отправить CAPT участникам"""
+        logger.info(f"Нажата кнопка 'Рассылка в ЛС' от {interaction.user}")
+        
+        if not await has_access(str(interaction.user.id)):
+            await interaction.response.send_message("❌ У вас нет доступа к боту", ephemeral=True)
+            return
+        
+        # Проверяем, активна ли регистрация
+        if not capt_reg_manager.active_session or not capt_reg_manager.capt_info:
             await interaction.response.send_message(
-                "❌ Введите число",
+                "❌ Нет активной регистрации",
                 ephemeral=True
             )
             return
         
-        number = int(self.reserve_number.value)
-        
-        # Получаем текущие списки
-        main_list, reserve_list = capt_reg_manager.get_lists()
-        
-        # Проверяем, что номер существует в резерве
-        if number < 1 or number > len(reserve_list):
-            await interaction.response.send_message(
-                f"❌ В резерве только {len(reserve_list)} участников. Номер {number} не существует.",
-                ephemeral=True
-            )
-            return
-        
-        # Получаем данные участника по номеру из резерва
-        target_user_id, target_user_name = reserve_list[number - 1]
-        
-        # Перемещаем в основной список
-        success, msg = await capt_reg_manager.move_to_main(
-            str(interaction.user.id),
-            target_user_id,
-            interaction.client
-        )
-        
-        await interaction.response.send_message(msg, ephemeral=True)
-
-
-class MoveToReserveModal(discord.ui.Modal, title="➡️ Перевести в резерв"):
-    """Модалка для перевода пользователя в резерв по номеру из основного списка"""
-    
-    main_number = discord.ui.TextInput(
-        label="Номер участника из основного списка",
-        placeholder="Например: 1",
-        max_length=3,
-        required=True
-    )
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        # Проверяем что ввели число
-        if not self.main_number.value.isdigit():
-            await interaction.response.send_message(
-                "❌ Введите число",
-                ephemeral=True
-            )
-            return
-        
-        number = int(self.main_number.value)
-        
-        # Получаем текущие списки
-        main_list, reserve_list = capt_reg_manager.get_lists()
-        
-        # Проверяем, что номер существует в основном списке
-        if number < 1 or number > len(main_list):
-            await interaction.response.send_message(
-                f"❌ В основном списке только {len(main_list)} участников. Номер {number} не существует.",
-                ephemeral=True
-            )
-            return
-        
-        # Получаем данные участника по номеру из основного списка
-        target_user_id, target_user_name = main_list[number - 1]
-        
-        # Перемещаем в резерв
-        success, msg = await capt_reg_manager.move_to_reserve(
-            str(interaction.user.id),
-            target_user_id,
-            interaction.client
-        )
-        
-        await interaction.response.send_message(msg, ephemeral=True)
+        await interaction.response.send_modal(CaptRegSendModal(capt_reg_manager.capt_info))
 
 
 # ===== ЧАТ ДЛЯ ВСЕХ =====

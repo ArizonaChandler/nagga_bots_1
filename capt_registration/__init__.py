@@ -3,7 +3,8 @@ import logging
 from capt_registration.manager import capt_reg_manager
 from capt_registration.views import ModerationView, PublicView
 from capt_registration.embeds import create_registration_embed
-from capt_registration.base import PermanentView  # новый экспорт
+from capt_registration.base import PermanentView
+from capt_registration.capt_core import capt_core, active_capt_tasks
 
 logger = logging.getLogger(__name__)
 logger.info("📦 Модуль capt_registration загружен")
@@ -13,5 +14,7 @@ __all__ = [
     'ModerationView',
     'PublicView',
     'create_registration_embed',
-    'PermanentView'  # добавили
+    'PermanentView',
+    'capt_core',
+    'active_capt_tasks'
 ]

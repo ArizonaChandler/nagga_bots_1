@@ -12,19 +12,19 @@ CONFIG = {
     'channel_id': None,
     'capt_channel_id': None,
     'server_id': None,
-    'capt_role_id': None,
+    'capt_role_id': None,           # Уже есть
     'message_1': 'Unit\nPink',
     'message_2': 'Unit\nBlue',
     'user_token_1': os.getenv('DISCORD_USER_TOKEN_1'),
     'user_token_2': os.getenv('DISCORD_USER_TOKEN_2'),
     'super_admin_id': SUPER_ADMIN_ID,
-    'alarm_channels': [],           # НОВОЕ: список каналов для напоминаний
-    'announce_channels': [],         # НОВОЕ: список каналов для оповещений
-    'reminder_roles': [],            # НОВОЕ: список ролей для упоминания в напоминаниях
-    'announce_roles': [],             # НОВОЕ: список ролей для упоминания в оповещениях
-    'capt_reg_main_channel': None,
-    'capt_reg_reserve_channel': None,
-    'capt_alert_channel': None  # Канал для оповещений о CAPT
+    'alarm_channels': [],           # списки каналов для напоминаний
+    'announce_channels': [],         # списки каналов для оповещений
+    'reminder_roles': [],            # списки ролей для упоминания в напоминаниях
+    'announce_roles': [],            # списки ролей для упоминания в оповещениях
+    'capt_reg_main_channel': None,   # канал для модерации CAPT регистрации
+    'capt_reg_reserve_channel': None, # канал для всех пользователей
+    'capt_alert_channel': None,      # канал для оповещений @everyone
 }
 
 def load_config():
@@ -47,7 +47,7 @@ def load_config():
                     CONFIG[key] = None
         else:
             # Если ключа нет в CONFIG, но он есть в БД - добавляем
-            if key in ['capt_reg_main_channel', 'capt_reg_reserve_channel', 'capt_alert_channel']:
+            if key in ['capt_reg_main_channel', 'capt_reg_reserve_channel', 'capt_alert_channel', 'capt_role_id']:
                 CONFIG[key] = value if value and value.lower() != 'null' else None
     
     colors = db.get_dual_colors()

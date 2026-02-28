@@ -13,19 +13,12 @@ from core.database import db
 from core.config import CONFIG, load_config
 from core.utils import format_mention, is_admin
 
-print("🔍 ПРОВЕРКА НАСТРОЕК:")
-settings = db.get_all_settings()
-print("Все настройки из БД:")
-for key, value in settings.items():
-    if 'capt' in key:
-        print(f"  {key} = {value}")
-
 from commands.info import setup as setup_info
 from commands.settings import setup as setup_settings
 from commands.log import setup as setup_log
 from commands.stats import setup as setup_stats
 
-from capt.core import capt_core
+# ВНИМАНИЕ: Импорт capt.core УДАЛЕН! CAPT перенесена в capt_registration
 from mcl.core import dual_mcl_core
 from files.core import file_manager
 
@@ -40,11 +33,6 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 import os
-
-# для CAPT регистрации
-from capt_registration.views import ModerationView, PublicView
-from capt_registration.manager import capt_reg_manager
-from capt_registration.embeds import create_registration_embed
 
 load_dotenv()
 BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')

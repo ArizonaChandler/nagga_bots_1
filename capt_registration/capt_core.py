@@ -1,4 +1,4 @@
-"""CAPT Core - Массовая отправка DM"""
+"""CAPT Core - Массовая отправка DM (перенесено из capt)"""
 import asyncio
 import time
 import discord
@@ -10,7 +10,7 @@ active_capt_tasks = {}
 class CAPTCore:
     def __init__(self):
         self.stats = {'total_sent': 0, 'total_failed': 0, 'total_time': 0, 'fastest_speed': 0}
-        print("⚡ CAPT Core инициализирован")
+        print("⚡ CAPT Core (новая система) инициализирован")
     
     async def send_bulk(self, interaction, members, time_str, message):
         user_id = str(interaction.user.id)
@@ -101,4 +101,5 @@ class CAPTCore:
         embed.set_footer(text=f"CAPT Core | {time_str}")
         return embed
 
+# Глобальный экземпляр
 capt_core = CAPTCore()
