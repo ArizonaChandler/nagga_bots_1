@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timedelta
 from core.database import db
 from core.utils import is_super_admin
+from core.config import CONFIG
 
 AD_TEXT_FILE = "/home/discordbot/discord-bot/ad_text.txt"
 AD_CHANNEL_FILE = "/home/discordbot/discord-bot/ad_channel.txt"

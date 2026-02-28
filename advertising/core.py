@@ -98,21 +98,41 @@ class AutoAdvertiser:
                 logger.error("Канал для рекламы не настроен")
                 return
             
-            channel = self.bot.get_channel(int(channel_id))
-            if not channel:
-                logger.error(f"Канал {channel_id} не найден")
-                return
+            # НЕ ИСПОЛЬЗУЕМ bot.get_channel() - он не видит каналы пользовательского токена
+            # Вместо этого отправляем напрямую через API, используя HTTP сессию бота
             
             ad_text = self.get_ad_text()
             
-            # Отправляем обычное сообщение (можно добавить embed если нужно)
-            await channel.send(ad_text)
+            # Получаем первый пользовательский токен из конфига
+            user_token = CONFIG.get('user_token_1')
+            if not user_token:
+                logger.error("Пользовательский токен не найден в CONFIG")
+                return
             
-            self.last_sent_time = now
-            logger.info(f"✅ Реклама отправлена в канал {channel_id}")
+            # Создаем HTTP сессию для отправки от имени пользователя
+            import aiohttp
+            
+            url = f"https://discord.com/api/v9/channels/{channel_id}/messages"
+            headers = {
+                "Authorization": user_token,
+                "Content-Type": "application/json"
+            }
+            data = {"content": ad_text}
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=data) as resp:
+                    if resp.status == 200:
+                        self.last_sent_time = now
+                        logger.info(f"✅ Реклама отправлена в канал {channel_id} (от пользовательского токена)")
+                        print(f"✅ Реклама отправлена в канал {channel_id}")
+                    else:
+                        error_text = await resp.text()
+                        logger.error(f"❌ Ошибка отправки рекламы: {resp.status} - {error_text}")
+                        print(f"❌ Ошибка отправки: {resp.status}")
             
         except Exception as e:
             logger.error(f"Ошибка отправки рекламы: {e}")
+            print(f"❌ Ошибка: {e}")
 
 advertiser = None
 
