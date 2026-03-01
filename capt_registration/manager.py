@@ -347,63 +347,83 @@ class CaptRegistrationManager:
             logger.error(f"Ошибка удаления участника: {e}")
             return False, f"❌ Ошибка: {e}"
     
-    async def move_to_main(self, user_id: str, target_user_id: str, bot):
-        """Перевести пользователя в основной список"""
-        logger.info(f"Перевод {target_user_id} в основной список от {user_id}")
+    async def move_to_main(self, user_id: str, target_reg_id: int, bot):
+        """Перевести пользователя в основной список по ID записи"""
+        logger.info(f"Перевод записи {target_reg_id} в основной список от {user_id}")
         
         try:
             with db.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Проверяем, есть ли пользователь
-                cursor.execute('SELECT list_type FROM capt_registrations WHERE user_id = ? AND is_active = 1', (target_user_id,))
+                # Получаем информацию о записи
+                cursor.execute('''
+                    SELECT user_id, user_name, list_type FROM capt_registrations 
+                    WHERE id = ? AND is_active = 1
+                ''', (target_reg_id,))
                 result = cursor.fetchone()
                 
                 if not result:
-                    return False, "❌ Пользователь не найден в списках"
+                    return False, "❌ Запись не найдена"
                 
-                if result[0] == 'main':
-                    return False, "❌ Пользователь уже в основном списке"
+                target_user_id, target_user_name, current_list = result
                 
-                # Обновляем
-                cursor.execute("UPDATE capt_registrations SET list_type = 'main' WHERE user_id = ? AND is_active = 1", (target_user_id,))
+                if current_list == 'main':
+                    return False, "❌ Эта запись уже в основном списке"
+                
+                # Переводим в основной
+                cursor.execute('''
+                    UPDATE capt_registrations 
+                    SET list_type = 'main'
+                    WHERE id = ?
+                ''', (target_reg_id,))
+                
                 conn.commit()
             
             # Обновляем embed
             await self._update_all_embeds(bot)
-            db.log_action(user_id, "CAPT_REG_TO_MAIN", f"User {target_user_id}")
+            db.log_action(user_id, "CAPT_REG_TO_MAIN", f"Registration ID {target_reg_id}")
             
             return True, f"✅ <@{target_user_id}> добавлен в основной список"
             
         except Exception as e:
             logger.error(f"Ошибка в move_to_main: {e}")
             return False, f"❌ Ошибка: {e}"
-    
-    async def move_to_reserve(self, user_id: str, target_user_id: str, bot):
-        """Перевести пользователя в резерв"""
-        logger.info(f"Перевод {target_user_id} в резерв от {user_id}")
+
+    async def move_to_reserve(self, user_id: str, target_reg_id: int, bot):
+        """Перевести пользователя в резерв по ID записи"""
+        logger.info(f"Перевод записи {target_reg_id} в резерв от {user_id}")
         
         try:
             with db.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Проверяем, есть ли пользователь
-                cursor.execute('SELECT list_type FROM capt_registrations WHERE user_id = ? AND is_active = 1', (target_user_id,))
+                # Получаем информацию о записи
+                cursor.execute('''
+                    SELECT user_id, user_name, list_type FROM capt_registrations 
+                    WHERE id = ? AND is_active = 1
+                ''', (target_reg_id,))
                 result = cursor.fetchone()
                 
                 if not result:
-                    return False, "❌ Пользователь не найден в списках"
+                    return False, "❌ Запись не найдена"
                 
-                if result[0] == 'reserve':
-                    return False, "❌ Пользователь уже в резерве"
+                target_user_id, target_user_name, current_list = result
                 
-                # Обновляем
-                cursor.execute("UPDATE capt_registrations SET list_type = 'reserve' WHERE user_id = ? AND is_active = 1", (target_user_id,))
+                if current_list == 'reserve':
+                    return False, "❌ Эта запись уже в резерве"
+                
+                # Переводим в резерв
+                cursor.execute('''
+                    UPDATE capt_registrations 
+                    SET list_type = 'reserve'
+                    WHERE id = ?
+                ''', (target_reg_id,))
+                
                 conn.commit()
             
             # Обновляем embed
             await self._update_all_embeds(bot)
-            db.log_action(user_id, "CAPT_REG_TO_RESERVE", f"User {target_user_id}")
+            db.log_action(user_id, "CAPT_REG_TO_RESERVE", f"Registration ID {target_reg_id}")
             
             return True, f"✅ <@{target_user_id}> переведён в резерв"
             
@@ -412,24 +432,26 @@ class CaptRegistrationManager:
             return False, f"❌ Ошибка: {e}"
     
     def get_lists(self):
-        """Получить текущие списки"""
+        """Получить текущие списки с ID записей"""
         with db.get_connection() as conn:
             cursor = conn.cursor()
+            # Основной список - сортируем по registered_at
             cursor.execute('''
-                SELECT user_id, user_name FROM capt_registrations 
+                SELECT id, user_id, user_name FROM capt_registrations 
                 WHERE is_active = 1 AND list_type = 'main'
                 ORDER BY registered_at
             ''')
-            main_list = cursor.fetchall()
+            main_list = cursor.fetchall()  # (id, user_id, user_name)
             
+            # Резервный список - сортируем по registered_at
             cursor.execute('''
-                SELECT user_id, user_name FROM capt_registrations 
+                SELECT id, user_id, user_name FROM capt_registrations 
                 WHERE is_active = 1 AND list_type = 'reserve'
                 ORDER BY registered_at
             ''')
-            reserve_list = cursor.fetchall()
+            reserve_list = cursor.fetchall()  # (id, user_id, user_name)
             
-            return main_list, reserve_list  # Должен возвращать два списка
+            return main_list, reserve_list
     
     def is_registration_active(self) -> bool:
         """Проверить, активна ли регистрация"""

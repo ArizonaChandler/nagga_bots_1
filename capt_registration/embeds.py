@@ -8,7 +8,7 @@ def create_registration_embed(main_list: list, reserve_list: list, capt_info: di
     # Основной список
     if main_list:
         main_lines = []
-        for i, (user_id, user_name) in enumerate(main_list, 1):
+        for i, (reg_id, user_id, user_name) in enumerate(main_list, 1):
             main_lines.append(f"❌ **{i}.** <@{user_id}> — {user_name}")
         main_text = "\n".join(main_lines)
     else:
@@ -17,7 +17,7 @@ def create_registration_embed(main_list: list, reserve_list: list, capt_info: di
     # Резервный список
     if reserve_list:
         reserve_lines = []
-        for i, (user_id, user_name) in enumerate(reserve_list, 1):
+        for i, (reg_id, user_id, user_name) in enumerate(reserve_list, 1):
             reserve_lines.append(f"⏳ **{i}.** <@{user_id}> — {user_name}")
         reserve_text = "\n".join(reserve_lines)
     else:
@@ -39,7 +39,7 @@ def create_registration_embed(main_list: list, reserve_list: list, capt_info: di
         info_text += f"👤 **Набрал:** {capt_info['started_by']}"
         
         embed.description = info_text
-        embed.add_field(name="\u200b", value="—" * 30, inline=False)  # Разделитель
+        embed.add_field(name="\u200b", value="—" * 30, inline=False)
     
     embed.add_field(
         name="❌ **ОСНОВНОЙ СОСТАВ**",
