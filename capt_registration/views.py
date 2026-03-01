@@ -464,7 +464,6 @@ class ModerationView(PermanentView):
             # Создаем множества для быстрого поиска
             main_users = {user_id for _, user_id, _ in main_list}
             reserve_users = {user_id for _, user_id, _ in reserve_list}
-            all_registered_users = main_users | reserve_users  # Объединение множеств
             
             # Собираем информацию о всех участниках в текущем войс-канале
             in_voice_from_main = []      # Из основного списка
@@ -497,14 +496,30 @@ class ModerationView(PermanentView):
                 timestamp=datetime.now()
             )
             
+            # Функция для ограничения длины текста
+            def limit_text(text, max_len=1000):
+                if len(text) > max_len:
+                    lines = text.split('\n')
+                    visible_lines = []
+                    current_len = 0
+                    for line in lines:
+                        if current_len + len(line) + 1 > max_len:
+                            remaining = len(lines) - len(visible_lines)
+                            visible_lines.append(f"... и ещё {remaining} записей")
+                            break
+                        visible_lines.append(line)
+                        current_len += len(line) + 1
+                    return '\n'.join(visible_lines)
+                return text
+            
             # Из основного списка в войсе
             if in_voice_from_main:
                 in_voice_text = ""
                 for i, (user_id, user_name) in enumerate(in_voice_from_main, 1):
                     in_voice_text += f"{i}. <@{user_id}> — {user_name}\n"
                 embed.add_field(
-                    name=f"✅ ИЗ ОСНОВНОГО СПИСКА В ВОЙСЕ ({len(in_voice_from_main)})",
-                    value=in_voice_text,
+                    name=f"✅ В ОСНОВНОМ СПИСКЕ И В ВОЙСЕ ({len(in_voice_from_main)})",
+                    value=limit_text(in_voice_text),
                     inline=False
                 )
             
@@ -514,8 +529,8 @@ class ModerationView(PermanentView):
                 for i, (user_id, user_name) in enumerate(in_voice_from_reserve, 1):
                     reserve_voice_text += f"{i}. <@{user_id}> — {user_name}\n"
                 embed.add_field(
-                    name=f"⏳ ИЗ РЕЗЕРВА В ВОЙСЕ ({len(in_voice_from_reserve)})",
-                    value=reserve_voice_text,
+                    name=f"⏳ В РЕЗЕРВЕ И В ВОЙСЕ ({len(in_voice_from_reserve)})",
+                    value=limit_text(reserve_voice_text),
                     inline=False
                 )
             
@@ -526,7 +541,7 @@ class ModerationView(PermanentView):
                     not_reg_text += f"{i}. <@{user_id}> — {user_name}\n"
                 embed.add_field(
                     name=f"⚪ В ВОЙСЕ, НО НЕ ЗАРЕГИСТРИРОВАНЫ ({len(in_voice_not_registered)})",
-                    value=not_reg_text,
+                    value=limit_text(not_reg_text),
                     inline=False
                 )
             
@@ -536,8 +551,8 @@ class ModerationView(PermanentView):
                 for i, (user_id, user_name) in enumerate(not_in_voice, 1):
                     not_in_voice_text += f"{i}. <@{user_id}> — {user_name}\n"
                 embed.add_field(
-                    name=f"❌ ИЗ ОСНОВНОГО СПИСКА НЕ В ВОЙСЕ ({len(not_in_voice)})",
-                    value=not_in_voice_text,
+                    name=f"❌ В ОСНОВНОМ СПИСКЕ, НО НЕ В ЭТОМ ВОЙСЕ ({len(not_in_voice)})",
+                    value=limit_text(not_in_voice_text),
                     inline=False
                 )
             
@@ -554,7 +569,7 @@ class ModerationView(PermanentView):
             
             embed.add_field(
                 name=f"🔊 Текущий войс-канал",
-                value=voice_info,
+                value=limit_text(voice_info, 500),
                 inline=False
             )
             
