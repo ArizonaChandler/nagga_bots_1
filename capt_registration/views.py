@@ -459,26 +459,31 @@ class ModerationView(PermanentView):
             # Получаем список участников из основного списка
             main_list, reserve_list = capt_reg_manager.get_lists()
             
-            if not main_list:
-                await interaction.followup.send(
-                    "❌ Основной список пуст",
-                    ephemeral=True
-                )
-                return
+            # Создаем множества для быстрого поиска
+            main_users = {user_id for user_id, _ in main_list}
+            reserve_users = {user_id for user_id, _ in reserve_list}
+            all_registered_users = main_users | reserve_users  # Объединение множеств
             
-            # Собираем ID всех участников в текущем войс-канале
-            users_in_voice = set()
+            # Собираем информацию о всех участниках в текущем войс-канале
+            in_voice_from_main = []  # Из основного списка
+            in_voice_from_reserve = []  # Из резерва
+            in_voice_not_registered = []  # Не зарегистрированы вообще
+            
             for member in current_voice_channel.members:
-                users_in_voice.add(str(member.id))
-            
-            # Проверяем, кто из основного списка в этом войсе
-            in_voice = []
-            not_in_voice = []
-            
-            for user_id, user_name in main_list:
-                if user_id in users_in_voice:
-                    in_voice.append((user_id, user_name))
+                user_id = str(member.id)
+                user_name = member.display_name
+                
+                if user_id in main_users:
+                    in_voice_from_main.append((user_id, user_name))
+                elif user_id in reserve_users:
+                    in_voice_from_reserve.append((user_id, user_name))
                 else:
+                    in_voice_not_registered.append((user_id, user_name))
+            
+            # Проверяем, кто из основного списка не в этом войсе
+            not_in_voice = []
+            for user_id, user_name in main_list:
+                if user_id not in {str(m.id) for m in current_voice_channel.members}:
                     not_in_voice.append((user_id, user_name))
             
             # Создаем embed с результатами
@@ -490,50 +495,53 @@ class ModerationView(PermanentView):
                 timestamp=datetime.now()
             )
             
-            # Кто в войсе
-            if in_voice:
+            # Из основного списка в войсе
+            if in_voice_from_main:
                 in_voice_text = ""
-                for i, (user_id, user_name) in enumerate(in_voice, 1):
+                for i, (user_id, user_name) in enumerate(in_voice_from_main, 1):
                     in_voice_text += f"{i}. <@{user_id}> — {user_name}\n"
                 embed.add_field(
-                    name=f"✅ В ВОЙСЕ ({len(in_voice)})",
+                    name=f"✅ ИЗ ОСНОВНОГО СПИСКА В ВОЙСЕ ({len(in_voice_from_main)})",
                     value=in_voice_text,
                     inline=False
                 )
-            else:
+            
+            # Из резерва в войсе
+            if in_voice_from_reserve:
+                reserve_voice_text = ""
+                for i, (user_id, user_name) in enumerate(in_voice_from_reserve, 1):
+                    reserve_voice_text += f"{i}. <@{user_id}> — {user_name}\n"
                 embed.add_field(
-                    name="✅ В ВОЙСЕ",
-                    value="Никого из основного списка нет в этом войсе",
+                    name=f"⏳ ИЗ РЕЗЕРВА В ВОЙСЕ ({len(in_voice_from_reserve)})",
+                    value=reserve_voice_text,
                     inline=False
                 )
             
-            # Кто не в войсе
+            # Не зарегистрированные в войсе
+            if in_voice_not_registered:
+                not_reg_text = ""
+                for i, (user_id, user_name) in enumerate(in_voice_not_registered, 1):
+                    not_reg_text += f"{i}. <@{user_id}> — {user_name}\n"
+                embed.add_field(
+                    name=f"⚪ В ВОЙСЕ, НО НЕ ЗАРЕГИСТРИРОВАНЫ ({len(in_voice_not_registered)})",
+                    value=not_reg_text,
+                    inline=False
+                )
+            
+            # Из основного списка не в войсе
             if not_in_voice:
                 not_in_voice_text = ""
                 for i, (user_id, user_name) in enumerate(not_in_voice, 1):
                     not_in_voice_text += f"{i}. <@{user_id}> — {user_name}\n"
                 embed.add_field(
-                    name=f"❌ НЕ В ЭТОМ ВОЙСЕ ({len(not_in_voice)})",
+                    name=f"❌ ИЗ ОСНОВНОГО СПИСКА НЕ В ВОЙСЕ ({len(not_in_voice)})",
                     value=not_in_voice_text,
                     inline=False
                 )
             
-            # Информация о текущем войс-канале
-            member_mentions = []
-            for member in current_voice_channel.members[:5]:  # Показываем первых 5
-                member_mentions.append(member.mention)
-            
-            voice_info = f"👥 **Участников в канале:** {len(current_voice_channel.members)}"
-            if member_mentions:
-                voice_info += f"\n{', '.join(member_mentions)}"
-                if len(current_voice_channel.members) > 5:
-                    voice_info += f" и ещё {len(current_voice_channel.members) - 5}"
-            
-            embed.add_field(
-                name=f"🔊 Текущий войс-канал",
-                value=voice_info,
-                inline=False
-            )
+            # Если вообще никого нет
+            if not in_voice_from_main and not in_voice_from_reserve and not in_voice_not_registered and not not_in_voice:
+                embed.description += "\n\nВ этом войс-канале никого нет, а основной список пуст."
             
             embed.set_footer(text=f"Всего в основном списке: {len(main_list)} • Проверка по войсу: {interaction.user.display_name}")
             
