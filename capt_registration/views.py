@@ -316,19 +316,30 @@ class ModerationView(PermanentView):
             return
         
         try:
+            # Сначала отвечаем, чтобы не было ошибки взаимодействия
+            await interaction.response.send_message(
+                "🧹 Завершение регистрации и очистка чата...",
+                ephemeral=True
+            )
+            
+            # Затем выполняем очистку
             await capt_reg_manager.end_registration(str(interaction.user.id), interaction.client)
             
             # Деактивируем кнопки после завершения
             self.update_buttons(registration_active=False)
             await interaction.message.edit(view=self)
             
-            await interaction.response.send_message(
-                "✅ Регистрация завершена! Все списки очищены.",
-                ephemeral=True
+            # Редактируем наше эфемерное сообщение
+            await interaction.edit_original_response(
+                content="✅ Регистрация завершена! Чат очищен."
             )
+            
         except Exception as e:
             logger.error(f"Ошибка при завершении регистрации: {e}", exc_info=True)
-            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+            try:
+                await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
+            except:
+                pass
     
     @discord.ui.button(
         label="➕ ДОБАВИТЬ В ОСНОВНОЙ", 

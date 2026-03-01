@@ -1,4 +1,5 @@
 """Менеджер регистрации на CAPT"""
+import asyncio
 import discord
 import logging
 from datetime import datetime
@@ -280,7 +281,7 @@ class CaptRegistrationManager:
         # Обновляем embed в обоих каналах (пустые списки)
         await self._update_all_embeds(bot, clear=True)
         
-        # ОЧИСТКА ЧАТА МОДЕРАЦИИ
+        # Очищаем чат модерации
         await self._clean_moderation_chat(bot)
         
         db.log_action(user_id, "CAPT_REG_END")
@@ -540,26 +541,15 @@ class CaptRegistrationManager:
                 if message.id == main_message_id:
                     continue
                 
-                # Пропускаем сообщения от других ботов/пользователей, если хотим
-                # Сейчас удаляем всё, кроме основного
-                
+                # Удаляем всё остальное
                 try:
                     await message.delete()
                     deleted_count += 1
-                    await asyncio.sleep(0.5)  # Небольшая задержка чтобы не забанили
+                    await asyncio.sleep(0.5)  # asyncio уже импортирован
                 except Exception as e:
                     logger.error(f"Ошибка удаления сообщения {message.id}: {e}")
             
             logger.info(f"✅ Очистка завершена. Удалено сообщений: {deleted_count}")
-            
-            # Отправляем уведомление о завершении
-            embed = discord.Embed(
-                title="🧹 Чат очищен",
-                description=f"Регистрация завершена. Все лишние сообщения удалены.",
-                color=0x00ff00
-            )
-            await channel.send(embed=embed)
-            
         except Exception as e:
             logger.error(f"Ошибка при очистке чата модерации: {e}", exc_info=True)
 
