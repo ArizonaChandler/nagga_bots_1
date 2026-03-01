@@ -13,7 +13,8 @@ def split_list_into_fields(name_prefix: str, items: list, emoji: str, max_length
     start_index = 1
     
     for i, (reg_id, user_id, user_name) in enumerate(items, 1):
-        line = f"{emoji} <@{user_id}>\n"
+        # Короткая версия с номером и тегом
+        line = f"`{i:02d}` <@{user_id}>\n"
         
         if len(current_text) + len(line) > max_length:
             field_name = f"{emoji} **{name_prefix}** (часть {len(fields) + 1})"
@@ -33,22 +34,22 @@ def split_list_into_fields(name_prefix: str, items: list, emoji: str, max_length
     return fields
 
 def create_registration_embed(main_list: list, reserve_list: list, capt_info: dict = None) -> discord.Embed:
-    """Создать минималистичный embed с тегами участников"""
+    """Создать embed с тегами и номерами участников"""
     
-    # Основной список - в столбик
+    # Основной список - с номерами
     if main_list:
         main_lines = []
-        for _, user_id, _ in main_list:
-            main_lines.append(f"<@{user_id}>")
+        for i, (_, user_id, _) in enumerate(main_list, 1):
+            main_lines.append(f"`{i:02d}` <@{user_id}>")
         main_text = "\n".join(main_lines)
     else:
         main_text = "*Список пуст*"
     
-    # Резервный список - в столбик
+    # Резервный список - с номерами
     if reserve_list:
         reserve_lines = []
-        for _, user_id, _ in reserve_list:
-            reserve_lines.append(f"<@{user_id}>")
+        for i, (_, user_id, _) in enumerate(reserve_list, 1):
+            reserve_lines.append(f"`{i:02d}` <@{user_id}>")
         reserve_text = "\n".join(reserve_lines)
     else:
         reserve_text = "*Список пуст*"
@@ -69,7 +70,6 @@ def create_registration_embed(main_list: list, reserve_list: list, capt_info: di
     
     # Проверяем длину основного списка
     if len(main_text) > 1000:
-        # Если слишком длинный, разбиваем на несколько полей
         main_fields = split_list_into_fields("ОСНОВНОЙ", main_list, "❌")
         for name, value in main_fields:
             embed.add_field(name=name, value=value, inline=False)
@@ -82,7 +82,6 @@ def create_registration_embed(main_list: list, reserve_list: list, capt_info: di
     
     # Проверяем длину резервного списка
     if len(reserve_text) > 1000:
-        # Если слишком длинный, разбиваем на несколько полей
         reserve_fields = split_list_into_fields("РЕЗЕРВ", reserve_list, "⏳")
         for name, value in reserve_fields:
             embed.add_field(name=name, value=value, inline=False)
