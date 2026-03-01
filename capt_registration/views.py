@@ -2,6 +2,7 @@
 import discord
 import logging
 import re
+from datetime import datetime
 from capt_registration.base import PermanentView
 from core.utils import has_access
 from capt_registration.manager import capt_reg_manager
@@ -459,90 +460,132 @@ class ModerationView(PermanentView):
             )
             return
         
+        # Отвечаем сразу, чтобы не было ошибки взаимодействия
         await interaction.response.defer(ephemeral=True)
         
-        # Получаем список участников из основного списка
-        main_list, reserve_list = capt_reg_manager.get_lists()
-        
-        if not main_list:
+        try:
+            # Получаем список участников из основного списка
+            main_list, reserve_list = capt_reg_manager.get_lists()
+            
+            if not main_list:
+                await interaction.followup.send(
+                    "❌ Основной список пуст",
+                    ephemeral=True
+                )
+                return
+            
+            # Получаем сервер
+            guild = interaction.guild
+            if not guild:
+                server_id = CONFIG.get('server_id')
+                if server_id:
+                    guild = interaction.client.get_guild(int(server_id))
+                else:
+                    await interaction.followup.send(
+                        "❌ Не удалось определить сервер",
+                        ephemeral=True
+                    )
+                    return
+            
+            # Собираем всех участников в войсах
+            users_in_voice = set()
+            voice_channels_info = []
+            
+            for vc in guild.voice_channels:
+                members_in_vc = vc.members
+                if members_in_vc:
+                    # Формируем информацию о канале
+                    member_mentions = []
+                    for member in members_in_vc[:3]:  # Показываем только первых 3
+                        member_mentions.append(member.mention)
+                    
+                    channel_info = f"🔊 **{vc.name}** ({len(members_in_vc)} чел.)"
+                    if member_mentions:
+                        channel_info += f"\n   {', '.join(member_mentions)}"
+                        if len(members_in_vc) > 3:
+                            channel_info += f" и ещё {len(members_in_vc) - 3}"
+                    
+                    voice_channels_info.append(channel_info)
+                    
+                    for member in members_in_vc:
+                        users_in_voice.add(str(member.id))
+            
+            # Проверяем, кто из основного списка в войсе
+            in_voice = []
+            not_in_voice = []
+            
+            for user_id, user_name in main_list:
+                if user_id in users_in_voice:
+                    in_voice.append((user_id, user_name))
+                else:
+                    not_in_voice.append((user_id, user_name))
+            
+            # Создаем embed с результатами
+            from datetime import datetime
+            embed = discord.Embed(
+                title="🎤 ПРОВЕРКА ПО ВОЙСУ",
+                color=0x00ff00,
+                timestamp=datetime.now()
+            )
+            
+            # Кто в войсе
+            if in_voice:
+                in_voice_text = ""
+                for i, (user_id, user_name) in enumerate(in_voice, 1):
+                    in_voice_text += f"{i}. <@{user_id}> — {user_name}\n"
+                embed.add_field(
+                    name=f"✅ В ВОЙСЕ ({len(in_voice)})",
+                    value=in_voice_text,
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name="✅ В ВОЙСЕ",
+                    value="Никого нет в войсе",
+                    inline=False
+                )
+            
+            # Кто не в войсе
+            if not_in_voice:
+                not_in_voice_text = ""
+                for i, (user_id, user_name) in enumerate(not_in_voice, 1):
+                    not_in_voice_text += f"{i}. <@{user_id}> — {user_name}\n"
+                embed.add_field(
+                    name=f"❌ НЕ В ВОЙСЕ ({len(not_in_voice)})",
+                    value=not_in_voice_text,
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name="❌ НЕ В ВОЙСЕ",
+                    value="Все в войсе!",
+                    inline=False
+                )
+            
+            # Информация о войс-каналах
+            if voice_channels_info:
+                embed.add_field(
+                    name="🔊 Активные войс-каналы",
+                    value="\n".join(voice_channels_info[:5]),
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name="🔊 Активные войс-каналы",
+                    value="Нет активных войс-каналов",
+                    inline=False
+                )
+            
+            embed.set_footer(text=f"Всего в основном списке: {len(main_list)}")
+            
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            
+        except Exception as e:
+            logger.error(f"Ошибка при проверке по войсу: {e}", exc_info=True)
             await interaction.followup.send(
-                "❌ Основной список пуст",
+                f"❌ Ошибка при проверке: {e}",
                 ephemeral=True
             )
-            return
-        
-        # Получаем все голосовые каналы на сервере
-        guild = interaction.guild
-        if not guild:
-            guild = interaction.client.get_guild(int(CONFIG['server_id']))
-        
-        # Собираем всех участников в войсах
-        users_in_voice = set()
-        voice_channels_info = []
-        
-        for vc in guild.voice_channels:
-            members_in_vc = vc.members
-            if members_in_vc:
-                voice_channels_info.append(f"🔊 {vc.name}: {len(members_in_vc)} чел.")
-                for member in members_in_vc:
-                    users_in_voice.add(str(member.id))
-        
-        # Проверяем, кто из основного списка в войсе
-        in_voice = []
-        not_in_voice = []
-        
-        for user_id, user_name in main_list:
-            if user_id in users_in_voice:
-                in_voice.append((user_id, user_name))
-            else:
-                not_in_voice.append((user_id, user_name))
-        
-        # Создаем embed с результатами
-        embed = discord.Embed(
-            title="🎤 ПРОВЕРКА ПО ВОЙСУ",
-            color=0x00ff00,
-            timestamp=datetime.now()
-        )
-        
-        # Кто в войсе
-        if in_voice:
-            in_voice_text = ""
-            for i, (user_id, user_name) in enumerate(in_voice, 1):
-                in_voice_text += f"{i}. <@{user_id}> — {user_name}\n"
-            embed.add_field(
-                name=f"✅ В ВОЙСЕ ({len(in_voice)})",
-                value=in_voice_text,
-                inline=False
-            )
-        else:
-            embed.add_field(
-                name="✅ В ВОЙСЕ",
-                value="Никого нет в войсе",
-                inline=False
-            )
-        
-        # Кто не в войсе
-        if not_in_voice:
-            not_in_voice_text = ""
-            for i, (user_id, user_name) in enumerate(not_in_voice, 1):
-                not_in_voice_text += f"{i}. <@{user_id}> — {user_name}\n"
-            embed.add_field(
-                name=f"❌ НЕ В ВОЙСЕ ({len(not_in_voice)})",
-                value=not_in_voice_text,
-                inline=False
-            )
-        
-        # Информация о войс-каналах
-        if voice_channels_info:
-            embed.add_field(
-                name="🔊 Активные войс-каналы",
-                value="\n".join(voice_channels_info[:5]),
-                inline=False
-            )
-        
-        embed.set_footer(text=f"Всего в основном списке: {len(main_list)}")
-        
-        await interaction.followup.send(embed=embed, ephemeral=True)
 
 
 # ===== ЧАТ ДЛЯ ВСЕХ =====

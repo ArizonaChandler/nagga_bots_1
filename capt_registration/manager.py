@@ -429,7 +429,7 @@ class CaptRegistrationManager:
             ''')
             reserve_list = cursor.fetchall()
             
-            return main_list, reserve_list
+            return main_list, reserve_list  # Должен возвращать два списка
     
     def is_registration_active(self) -> bool:
         """Проверить, активна ли регистрация"""
