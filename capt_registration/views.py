@@ -264,7 +264,7 @@ class CaptRegSendModal(discord.ui.Modal, title="🚨 ОТПРАВКА CAPT"):
 # ===== ЧАТ МОДЕРАЦИИ (ДЛЯ АДМИНОВ) =====
 
 class ModerationView(PermanentView):
-    """View для чата модерации - кнопки управления"""
+    """View для чата модерации - кнопки управления (доступны всем в чате)"""
     
     def __init__(self):
         super().__init__()
@@ -291,13 +291,10 @@ class ModerationView(PermanentView):
         custom_id="capt_reg_start"
     )
     async def start_registration(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Начать регистрацию (для всех с доступом)"""
+        """Начать регистрацию (доступно всем в чате)"""
         logger.info(f"Нажата кнопка 'Начать регистрацию' от {interaction.user}")
         
-        if not await has_access(str(interaction.user.id)):
-            await interaction.response.send_message("❌ У вас нет доступа к боту", ephemeral=True)
-            return
-        
+        # УБРАНА ПРОВЕРКА has_access
         await interaction.response.send_modal(StartRegistrationModal())
     
     @discord.ui.button(
@@ -309,12 +306,10 @@ class ModerationView(PermanentView):
         custom_id="capt_reg_end"
     )
     async def end_registration(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Завершить регистрацию (очистить всё)"""
+        """Завершить регистрацию (доступно всем в чате)"""
         logger.info(f"Нажата кнопка 'Завершить регистрацию' от {interaction.user}")
         
-        if not await has_access(str(interaction.user.id)):
-            await interaction.response.send_message("❌ У вас нет доступа к боту", ephemeral=True)
-            return
+        # УБРАНА ПРОВЕРКА has_access
         
         try:
             # Сначала отвечаем, чтобы не было ошибки взаимодействия
@@ -351,13 +346,10 @@ class ModerationView(PermanentView):
         custom_id="capt_reg_add_main"
     )
     async def add_to_main(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Добавить пользователя в основной список"""
+        """Добавить пользователя в основной список (доступно всем в чате)"""
         logger.info(f"Нажата кнопка 'Добавить в основной' от {interaction.user}")
         
-        if not await has_access(str(interaction.user.id)):
-            await interaction.response.send_message("❌ У вас нет доступа к боту", ephemeral=True)
-            return
-        
+        # УБРАНА ПРОВЕРКА has_access
         await interaction.response.send_modal(MoveToMainModal())
     
     @discord.ui.button(
@@ -369,13 +361,10 @@ class ModerationView(PermanentView):
         custom_id="capt_reg_move_reserve"
     )
     async def move_to_reserve(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Перевести пользователя в резерв"""
+        """Перевести пользователя в резерв (доступно всем в чате)"""
         logger.info(f"Нажата кнопка 'Перевести в резерв' от {interaction.user}")
         
-        if not await has_access(str(interaction.user.id)):
-            await interaction.response.send_message("❌ У вас нет доступа к боту", ephemeral=True)
-            return
-        
+        # УБРАНА ПРОВЕРКА has_access
         await interaction.response.send_modal(MoveToReserveModal())
     
     @discord.ui.button(
@@ -387,12 +376,10 @@ class ModerationView(PermanentView):
         custom_id="capt_reg_send"
     )
     async def send_capt(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Отправить CAPT участникам"""
+        """Отправить CAPT участникам (доступно всем в чате)"""
         logger.info(f"Нажата кнопка 'Рассылка в ЛС' от {interaction.user}")
         
-        if not await has_access(str(interaction.user.id)):
-            await interaction.response.send_message("❌ У вас нет доступа к боту", ephemeral=True)
-            return
+        # УБРАНА ПРОВЕРКА has_access
         
         # Проверяем, активна ли регистрация
         if not capt_reg_manager.active_session or not capt_reg_manager.capt_info:
@@ -413,12 +400,10 @@ class ModerationView(PermanentView):
         custom_id="capt_reg_reeveryone"
     )
     async def resend_everyone(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Повторно отправить @everyone оповещение"""
+        """Повторно отправить @everyone оповещение (доступно всем в чате)"""
         logger.info(f"Нажата кнопка 'Повторный @everyone' от {interaction.user}")
         
-        if not await has_access(str(interaction.user.id)):
-            await interaction.response.send_message("❌ У вас нет доступа к боту", ephemeral=True)
-            return
+        # УБРАНА ПРОВЕРКА has_access
         
         # Проверяем, активна ли регистрация
         if not capt_reg_manager.active_session or not capt_reg_manager.capt_info:
@@ -445,12 +430,10 @@ class ModerationView(PermanentView):
         custom_id="capt_reg_voicecheck"
     )
     async def voice_check(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Проверить участников основного списка в войсе"""
+        """Проверить участников основного списка в войсе (доступно всем в чате)"""
         logger.info(f"Нажата кнопка 'Проверка по войсу' от {interaction.user}")
         
-        if not await has_access(str(interaction.user.id)):
-            await interaction.response.send_message("❌ У вас нет доступа к боту", ephemeral=True)
-            return
+        # УБРАНА ПРОВЕРКА has_access
         
         # Проверяем, активна ли регистрация
         if not capt_reg_manager.active_session:
@@ -496,7 +479,7 @@ class ModerationView(PermanentView):
                 if members_in_vc:
                     # Формируем информацию о канале
                     member_mentions = []
-                    for member in members_in_vc[:3]:  # Показываем только первых 3
+                    for member in members_in_vc[:3]:
                         member_mentions.append(member.mention)
                     
                     channel_info = f"🔊 **{vc.name}** ({len(members_in_vc)} чел.)"
@@ -586,7 +569,6 @@ class ModerationView(PermanentView):
                 f"❌ Ошибка при проверке: {e}",
                 ephemeral=True
             )
-
 
 # ===== ЧАТ ДЛЯ ВСЕХ =====
 
