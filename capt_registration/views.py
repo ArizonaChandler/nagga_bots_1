@@ -430,10 +430,8 @@ class ModerationView(PermanentView):
         custom_id="capt_reg_voicecheck"
     )
     async def voice_check(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Проверить участников основного списка в войсе (доступно всем в чате)"""
+        """Проверить участников основного списка в текущем войс-канале"""
         logger.info(f"Нажата кнопка 'Проверка по войсу' от {interaction.user}")
-        
-        # УБРАНА ПРОВЕРКА has_access
         
         # Проверяем, активна ли регистрация
         if not capt_reg_manager.active_session:
@@ -442,6 +440,17 @@ class ModerationView(PermanentView):
                 ephemeral=True
             )
             return
+        
+        # Проверяем, находится ли пользователь в войс-канале
+        if not interaction.user.voice or not interaction.user.voice.channel:
+            await interaction.response.send_message(
+                "❌ Ты должен находиться в голосовом канале, чтобы использовать эту кнопку",
+                ephemeral=True
+            )
+            return
+        
+        # Получаем войс-канал, в котором находится пользователь
+        current_voice_channel = interaction.user.voice.channel
         
         # Отвечаем сразу, чтобы не было ошибки взаимодействия
         await interaction.response.defer(ephemeral=True)
@@ -457,43 +466,12 @@ class ModerationView(PermanentView):
                 )
                 return
             
-            # Получаем сервер
-            guild = interaction.guild
-            if not guild:
-                server_id = CONFIG.get('server_id')
-                if server_id:
-                    guild = interaction.client.get_guild(int(server_id))
-                else:
-                    await interaction.followup.send(
-                        "❌ Не удалось определить сервер",
-                        ephemeral=True
-                    )
-                    return
-            
-            # Собираем всех участников в войсах
+            # Собираем ID всех участников в текущем войс-канале
             users_in_voice = set()
-            voice_channels_info = []
+            for member in current_voice_channel.members:
+                users_in_voice.add(str(member.id))
             
-            for vc in guild.voice_channels:
-                members_in_vc = vc.members
-                if members_in_vc:
-                    # Формируем информацию о канале
-                    member_mentions = []
-                    for member in members_in_vc[:3]:
-                        member_mentions.append(member.mention)
-                    
-                    channel_info = f"🔊 **{vc.name}** ({len(members_in_vc)} чел.)"
-                    if member_mentions:
-                        channel_info += f"\n   {', '.join(member_mentions)}"
-                        if len(members_in_vc) > 3:
-                            channel_info += f" и ещё {len(members_in_vc) - 3}"
-                    
-                    voice_channels_info.append(channel_info)
-                    
-                    for member in members_in_vc:
-                        users_in_voice.add(str(member.id))
-            
-            # Проверяем, кто из основного списка в войсе
+            # Проверяем, кто из основного списка в этом войсе
             in_voice = []
             not_in_voice = []
             
@@ -507,6 +485,7 @@ class ModerationView(PermanentView):
             from datetime import datetime
             embed = discord.Embed(
                 title="🎤 ПРОВЕРКА ПО ВОЙСУ",
+                description=f"Проверка в канале: **{current_voice_channel.name}**",
                 color=0x00ff00,
                 timestamp=datetime.now()
             )
@@ -524,7 +503,7 @@ class ModerationView(PermanentView):
             else:
                 embed.add_field(
                     name="✅ В ВОЙСЕ",
-                    value="Никого нет в войсе",
+                    value="Никого из основного списка нет в этом войсе",
                     inline=False
                 )
             
@@ -534,32 +513,29 @@ class ModerationView(PermanentView):
                 for i, (user_id, user_name) in enumerate(not_in_voice, 1):
                     not_in_voice_text += f"{i}. <@{user_id}> — {user_name}\n"
                 embed.add_field(
-                    name=f"❌ НЕ В ВОЙСЕ ({len(not_in_voice)})",
+                    name=f"❌ НЕ В ЭТОМ ВОЙСЕ ({len(not_in_voice)})",
                     value=not_in_voice_text,
                     inline=False
                 )
-            else:
-                embed.add_field(
-                    name="❌ НЕ В ВОЙСЕ",
-                    value="Все в войсе!",
-                    inline=False
-                )
             
-            # Информация о войс-каналах
-            if voice_channels_info:
-                embed.add_field(
-                    name="🔊 Активные войс-каналы",
-                    value="\n".join(voice_channels_info[:5]),
-                    inline=False
-                )
-            else:
-                embed.add_field(
-                    name="🔊 Активные войс-каналы",
-                    value="Нет активных войс-каналов",
-                    inline=False
-                )
+            # Информация о текущем войс-канале
+            member_mentions = []
+            for member in current_voice_channel.members[:5]:  # Показываем первых 5
+                member_mentions.append(member.mention)
             
-            embed.set_footer(text=f"Всего в основном списке: {len(main_list)}")
+            voice_info = f"👥 **Участников в канале:** {len(current_voice_channel.members)}"
+            if member_mentions:
+                voice_info += f"\n{', '.join(member_mentions)}"
+                if len(current_voice_channel.members) > 5:
+                    voice_info += f" и ещё {len(current_voice_channel.members) - 5}"
+            
+            embed.add_field(
+                name=f"🔊 Текущий войс-канал",
+                value=voice_info,
+                inline=False
+            )
+            
+            embed.set_footer(text=f"Всего в основном списке: {len(main_list)} • Проверка по войсу: {interaction.user.display_name}")
             
             await interaction.followup.send(embed=embed, ephemeral=True)
             
