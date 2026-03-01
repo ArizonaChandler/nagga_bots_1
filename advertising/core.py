@@ -87,13 +87,14 @@ class AutoAdvertiser:
     
     async def notify_admin(self, message):
         """Отправить уведомление супер-админу в ЛС"""
-        if self.super_admin_id:
+        """if self.super_admin_id:
             try:
                 user = await self.bot.fetch_user(int(self.super_admin_id))
                 if user:
                     await user.send(f"📢 [AutoAd] {message}")
             except:
-                pass
+                pass"""
+        pass
     
     async def _run(self):
         while self.running:

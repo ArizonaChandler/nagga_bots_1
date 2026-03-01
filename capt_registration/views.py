@@ -391,6 +391,147 @@ class ModerationView(PermanentView):
             return
         
         await interaction.response.send_modal(CaptRegSendModal(capt_reg_manager.capt_info))
+    
+    @discord.ui.button(
+        label="🔄 ПОВТОРНЫЙ @EVERYONE", 
+        style=discord.ButtonStyle.primary,
+        emoji="🔄",
+        row=3,
+        disabled=True,
+        custom_id="capt_reg_reeveryone"
+    )
+    async def resend_everyone(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Повторно отправить @everyone оповещение"""
+        logger.info(f"Нажата кнопка 'Повторный @everyone' от {interaction.user}")
+        
+        if not await has_access(str(interaction.user.id)):
+            await interaction.response.send_message("❌ У вас нет доступа к боту", ephemeral=True)
+            return
+        
+        # Проверяем, активна ли регистрация
+        if not capt_reg_manager.active_session or not capt_reg_manager.capt_info:
+            await interaction.response.send_message(
+                "❌ Нет активной регистрации",
+                ephemeral=True
+            )
+            return
+        
+        # Отправляем повторное оповещение
+        await capt_reg_manager._send_capt_announcement(interaction.client)
+        
+        await interaction.response.send_message(
+            "✅ Повторное @everyone оповещение отправлено!",
+            ephemeral=True
+        )
+    
+    @discord.ui.button(
+        label="🎤 ПРОВЕРКА ПО ВОЙСУ", 
+        style=discord.ButtonStyle.success,
+        emoji="🎤",
+        row=3,
+        disabled=True,
+        custom_id="capt_reg_voicecheck"
+    )
+    async def voice_check(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Проверить участников основного списка в войсе"""
+        logger.info(f"Нажата кнопка 'Проверка по войсу' от {interaction.user}")
+        
+        if not await has_access(str(interaction.user.id)):
+            await interaction.response.send_message("❌ У вас нет доступа к боту", ephemeral=True)
+            return
+        
+        # Проверяем, активна ли регистрация
+        if not capt_reg_manager.active_session:
+            await interaction.response.send_message(
+                "❌ Нет активной регистрации",
+                ephemeral=True
+            )
+            return
+        
+        await interaction.response.defer(ephemeral=True)
+        
+        # Получаем список участников из основного списка
+        main_list, reserve_list = capt_reg_manager.get_lists()
+        
+        if not main_list:
+            await interaction.followup.send(
+                "❌ Основной список пуст",
+                ephemeral=True
+            )
+            return
+        
+        # Получаем все голосовые каналы на сервере
+        guild = interaction.guild
+        if not guild:
+            guild = interaction.client.get_guild(int(CONFIG['server_id']))
+        
+        # Собираем всех участников в войсах
+        users_in_voice = set()
+        voice_channels_info = []
+        
+        for vc in guild.voice_channels:
+            members_in_vc = vc.members
+            if members_in_vc:
+                voice_channels_info.append(f"🔊 {vc.name}: {len(members_in_vc)} чел.")
+                for member in members_in_vc:
+                    users_in_voice.add(str(member.id))
+        
+        # Проверяем, кто из основного списка в войсе
+        in_voice = []
+        not_in_voice = []
+        
+        for user_id, user_name in main_list:
+            if user_id in users_in_voice:
+                in_voice.append((user_id, user_name))
+            else:
+                not_in_voice.append((user_id, user_name))
+        
+        # Создаем embed с результатами
+        embed = discord.Embed(
+            title="🎤 ПРОВЕРКА ПО ВОЙСУ",
+            color=0x00ff00,
+            timestamp=datetime.now()
+        )
+        
+        # Кто в войсе
+        if in_voice:
+            in_voice_text = ""
+            for i, (user_id, user_name) in enumerate(in_voice, 1):
+                in_voice_text += f"{i}. <@{user_id}> — {user_name}\n"
+            embed.add_field(
+                name=f"✅ В ВОЙСЕ ({len(in_voice)})",
+                value=in_voice_text,
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="✅ В ВОЙСЕ",
+                value="Никого нет в войсе",
+                inline=False
+            )
+        
+        # Кто не в войсе
+        if not_in_voice:
+            not_in_voice_text = ""
+            for i, (user_id, user_name) in enumerate(not_in_voice, 1):
+                not_in_voice_text += f"{i}. <@{user_id}> — {user_name}\n"
+            embed.add_field(
+                name=f"❌ НЕ В ВОЙСЕ ({len(not_in_voice)})",
+                value=not_in_voice_text,
+                inline=False
+            )
+        
+        # Информация о войс-каналах
+        if voice_channels_info:
+            embed.add_field(
+                name="🔊 Активные войс-каналы",
+                value="\n".join(voice_channels_info[:5]),
+                inline=False
+            )
+        
+        embed.set_footer(text=f"Всего в основном списке: {len(main_list)}")
+        
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
 
 # ===== ЧАТ ДЛЯ ВСЕХ =====
