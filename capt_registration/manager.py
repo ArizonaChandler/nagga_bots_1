@@ -87,6 +87,41 @@ class CaptRegistrationManager:
             await self._clean_old_messages(main_channel)
             await self._clean_old_messages(reserve_channel)
             
+            # ===== НОВЫЙ КОД: ПРОВЕРЯЕМ АКТИВНУЮ СЕССИЮ В БД =====
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT id, started_by, started_at, main_message_id, reserve_message_id
+                    FROM capt_sessions 
+                    WHERE is_active = 1 
+                    ORDER BY started_at DESC LIMIT 1
+                ''')
+                active_session = cursor.fetchone()
+                
+                if active_session:
+                    session_id, started_by, started_at, main_msg_id, reserve_msg_id = active_session
+                    self.active_session = session_id
+                    
+                    # Загружаем информацию о CAPT (можно расширить позже)
+                    self.capt_info = {
+                        'enemy': "Восстановлено",
+                        'teleport_time': "из сессии",
+                        'additional_info': "Нет",
+                        'started_by': f"<@{started_by}>",
+                        'started_by_name': "Организатор"
+                    }
+                    
+                    # Восстанавливаем ID сообщений
+                    self.main_message_id = main_msg_id
+                    self.reserve_message_id = reserve_msg_id
+                    
+                    logger.info(f"✅ Восстановлена активная сессия ID: {session_id}")
+                else:
+                    self.active_session = None
+                    self.capt_info = None
+                    logger.info("ℹ️ Нет активной сессии")
+            # ===== КОНЕЦ НОВОГО КОДА =====
+            
             # Получаем текущие списки
             from capt_registration.embeds import create_registration_embed
             from capt_registration.views import ModerationView, PublicView
@@ -94,14 +129,23 @@ class CaptRegistrationManager:
             main_list, reserve_list = self.get_lists()
             embed = create_registration_embed(main_list, reserve_list, self.capt_info)
             
-            # Отправляем новые сообщения
-            main_msg = await main_channel.send(embed=embed, view=ModerationView())
-            reserve_msg = await reserve_channel.send(embed=embed, view=PublicView())
+            # Определяем, активна ли регистрация
+            registration_active = self.active_session is not None
+            
+            # Отправляем новые сообщения с правильным состоянием кнопок
+            moderation_view = ModerationView()
+            moderation_view.update_buttons(registration_active)
+            
+            public_view = PublicView()
+            public_view.set_registration_active(registration_active)
+            
+            main_msg = await main_channel.send(embed=embed, view=moderation_view)
+            reserve_msg = await reserve_channel.send(embed=embed, view=public_view)
             
             self.main_message_id = str(main_msg.id)
             self.reserve_message_id = str(reserve_msg.id)
             
-            # Если есть активная сессия, обновляем ID сообщений
+            # Обновляем ID сообщений в сессии если она активна
             if self.active_session:
                 with db.get_connection() as conn:
                     cursor = conn.cursor()
@@ -113,6 +157,7 @@ class CaptRegistrationManager:
                     conn.commit()
             
             logger.info(f"✅ Постоянные кнопки отправлены: main_msg={main_msg.id}, reserve_msg={reserve_msg.id}")
+            logger.info(f"📊 Статус регистрации: {'АКТИВНА' if registration_active else 'НЕАКТИВНА'}")
             return True
             
         except Exception as e:
@@ -429,6 +474,36 @@ class CaptRegistrationManager:
             
         except Exception as e:
             logger.error(f"Ошибка в move_to_reserve: {e}")
+            return False, f"❌ Ошибка: {e}"
+
+    async def move_all_to_main(self, user_id: str, bot):
+        """Переместить всех из резерва в основной список"""
+        logger.info(f"Перемещение всех в основной список от {user_id}")
+        
+        try:
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Получаем количество затронутых записей
+                cursor.execute('''
+                    UPDATE capt_registrations 
+                    SET list_type = 'main'
+                    WHERE is_active = 1 AND list_type = 'reserve'
+                ''')
+                moved_count = cursor.rowcount
+                conn.commit()
+            
+            if moved_count > 0:
+                # Обновляем embed
+                await self._update_all_embeds(bot)
+                db.log_action(user_id, "CAPT_REG_MOVE_ALL", f"Перемещено: {moved_count}")
+                logger.info(f"✅ Перемещено в основной: {moved_count}")
+                return True, f"✅ {moved_count} участников перемещено в основной список"
+            else:
+                return False, "❌ В резерве нет участников для перемещения"
+            
+        except Exception as e:
+            logger.error(f"Ошибка при перемещении всех: {e}")
             return False, f"❌ Ошибка: {e}"
     
     def get_lists(self):

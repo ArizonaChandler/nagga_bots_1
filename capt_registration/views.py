@@ -368,6 +368,52 @@ class ModerationView(PermanentView):
         await interaction.response.send_modal(MoveToReserveModal())
     
     @discord.ui.button(
+        label="⬆️⬆️ ВСЕХ В ОСНОВНОЙ", 
+        style=discord.ButtonStyle.success,
+        emoji="⬆️⬆️",
+        row=2,
+        disabled=True,
+        custom_id="capt_reg_move_all"
+    )
+    async def move_all_to_main(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Переместить всех из резерва в основной список"""
+        logger.info(f"Нажата кнопка 'Всех в основной' от {interaction.user}")
+        
+        # Проверяем, активна ли регистрация
+        if not capt_reg_manager.active_session:
+            await interaction.response.send_message(
+                "❌ Нет активной регистрации",
+                ephemeral=True
+            )
+            return
+        
+        # Спрашиваем подтверждение
+        await interaction.response.send_message(
+            "⚠️ Ты уверен, что хочешь переместить **ВСЕХ** из резерва в основной список?",
+            view=ConfirmMoveAllView(),
+            ephemeral=True
+        )
+
+
+    class ConfirmMoveAllView(discord.ui.View):
+        """Подтверждение перемещения всех участников"""
+        
+        def __init__(self):
+            super().__init__(timeout=30)
+        
+        @discord.ui.button(label="✅ Да, переместить всех", style=discord.ButtonStyle.success)
+        async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+            success, msg = await capt_reg_manager.move_all_to_main(
+                str(interaction.user.id),
+                interaction.client
+            )
+            await interaction.response.edit_message(content=msg, view=None)
+        
+        @discord.ui.button(label="❌ Отмена", style=discord.ButtonStyle.secondary)
+        async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await interaction.response.edit_message(content="❌ Отменено", view=None)
+
+    @discord.ui.button(
         label="📨 РАССЫЛКА В ЛС", 
         style=discord.ButtonStyle.danger,
         emoji="📨",
