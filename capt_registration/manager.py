@@ -280,6 +280,9 @@ class CaptRegistrationManager:
         # Обновляем embed в обоих каналах (пустые списки)
         await self._update_all_embeds(bot, clear=True)
         
+        # ОЧИСТКА ЧАТА МОДЕРАЦИИ
+        await self._clean_moderation_chat(bot)
+        
         db.log_action(user_id, "CAPT_REG_END")
         logger.info("✅ Регистрация завершена")
         return True
@@ -513,6 +516,52 @@ class CaptRegistrationManager:
                 logger.debug(f"Embed обновлён в канале {channel_id}")
         except Exception as e:
             logger.error(f"Ошибка обновления embed в {channel_id}: {e}")
+
+    async def _clean_moderation_chat(self, bot):
+        """Очистить чат модерации от всех сообщений кроме основного embed с кнопками"""
+        if not self.main_channel_id or not self.main_message_id:
+            return
+        
+        try:
+            channel = bot.get_channel(int(self.main_channel_id))
+            if not channel:
+                logger.error(f"❌ Канал модерации {self.main_channel_id} не найден")
+                return
+            
+            logger.info(f"🧹 Очистка чата модерации #{channel.name} от лишних сообщений...")
+            
+            # Сохраняем ID основного сообщения, которое нужно оставить
+            main_message_id = int(self.main_message_id)
+            deleted_count = 0
+            
+            # Перебираем историю сообщений
+            async for message in channel.history(limit=100):
+                # Пропускаем основное сообщение с кнопками
+                if message.id == main_message_id:
+                    continue
+                
+                # Пропускаем сообщения от других ботов/пользователей, если хотим
+                # Сейчас удаляем всё, кроме основного
+                
+                try:
+                    await message.delete()
+                    deleted_count += 1
+                    await asyncio.sleep(0.5)  # Небольшая задержка чтобы не забанили
+                except Exception as e:
+                    logger.error(f"Ошибка удаления сообщения {message.id}: {e}")
+            
+            logger.info(f"✅ Очистка завершена. Удалено сообщений: {deleted_count}")
+            
+            # Отправляем уведомление о завершении
+            embed = discord.Embed(
+                title="🧹 Чат очищен",
+                description=f"Регистрация завершена. Все лишние сообщения удалены.",
+                color=0x00ff00
+            )
+            await channel.send(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"Ошибка при очистке чата модерации: {e}", exc_info=True)
 
 # Глобальный экземпляр
 capt_reg_manager = CaptRegistrationManager()
