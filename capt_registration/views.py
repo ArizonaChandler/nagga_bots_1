@@ -368,9 +368,9 @@ class ModerationView(PermanentView):
         await interaction.response.send_modal(MoveToReserveModal())
     
     @discord.ui.button(
-        label="⬆️⬆️ ВСЕХ В ОСНОВНОЙ", 
+        label="ВСЕХ В ОСНОВНОЙ", 
         style=discord.ButtonStyle.success,
-        emoji="⬆️⬆️",
+        emoji="⏫",  # Заменили на один эмодзи
         row=2,
         disabled=True,
         custom_id="capt_reg_move_all"
