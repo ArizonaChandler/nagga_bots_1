@@ -2,26 +2,43 @@
 import discord
 from datetime import datetime
 
+def split_list_into_fields(name_prefix: str, items: list, emoji: str, max_length: int = 1000):
+    """Разбить длинный список на несколько полей"""
+    fields = []
+    
+    if not items:
+        return [(f"{emoji} **{name_prefix}**", "*Список пуст*")]
+    
+    current_text = ""
+    current_count = 0
+    start_index = 1
+    
+    for i, (reg_id, user_id, user_name) in enumerate(items, 1):
+        line = f"{emoji} **{i}.** <@{user_id}> — {user_name}\n"
+        
+        if len(current_text) + len(line) > max_length:
+            # Добавляем текущее поле
+            field_name = f"{emoji} **{name_prefix}** (часть {len(fields) + 1})"
+            fields.append((field_name, current_text))
+            
+            # Начинаем новое поле
+            current_text = line
+            start_index = i
+        else:
+            current_text += line
+    
+    # Добавляем последнее поле
+    if current_text:
+        if len(fields) == 0:
+            field_name = f"{emoji} **{name_prefix}** ({len(items)})"
+        else:
+            field_name = f"{emoji} **{name_prefix}** (часть {len(fields) + 1}, {len(items)})"
+        fields.append((field_name, current_text))
+    
+    return fields
+
 def create_registration_embed(main_list: list, reserve_list: list, capt_info: dict = None) -> discord.Embed:
     """Создать embed с основным и резервным списками и информацией о CAPT"""
-    
-    # Основной список
-    if main_list:
-        main_lines = []
-        for i, (reg_id, user_id, user_name) in enumerate(main_list, 1):
-            main_lines.append(f"❌ **{i}.** <@{user_id}> — {user_name}")
-        main_text = "\n".join(main_lines)
-    else:
-        main_text = "*Список пуст*"
-    
-    # Резервный список
-    if reserve_list:
-        reserve_lines = []
-        for i, (reg_id, user_id, user_name) in enumerate(reserve_list, 1):
-            reserve_lines.append(f"⏳ **{i}.** <@{user_id}> — {user_name}")
-        reserve_text = "\n".join(reserve_lines)
-    else:
-        reserve_text = "*Список пуст*"
     
     # Создаём embed
     embed = discord.Embed(
@@ -41,17 +58,15 @@ def create_registration_embed(main_list: list, reserve_list: list, capt_info: di
         embed.description = info_text
         embed.add_field(name="\u200b", value="—" * 30, inline=False)
     
-    embed.add_field(
-        name="❌ **ОСНОВНОЙ СОСТАВ**",
-        value=main_text,
-        inline=False
-    )
+    # Разбиваем основной список на поля
+    main_fields = split_list_into_fields("ОСНОВНОЙ СОСТАВ", main_list, "❌")
+    for name, value in main_fields:
+        embed.add_field(name=name, value=value, inline=False)
     
-    embed.add_field(
-        name="⏳ **РЕЗЕРВ**",
-        value=reserve_text,
-        inline=False
-    )
+    # Разбиваем резервный список на поля
+    reserve_fields = split_list_into_fields("РЕЗЕРВ", reserve_list, "⏳")
+    for name, value in reserve_fields:
+        embed.add_field(name=name, value=value, inline=False)
     
     # Подсчёт участников для футера
     total = len(main_list) + len(reserve_list)
