@@ -55,10 +55,54 @@ class AdSettingsView(PermanentView):
         await interaction.response.send_modal(SetAdChannelModal())
     
     @discord.ui.button(
+        label="🚀 ЗАПУСТИТЬ СЕЙЧАС", 
+        style=discord.ButtonStyle.success,
+        emoji="🚀",
+        row=2,
+        custom_id="ad_settings_send"
+    )
+    async def send_ad_now(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Отправить рекламу сейчас"""
+        logger.info(f"Нажата кнопка 'Запустить сейчас' от {interaction.user}")
+        
+        await interaction.response.defer(ephemeral=True)
+        
+        try:
+            from advertising.core import advertiser
+            
+            if not advertiser:
+                await interaction.followup.send("❌ Ошибка: рекламная система не инициализирована", ephemeral=True)
+                return
+            
+            # Проверяем наличие настроек
+            channel_id = None
+            try:
+                with open(AD_CHANNEL_FILE, 'r', encoding='utf-8') as f:
+                    channel_id = f.read().strip()
+            except:
+                pass
+            
+            if not channel_id:
+                await interaction.followup.send(
+                    "❌ Сначала настройте канал для отправки рекламы!", 
+                    ephemeral=True
+                )
+                return
+            
+            await interaction.followup.send("🔄 Отправка рекламы...", ephemeral=True)
+            
+            from datetime import datetime
+            await advertiser.send_ad(datetime.now())
+            
+        except Exception as e:
+            logger.error(f"Ошибка при запуске рекламы: {e}", exc_info=True)
+            await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
+    
+    @discord.ui.button(
         label="📊 Текущие настройки", 
         style=discord.ButtonStyle.secondary,
         emoji="📊",
-        row=2,
+        row=3,
         custom_id="ad_settings_show"
     )
     async def show_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
