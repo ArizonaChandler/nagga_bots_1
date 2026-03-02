@@ -48,7 +48,7 @@ class AutoAdvertiser:
     
     async def start(self):
         logger.info("📢 Auto Advertiser запущен")
-        await self.initialize_settings_channel(self.bot
+        await self.initialize_settings_channel(self.bot)
         self.task = asyncio.create_task(self._run())
     
     async def stop(self):
