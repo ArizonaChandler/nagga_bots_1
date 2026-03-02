@@ -306,8 +306,17 @@ class GlobalSettingsView(BaseMenuView):
         alarm_btn.callback = alarm_cb
         self.add_item(alarm_btn)
         
-        # ===== РЯД 3: СВОБОДНО (МЕСТО ДЛЯ БУДУЩИХ СИСТЕМ) =====
-        # КНОПКИ CAPT УБРАНЫ - ОНИ ТЕПЕРЬ ТОЛЬКО В НОВОМ РАЗДЕЛЕ
+        # ⚙️ Канал настроек CAPT
+        capt_settings_channel_btn = discord.ui.Button(
+            label="⚙️ Канал настроек CAPT",
+            style=discord.ButtonStyle.secondary,
+            emoji="⚙️",
+            row=3
+        )
+        async def capt_settings_channel_cb(i):
+            await i.response.send_modal(SetCaptSettingsChannelModal(self.guild))
+        capt_settings_channel_btn.callback = capt_settings_channel_cb
+        self.add_item(capt_settings_channel_btn)
         
         # ===== РЯД 4: НАЗАД =====
         

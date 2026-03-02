@@ -65,8 +65,33 @@ class CaptRegistrationManager:
         """Инициализация постоянных кнопок при старте бота"""
         logger.info("🔄 Инициализация постоянных кнопок CAPT регистрации")
         
+        # ===== 1. ИНИЦИАЛИЗАЦИЯ КАНАЛА НАСТРОЕК =====
+        settings_channel_id = CONFIG.get('capt_settings_channel')
+        if settings_channel_id:
+            try:
+                settings_channel = bot.get_channel(int(settings_channel_id))
+                if settings_channel:
+                    from capt_registration.settings_view import CaptSettingsView
+                    
+                    # Очищаем старые сообщения бота в канале настроек
+                    async for msg in settings_channel.history(limit=20):
+                        if msg.author == bot.user:
+                            await msg.delete()
+                    
+                    # Отправляем новое сообщение с кнопками настроек
+                    embed = discord.Embed(
+                        title="⚙️ **ПАНЕЛЬ УПРАВЛЕНИЯ CAPT**",
+                        description="Настройка всех параметров системы регистрации на CAPT",
+                        color=0xff0000
+                    )
+                    await settings_channel.send(embed=embed, view=CaptSettingsView())
+                    logger.info(f"✅ Канал настроек CAPT инициализирован: #{settings_channel.name}")
+            except Exception as e:
+                logger.error(f"❌ Ошибка инициализации канала настроек: {e}")
+        
+        # ===== 2. ПРОВЕРКА НАЛИЧИЯ ОСНОВНЫХ КАНАЛОВ =====
         if not self.main_channel_id or not self.reserve_channel_id:
-            logger.warning("❌ Каналы не настроены, пропускаем инициализацию")
+            logger.warning("❌ Каналы регистрации не настроены, пропускаем инициализацию")
             return False
         
         try:
@@ -83,11 +108,11 @@ class CaptRegistrationManager:
             
             logger.info(f"✅ Каналы найдены: #{main_channel.name} и #{reserve_channel.name}")
             
-            # Очищаем старые сообщения бота
+            # Очищаем старые сообщения бота в обоих каналах
             await self._clean_old_messages(main_channel)
             await self._clean_old_messages(reserve_channel)
             
-            # ===== НОВЫЙ КОД: ПРОВЕРЯЕМ АКТИВНУЮ СЕССИЮ В БД =====
+            # ===== 3. ПРОВЕРКА АКТИВНОЙ СЕССИИ В БД =====
             with db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
@@ -120,9 +145,8 @@ class CaptRegistrationManager:
                     self.active_session = None
                     self.capt_info = None
                     logger.info("ℹ️ Нет активной сессии")
-            # ===== КОНЕЦ НОВОГО КОДА =====
             
-            # Получаем текущие списки
+            # ===== 4. ПОЛУЧАЕМ ТЕКУЩИЕ СПИСКИ =====
             from capt_registration.embeds import create_registration_embed
             from capt_registration.views import ModerationView, PublicView
             
@@ -132,20 +156,21 @@ class CaptRegistrationManager:
             # Определяем, активна ли регистрация
             registration_active = self.active_session is not None
             
-            # Отправляем новые сообщения с правильным состоянием кнопок
+            # ===== 5. СОЗДАЕМ VIEW С ПРАВИЛЬНЫМ СОСТОЯНИЕМ КНОПОК =====
             moderation_view = ModerationView()
             moderation_view.update_buttons(registration_active)
             
             public_view = PublicView()
             public_view.set_registration_active(registration_active)
             
+            # ===== 6. ОТПРАВЛЯЕМ НОВЫЕ СООБЩЕНИЯ =====
             main_msg = await main_channel.send(embed=embed, view=moderation_view)
             reserve_msg = await reserve_channel.send(embed=embed, view=public_view)
             
             self.main_message_id = str(main_msg.id)
             self.reserve_message_id = str(reserve_msg.id)
             
-            # Обновляем ID сообщений в сессии если она активна
+            # ===== 7. ОБНОВЛЯЕМ ID СООБЩЕНИЙ В СЕССИИ =====
             if self.active_session:
                 with db.get_connection() as conn:
                     cursor = conn.cursor()
