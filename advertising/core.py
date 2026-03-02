@@ -48,6 +48,7 @@ class AutoAdvertiser:
     
     async def start(self):
         logger.info("📢 Auto Advertiser запущен")
+        await self.initialize_settings_channel(self.bot
         self.task = asyncio.create_task(self._run())
     
     async def stop(self):
@@ -221,6 +222,37 @@ class AutoAdvertiser:
             logger.error(error_msg)
             print(f"❌ {error_msg}")
             await self.notify_admin(f"❌ Ошибка: {e}")
+        
+    async def initialize_settings_channel(self, bot):
+        """Инициализация канала настроек авто-рекламы"""
+        settings_channel_id = CONFIG.get('ad_settings_channel')
+        if not settings_channel_id:
+            return
+        
+        try:
+            channel = bot.get_channel(int(settings_channel_id))
+            if not channel:
+                logger.error(f"❌ Канал настроек авто-рекламы {settings_channel_id} не найден")
+                return
+            
+            from advertising.settings_view import AdSettingsView
+            
+            # Очищаем старые сообщения бота
+            async for msg in channel.history(limit=20):
+                if msg.author == bot.user:
+                    await msg.delete()
+            
+            # Отправляем новое сообщение с кнопками
+            embed = discord.Embed(
+                title="📢 **ПАНЕЛЬ УПРАВЛЕНИЯ АВТО-РЕКЛАМОЙ**",
+                description="Настройка параметров автоматической рекламы",
+                color=0x00ff00
+            )
+            await channel.send(embed=embed, view=AdSettingsView())
+            logger.info(f"✅ Канал настроек авто-рекламы инициализирован: #{channel.name}")
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка инициализации канала настроек: {e}")
 
 advertiser = None
 

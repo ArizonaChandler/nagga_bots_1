@@ -277,6 +277,18 @@ class GlobalSettingsView(BaseMenuView):
             await i.response.send_modal(SetCaptSettingsChannelModal(self.guild))
         capt_settings_channel_btn.callback = capt_settings_channel_cb
         self.add_item(capt_settings_channel_btn)
+
+        # 📢 Канал настроек авто-рекламы
+        ad_settings_channel_btn = discord.ui.Button(
+            label="📢 Канал настроек авто-рекламы",
+            style=discord.ButtonStyle.secondary,
+            emoji="📢",
+            row=4
+        )
+        async def ad_settings_channel_cb(i):
+            await i.response.send_modal(SetAdSettingsChannelModal(self.guild))
+        ad_settings_channel_btn.callback = ad_settings_channel_cb
+        self.add_item(ad_settings_channel_btn)
         
         # ===== РЯД 4: НАЗАД =====
         

@@ -10,7 +10,7 @@ from admin.modals import (
     SetAlarmChannelModal, SetAnnounceChannelModal, AddEventModal, EditEventModal, TakeEventModal,
     SetAlarmChannelsModal, SetAnnounceChannelsModal, SetReminderRolesModal, SetAnnounceRolesModal,
     SetCaptAlertChannelModal, SetCaptRoleModal, SetCaptRegChannelsModal,
-    SetCaptSettingsChannelModal
+    SetCaptSettingsChannelModal, SetAdSettingsChannelModal
 )
 
 __all__ = [
@@ -30,5 +30,5 @@ __all__ = [
     
     # Modals - система CAPT
     'SetCaptAlertChannelModal', 'SetCaptRoleModal', 'SetCaptRegChannelsModal',
-    'SetCaptSettingsChannelModal'
+    'SetCaptSettingsChannelModal', 'SetAdSettingsChannelModal'
 ]
