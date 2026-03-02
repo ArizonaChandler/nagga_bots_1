@@ -256,32 +256,14 @@ class GlobalSettingsView(BaseMenuView):
         capt_role_btn.callback = capt_role_cb
         self.add_item(capt_role_btn)
         
-        # ⚙️ Канал настроек CAPT
-        capt_settings_channel_btn = discord.ui.Button(
-            label="⚙️ Канал настроек CAPT",
-            style=discord.ButtonStyle.secondary,
-            emoji="⚙️",
-            row=4
-        )
-        async def capt_settings_channel_cb(i):
-            await i.response.send_modal(SetCaptSettingsChannelModal(self.guild))
-        capt_settings_channel_btn.callback = capt_settings_channel_cb
-        self.add_item(capt_settings_channel_btn)
+        # ⚙️ Канал настроек CAPT - ВРЕМЕННО УБИРАЕМ
+        # capt_settings_channel_btn = discord.ui.Button(...)
         
-        # 📢 Канал настроек авто-рекламы
-        ad_settings_channel_btn = discord.ui.Button(
-            label="📢 Канал настроек авто-рекламы",
-            style=discord.ButtonStyle.secondary,
-            emoji="📢",
-            row=4
-        )
-        async def ad_settings_channel_cb(i):
-            await i.response.send_modal(SetAdSettingsChannelModal(self.guild))
-        ad_settings_channel_btn.callback = ad_settings_channel_cb
-        self.add_item(ad_settings_channel_btn)
+        # 📢 Канал настроек авто-рекламы - ВРЕМЕННО УБИРАЕМ
+        # ad_settings_channel_btn = discord.ui.Button(...)
         
-        # РЯД 5: НАЗАД
-        self.add_back_button(row=5)
+        # РЯД 4: НАЗАД
+        self.add_back_button(row=4)
     
     async def get_current_embed(self):
         server_name = await get_server_name(self.guild, CONFIG.get('server_id'))

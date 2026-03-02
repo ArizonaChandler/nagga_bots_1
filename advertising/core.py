@@ -237,24 +237,25 @@ class AutoAdvertiser:
             
             from advertising.settings_view import AdSettingsView
             
-            # УДАЛЯЕМ ВСЕ старые сообщения бота в канале настроек
-            logger.info(f"🧹 Очистка старых сообщений в канале настроек авто-рекламы: #{channel.name}")
-            deleted_count = 0
-            async for msg in channel.history(limit=50):
-                if msg.author == bot.user:
-                    await msg.delete()
-                    deleted_count += 1
-                    await asyncio.sleep(0.5)  # Небольшая задержка чтобы не забанили
-            logger.info(f"✅ Удалено {deleted_count} старых сообщений")
+            # Ищем существующее сообщение с настройками авто-рекламы
+            ad_message_exists = False
+            async for msg in channel.history(limit=20):
+                if msg.author == bot.user and msg.embeds and "ПАНЕЛЬ УПРАВЛЕНИЯ АВТО-РЕКЛАМОЙ" in msg.embeds[0].title:
+                    ad_message_exists = True
+                    # Обновляем view у существующего сообщения
+                    await msg.edit(view=AdSettingsView())
+                    logger.info(f"✅ Обновлено существующее сообщение авто-рекламы в #{channel.name}")
+                    break
             
-            # Отправляем НОВОЕ сообщение с актуальными кнопками
-            embed = discord.Embed(
-                title="📢 **ПАНЕЛЬ УПРАВЛЕНИЯ АВТО-РЕКЛАМОЙ**",
-                description="Настройка параметров автоматической рекламы",
-                color=0x00ff00
-            )
-            await channel.send(embed=embed, view=AdSettingsView())
-            logger.info(f"✅ Новое сообщение с настройками авто-рекламы отправлено в #{channel.name}")
+            if not ad_message_exists:
+                # Отправляем новое сообщение
+                embed = discord.Embed(
+                    title="📢 **ПАНЕЛЬ УПРАВЛЕНИЯ АВТО-РЕКЛАМОЙ**",
+                    description="Настройка параметров автоматической рекламы",
+                    color=0x00ff00
+                )
+                await channel.send(embed=embed, view=AdSettingsView())
+                logger.info(f"✅ Новое сообщение авто-рекламы отправлено в #{channel.name}")
             
         except Exception as e:
             logger.error(f"❌ Ошибка инициализации канала настроек: {e}")
