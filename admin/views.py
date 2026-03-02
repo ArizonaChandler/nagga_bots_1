@@ -222,45 +222,28 @@ class GlobalSettingsView(BaseMenuView):
         alarm_btn.callback = alarm_cb
         self.add_item(alarm_btn)
         
-        # РЯД 3: НАСТРОЙКИ КАНАЛОВ CAPT
-        capt_channels_btn = discord.ui.Button(
-            label="🎯 Каналы CAPT",
-            style=discord.ButtonStyle.danger,
-            emoji="🎯",
+        # РЯД 3: НАСТРОЙКИ КАНАЛОВ УПРАВЛЕНИЯ
+        capt_settings_channel_btn = discord.ui.Button(
+            label="⚙️ Канал настроек CAPT",
+            style=discord.ButtonStyle.secondary,
+            emoji="⚙️",
             row=3
         )
-        async def capt_channels_cb(i):
-            await i.response.send_modal(SetCaptRegChannelsModal(self.guild))
-        capt_channels_btn.callback = capt_channels_cb
-        self.add_item(capt_channels_btn)
+        async def capt_settings_channel_cb(i):
+            await i.response.send_modal(SetCaptSettingsChannelModal(self.guild))
+        capt_settings_channel_btn.callback = capt_settings_channel_cb
+        self.add_item(capt_settings_channel_btn)
         
-        capt_alert_btn = discord.ui.Button(
-            label="📢 Канал @everyone",
-            style=discord.ButtonStyle.danger,
+        ad_settings_channel_btn = discord.ui.Button(
+            label="📢 Канал настроек авто-рекламы",
+            style=discord.ButtonStyle.secondary,
             emoji="📢",
             row=3
         )
-        async def capt_alert_cb(i):
-            await i.response.send_modal(SetCaptAlertChannelModal(self.guild))
-        capt_alert_btn.callback = capt_alert_cb
-        self.add_item(capt_alert_btn)
-        
-        capt_role_btn = discord.ui.Button(
-            label="🎭 Роль для ЛС",
-            style=discord.ButtonStyle.danger,
-            emoji="🎭",
-            row=3
-        )
-        async def capt_role_cb(i):
-            await i.response.send_modal(SetCaptRoleModal(self.guild))
-        capt_role_btn.callback = capt_role_cb
-        self.add_item(capt_role_btn)
-        
-        # ⚙️ Канал настроек CAPT - ВРЕМЕННО УБИРАЕМ
-        # capt_settings_channel_btn = discord.ui.Button(...)
-        
-        # 📢 Канал настроек авто-рекламы - ВРЕМЕННО УБИРАЕМ
-        # ad_settings_channel_btn = discord.ui.Button(...)
+        async def ad_settings_channel_cb(i):
+            await i.response.send_modal(SetAdSettingsChannelModal(self.guild))
+        ad_settings_channel_btn.callback = ad_settings_channel_cb
+        self.add_item(ad_settings_channel_btn)
         
         # РЯД 4: НАЗАД
         self.add_back_button(row=4)
@@ -290,63 +273,36 @@ class GlobalSettingsView(BaseMenuView):
             inline=True
         )
         
-        embed.set_footer(text="Выберите раздел для настройки")
+        # Статус CAPT системы (только информация, без кнопок)
+        capt_main = CONFIG.get('capt_reg_main_channel')
+        capt_reserve = CONFIG.get('capt_reg_reserve_channel')
+        capt_alert = CONFIG.get('capt_alert_channel')
+        capt_role = CONFIG.get('capt_role_id')
+        
+        capt_status = []
+        if capt_main and capt_reserve:
+            capt_status.append("✅ Каналы CAPT")
+        else:
+            capt_status.append("❌ Каналы CAPT")
+            
+        if capt_alert:
+            capt_status.append("✅ @everyone")
+        else:
+            capt_status.append("❌ @everyone")
+            
+        if capt_role:
+            capt_status.append("✅ Роль")
+        else:
+            capt_status.append("❌ Роль")
+        
+        embed.add_field(
+            name="🎯 CAPT система",
+            value=" • ".join(capt_status),
+            inline=True
+        )
+        
+        embed.set_footer(text="Настройки CAPT и авто-рекламы в отдельных каналах")
         return embed
-
-
-class AccessView(BaseMenuView):
-    def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
-        super().__init__(user_id, guild, previous_view, previous_embed)
-        
-        add_btn = discord.ui.Button(label="➕ Добавить пользователя", style=discord.ButtonStyle.success)
-        async def add_cb(i):
-            await i.response.send_modal(AddUserModal())
-        add_btn.callback = add_cb
-        self.add_item(add_btn)
-        
-        remove_btn = discord.ui.Button(label="➖ Удалить пользователя", style=discord.ButtonStyle.danger)
-        async def remove_cb(i):
-            await i.response.send_modal(RemoveUserModal())
-        remove_btn.callback = remove_cb
-        self.add_item(remove_btn)
-        
-        list_btn = discord.ui.Button(label="📋 Список пользователей", style=discord.ButtonStyle.secondary)
-        async def list_cb(i):
-            users = db.get_users_with_details()
-            embed = discord.Embed(
-                title="📋 **ПОЛЬЗОВАТЕЛИ С ДОСТУПОМ**",
-                color=0x7289da,
-                timestamp=datetime.now()
-            )
-            
-            if users:
-                lines = []
-                for uid, username, added_by, added_at, last_used, is_admin, is_super in users[:25]:
-                    mention = format_mention(self.guild, uid, 'user')
-                    if is_super:
-                        icon = "👑👑"
-                        role = "**Супер-админ**"
-                    elif is_admin:
-                        icon = "👑"
-                        role = "Админ"
-                    else:
-                        icon = "👤"
-                        role = "Пользователь"
-                    lines.append(f"{icon} {mention} • {role}")
-                
-                embed.description = "\n".join(lines)
-                total = len(users)
-                admins_count = sum(1 for u in users if u[5])
-                supers_count = sum(1 for u in users if u[6])
-                embed.set_footer(text=f"Всего: {total} • Админов: {admins_count} • Супер-админов: {supers_count}")
-            else:
-                embed.description = "❌ Нет пользователей с доступом"
-            
-            await i.response.edit_message(embed=embed, view=self)
-        list_btn.callback = list_cb
-        self.add_item(list_btn)
-        
-        self.add_back_button()
 
 
 class AdminView(BaseMenuView):
