@@ -121,6 +121,20 @@ async def on_ready():
         name="!info | v1.3"
     ))
     
+    # ВРЕМЕННАЯ ПРОВЕРКА
+    print(f"🔍 capt_settings_channel: {CONFIG.get('capt_settings_channel')}")
+    print(f"🔍 ad_settings_channel: {CONFIG.get('ad_settings_channel')}")
+    
+    # Инициализация постоянных кнопок CAPT регистрации
+    try:
+        from capt_registration.manager import capt_reg_manager
+        print("🔄 Инициализация CAPT регистрации...")
+        await capt_reg_manager.initialize_buttons(bot)
+    except Exception as e:
+        print(f"❌ Ошибка инициализации CAPT регистрации: {e}")
+        import traceback
+        traceback.print_exc()
+
     print("="*60 + "\n")
 
 @bot.event

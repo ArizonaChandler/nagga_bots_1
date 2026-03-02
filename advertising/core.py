@@ -225,30 +225,41 @@ class AutoAdvertiser:
         
     async def initialize_settings_channel(self, bot):
         """Инициализация канала настроек авто-рекламы"""
+        logger.info("🔍 Начинаем инициализацию канала настроек авто-рекламы")
+        
         settings_channel_id = CONFIG.get('ad_settings_channel')
+        logger.info(f"📢 ad_settings_channel из CONFIG: {settings_channel_id}")
+        
         if not settings_channel_id:
+            logger.warning("❌ ad_settings_channel не настроен в CONFIG")
             return
         
         try:
             channel = bot.get_channel(int(settings_channel_id))
+            logger.info(f"📢 Получен канал: {channel}")
+            
             if not channel:
                 logger.error(f"❌ Канал настроек авто-рекламы {settings_channel_id} не найден")
                 return
             
-            from advertising.settings_view import AdSettingsView
+            logger.info(f"✅ Канал найден: #{channel.name} (ID: {channel.id})")
             
-            # Ищем существующее сообщение с настройками авто-рекламы
+            from advertising.settings_view import AdSettingsView
+            logger.info("✅ AdSettingsView импортирован")
+            
+            # Ищем существующее сообщение
             ad_message_exists = False
             async for msg in channel.history(limit=20):
-                if msg.author == bot.user and msg.embeds and "ПАНЕЛЬ УПРАВЛЕНИЯ АВТО-РЕКЛАМОЙ" in msg.embeds[0].title:
-                    ad_message_exists = True
-                    # Обновляем view у существующего сообщения
-                    await msg.edit(view=AdSettingsView())
-                    logger.info(f"✅ Обновлено существующее сообщение авто-рекламы в #{channel.name}")
-                    break
+                if msg.author == bot.user and msg.embeds:
+                    logger.info(f"📝 Найдено сообщение бота: {msg.id}, embed title: {msg.embeds[0].title if msg.embeds else 'нет'}")
+                    if msg.embeds and "ПАНЕЛЬ УПРАВЛЕНИЯ АВТО-РЕКЛАМОЙ" in msg.embeds[0].title:
+                        ad_message_exists = True
+                        await msg.edit(view=AdSettingsView())
+                        logger.info(f"✅ Обновлено существующее сообщение авто-рекламы в #{channel.name}")
+                        break
             
             if not ad_message_exists:
-                # Отправляем новое сообщение
+                logger.info("📝 Существующих сообщений не найдено, создаем новое")
                 embed = discord.Embed(
                     title="📢 **ПАНЕЛЬ УПРАВЛЕНИЯ АВТО-РЕКЛАМОЙ**",
                     description="Настройка параметров автоматической рекламы",
@@ -258,7 +269,7 @@ class AutoAdvertiser:
                 logger.info(f"✅ Новое сообщение авто-рекламы отправлено в #{channel.name}")
             
         except Exception as e:
-            logger.error(f"❌ Ошибка инициализации канала настроек: {e}")
+            logger.error(f"❌ Ошибка инициализации канала настроек: {e}", exc_info=True)
 
 advertiser = None
 
