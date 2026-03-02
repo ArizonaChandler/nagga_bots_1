@@ -135,6 +135,19 @@ async def on_ready():
         import traceback
         traceback.print_exc()
 
+    # Инициализация канала настроек авто-рекламы
+    try:
+        from advertising.core import advertiser
+        print("🔄 Инициализация канала авто-рекламы...")
+        if advertiser:
+            await advertiser.initialize_settings_channel(bot)
+        else:
+            print("❌ advertiser не инициализирован")
+    except Exception as e:
+        print(f"❌ Ошибка инициализации авто-рекламы: {e}")
+        import traceback
+        traceback.print_exc()
+
     print("="*60 + "\n")
 
 @bot.event

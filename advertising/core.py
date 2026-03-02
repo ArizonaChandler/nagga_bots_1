@@ -225,51 +225,93 @@ class AutoAdvertiser:
         
     async def initialize_settings_channel(self, bot):
         """Инициализация канала настроек авто-рекламы"""
-        logger.info("🔍 Начинаем инициализацию канала настроек авто-рекламы")
+        logger.info("="*50)
+        logger.info("🔍 НАЧАЛО ИНИЦИАЛИЗАЦИИ КАНАЛА АВТО-РЕКЛАМЫ")
         
         settings_channel_id = CONFIG.get('ad_settings_channel')
         logger.info(f"📢 ad_settings_channel из CONFIG: {settings_channel_id}")
         
         if not settings_channel_id:
             logger.warning("❌ ad_settings_channel не настроен в CONFIG")
-            return
+            return False
         
         try:
+            # Пробуем получить канал разными способами
             channel = bot.get_channel(int(settings_channel_id))
-            logger.info(f"📢 Получен канал: {channel}")
+            logger.info(f"📢 get_channel результат: {channel}")
+            
+            if not channel:
+                # Пробуем через fetch
+                try:
+                    channel = await bot.fetch_channel(int(settings_channel_id))
+                    logger.info(f"📢 fetch_channel результат: {channel}")
+                except Exception as fetch_error:
+                    logger.error(f"❌ fetch_channel тоже не нашел: {fetch_error}")
             
             if not channel:
                 logger.error(f"❌ Канал настроек авто-рекламы {settings_channel_id} не найден")
-                return
+                return False
             
             logger.info(f"✅ Канал найден: #{channel.name} (ID: {channel.id})")
             
-            from advertising.settings_view import AdSettingsView
-            logger.info("✅ AdSettingsView импортирован")
+            # Импортируем view
+            try:
+                from advertising.settings_view import AdSettingsView
+                logger.info("✅ AdSettingsView успешно импортирован")
+            except ImportError as e:
+                logger.error(f"❌ Ошибка импорта AdSettingsView: {e}")
+                return False
+            
+            # Проверяем права бота в канале
+            permissions = channel.permissions_for(channel.guild.me)
+            logger.info(f"📢 Права бота в канале: send_messages={permissions.send_messages}, embed_links={permissions.embed_links}")
+            
+            if not permissions.send_messages:
+                logger.error("❌ Бот не имеет прав на отправку сообщений в этом канале")
+                return False
             
             # Ищем существующее сообщение
             ad_message_exists = False
+            message_count = 0
+            
             async for msg in channel.history(limit=20):
-                if msg.author == bot.user and msg.embeds:
-                    logger.info(f"📝 Найдено сообщение бота: {msg.id}, embed title: {msg.embeds[0].title if msg.embeds else 'нет'}")
-                    if msg.embeds and "ПАНЕЛЬ УПРАВЛЕНИЯ АВТО-РЕКЛАМОЙ" in msg.embeds[0].title:
-                        ad_message_exists = True
-                        await msg.edit(view=AdSettingsView())
-                        logger.info(f"✅ Обновлено существующее сообщение авто-рекламы в #{channel.name}")
-                        break
+                message_count += 1
+                if msg.author == bot.user:
+                    logger.info(f"📝 Найдено сообщение бота: ID={msg.id}")
+                    if msg.embeds:
+                        logger.info(f"   Embed title: {msg.embeds[0].title}")
+                        if "ПАНЕЛЬ УПРАВЛЕНИЯ АВТО-РЕКЛАМОЙ" in msg.embeds[0].title:
+                            ad_message_exists = True
+                            await msg.edit(view=AdSettingsView())
+                            logger.info(f"✅ Обновлено существующее сообщение авто-рекламы")
+                            break
+                    else:
+                        logger.info("   Сообщение без embed")
+            
+            logger.info(f"📊 Проверено сообщений: {message_count}")
             
             if not ad_message_exists:
-                logger.info("📝 Существующих сообщений не найдено, создаем новое")
+                logger.info("📝 Создаем новое сообщение с настройками авто-рекламы")
+                
                 embed = discord.Embed(
                     title="📢 **ПАНЕЛЬ УПРАВЛЕНИЯ АВТО-РЕКЛАМОЙ**",
                     description="Настройка параметров автоматической рекламы",
                     color=0x00ff00
                 )
-                await channel.send(embed=embed, view=AdSettingsView())
-                logger.info(f"✅ Новое сообщение авто-рекламы отправлено в #{channel.name}")
+                
+                try:
+                    await channel.send(embed=embed, view=AdSettingsView())
+                    logger.info(f"✅ Новое сообщение авто-рекламы отправлено в #{channel.name}")
+                except Exception as send_error:
+                    logger.error(f"❌ Ошибка при отправке сообщения: {send_error}")
+                    return False
+            
+            logger.info("="*50)
+            return True
             
         except Exception as e:
-            logger.error(f"❌ Ошибка инициализации канала настроек: {e}", exc_info=True)
+            logger.error(f"❌ Критическая ошибка инициализации канала настроек: {e}", exc_info=True)
+            return False
 
 advertiser = None
 
