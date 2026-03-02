@@ -1,6 +1,7 @@
 from admin.views import (
-    MainView, SettingsView, MclSettingsView, GlobalSettingsView, 
-    AccessView, AdminView, EventSettingsView, EventsListView, EventDetailView,
+    MainView, SettingsView,  # Убрали MclSettingsView, так как его нет
+    GlobalSettingsView, AccessView, AdminView,
+    EventSettingsView, EventsListView, EventDetailView,
 )
 from admin.modals import (
     SetRoleModal, SetCaptChannelModal, SetServerModal,
@@ -10,13 +11,14 @@ from admin.modals import (
     SetCaptAlertChannelModal, SetCaptRoleModal, SetCaptRegChannelsModal,
     SetCaptSettingsChannelModal, SetAdSettingsChannelModal
 )
-from capt_registration.settings_view import CaptSettingsView  # Прямой импорт
+from capt_registration.settings_view import CaptSettingsView
+from mcl.views import MclSettingsView  # Импортируем из правильного места
 
 __all__ = [
     # Views
-    'MainView', 'SettingsView', 'MclSettingsView',
+    'MainView', 'SettingsView',
     'GlobalSettingsView', 'AccessView', 'AdminView', 'EventSettingsView',
-    'EventsListView', 'EventDetailView', 'CaptSettingsView',  # Добавлено
+    'EventsListView', 'EventDetailView', 'CaptSettingsView', 'MclSettingsView',
     
     # Modals
     'SetRoleModal', 'SetCaptChannelModal', 'SetServerModal',
