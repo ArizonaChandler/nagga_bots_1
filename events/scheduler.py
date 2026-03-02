@@ -429,16 +429,18 @@ class EventScheduler:
             
             from events.settings_view import EventsSettingsView
             
-            # Ищем существующее сообщение
-            message_exists = False
-            async for msg in channel.history(limit=20):
-                if msg.author == bot.user and msg.embeds and "ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ" in msg.embeds[0].title:
-                    message_exists = True
-                    await msg.edit(view=EventsSettingsView())
-                    logger.info(f"✅ Обновлено существующее сообщение мероприятий в #{channel.name}")
-                    break
+            # Ищем ТОЛЬКО сообщение мероприятий
+            events_message_exists = False
+            async for msg in channel.history(limit=50):
+                if msg.author == bot.user and msg.embeds:
+                    # Если это сообщение мероприятий - обновляем
+                    if msg.embeds and "ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ" in msg.embeds[0].title:
+                        await msg.edit(view=EventsSettingsView())
+                        events_message_exists = True
+                        logger.info(f"✅ Обновлено сообщение мероприятий в #{channel.name}")
+                    # Остальные сообщения НЕ ТРОГАЕМ!
             
-            if not message_exists:
+            if not events_message_exists:
                 embed = discord.Embed(
                     title="🔔 **ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ**",
                     description="Управление автоматическими напоминаниями о мероприятиях",
