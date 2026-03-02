@@ -348,6 +348,17 @@ class GlobalSettingsView(BaseMenuView):
         ad_settings_channel_btn.callback = ad_settings_channel_cb
         self.add_item(ad_settings_channel_btn)
         
+        events_settings_channel_btn = discord.ui.Button(
+            label="🔔 Канал настроек мероприятий",
+            style=discord.ButtonStyle.secondary,
+            emoji="🔔",
+            row=3
+        )
+        async def events_settings_channel_cb(i):
+            await i.response.send_modal(SetEventsSettingsChannelModal(self.guild))
+        events_settings_channel_btn.callback = events_settings_channel_cb
+        self.add_item(events_settings_channel_btn)
+        
         # РЯД 4: НАЗАД
         self.add_back_button(row=4)
     

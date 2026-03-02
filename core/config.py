@@ -27,6 +27,7 @@ CONFIG = {
     'capt_alert_channel': None,      # канал для оповещений @everyone
     'capt_settings_channel': None,  # Канал для настроек CAPT
     'ad_settings_channel': None,  # Канал для настроек авто-рекламы
+    'events_settings_channel': None,  # Канал для настроек мероприятий
 }
 
 def load_config():
@@ -50,7 +51,8 @@ def load_config():
         else:
             # Если ключа нет в CONFIG, но он есть в БД - добавляем
             if key in ['capt_reg_main_channel', 'capt_reg_reserve_channel', 'capt_alert_channel', 
-                    'capt_role_id', 'capt_settings_channel', 'ad_settings_channel']:
+                    'capt_role_id', 'capt_settings_channel', 'ad_settings_channel', 
+                    'events_settings_channel']:
                 CONFIG[key] = value if value and value.lower() != 'null' else None
     
     colors = db.get_dual_colors()

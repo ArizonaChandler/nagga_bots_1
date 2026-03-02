@@ -36,6 +36,7 @@ class EventScheduler:
     async def start(self):
         file_logger.info("🕐 Event Scheduler запущен")
         logger.info("🕐 Event Scheduler запущен")
+        await self.initialize_settings_channel(self.bot)
         self.task = asyncio.create_task(self._run())
     
     async def stop(self):
@@ -413,6 +414,41 @@ class EventScheduler:
         except Exception as e:
             file_logger.error(f"Ошибка в cleanup_old_reminders: {e}")
             file_logger.error(traceback.format_exc())
+
+    async def initialize_settings_channel(self, bot):
+        """Инициализация канала настроек мероприятий"""
+        settings_channel_id = CONFIG.get('events_settings_channel')
+        if not settings_channel_id:
+            return
+        
+        try:
+            channel = bot.get_channel(int(settings_channel_id))
+            if not channel:
+                logger.error(f"❌ Канал настроек мероприятий {settings_channel_id} не найден")
+                return
+            
+            from events.settings_view import EventsSettingsView
+            
+            # Ищем существующее сообщение
+            message_exists = False
+            async for msg in channel.history(limit=20):
+                if msg.author == bot.user and msg.embeds and "ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ" in msg.embeds[0].title:
+                    message_exists = True
+                    await msg.edit(view=EventsSettingsView())
+                    logger.info(f"✅ Обновлено существующее сообщение мероприятий в #{channel.name}")
+                    break
+            
+            if not message_exists:
+                embed = discord.Embed(
+                    title="🔔 **ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ**",
+                    description="Управление автоматическими напоминаниями о мероприятиях",
+                    color=0xffa500
+                )
+                await channel.send(embed=embed, view=EventsSettingsView())
+                logger.info(f"✅ Новое сообщение мероприятий отправлено в #{channel.name}")
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка инициализации канала настроек мероприятий: {e}")
 
 scheduler = None
 

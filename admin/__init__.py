@@ -9,7 +9,7 @@ from admin.modals import (
     SetAlarmChannelModal, SetAnnounceChannelModal, AddEventModal, EditEventModal, TakeEventModal,
     SetAlarmChannelsModal, SetAnnounceChannelsModal, SetReminderRolesModal, SetAnnounceRolesModal,
     SetCaptAlertChannelModal, SetCaptRoleModal, SetCaptRegChannelsModal,
-    SetCaptSettingsChannelModal, SetAdSettingsChannelModal
+    SetCaptSettingsChannelModal, SetAdSettingsChannelModal, SetEventsSettingsChannelModal
 )
 from capt_registration.settings_view import CaptSettingsView
 from mcl.views import MclSettingsView
@@ -28,5 +28,5 @@ __all__ = [
     'EditEventModal', 'TakeEventModal', 'SetAlarmChannelsModal',
     'SetAnnounceChannelsModal', 'SetReminderRolesModal', 'SetAnnounceRolesModal',
     'SetCaptAlertChannelModal', 'SetCaptRoleModal', 'SetCaptRegChannelsModal',
-    'SetCaptSettingsChannelModal', 'SetAdSettingsChannelModal'
+    'SetCaptSettingsChannelModal', 'SetAdSettingsChannelModal', 'SetEventsSettingsChannelModal'
 ]
