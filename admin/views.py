@@ -12,6 +12,7 @@ from files.core import file_manager
 from files.views import FilesView
 from events.views import EventInfoView
 
+
 class MainView(BaseMenuView):
     """Главное меню !info"""
     def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
@@ -154,6 +155,108 @@ class SettingsView(BaseMenuView):
             color=0x7289da
         )
         return embed
+
+
+class AccessView(BaseMenuView):
+    """Управление доступом пользователей"""
+    def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
+        super().__init__(user_id, guild, previous_view, previous_embed)
+        
+        add_btn = discord.ui.Button(label="➕ Добавить пользователя", style=discord.ButtonStyle.success)
+        async def add_cb(i):
+            await i.response.send_modal(AddUserModal())
+        add_btn.callback = add_cb
+        self.add_item(add_btn)
+        
+        remove_btn = discord.ui.Button(label="➖ Удалить пользователя", style=discord.ButtonStyle.danger)
+        async def remove_cb(i):
+            await i.response.send_modal(RemoveUserModal())
+        remove_btn.callback = remove_cb
+        self.add_item(remove_btn)
+        
+        list_btn = discord.ui.Button(label="📋 Список пользователей", style=discord.ButtonStyle.secondary)
+        async def list_cb(i):
+            users = db.get_users_with_details()
+            embed = discord.Embed(
+                title="📋 **ПОЛЬЗОВАТЕЛИ С ДОСТУПОМ**",
+                color=0x7289da,
+                timestamp=datetime.now()
+            )
+            
+            if users:
+                lines = []
+                for uid, username, added_by, added_at, last_used, is_admin, is_super in users[:25]:
+                    mention = format_mention(self.guild, uid, 'user')
+                    if is_super:
+                        icon = "👑👑"
+                        role = "**Супер-админ**"
+                    elif is_admin:
+                        icon = "👑"
+                        role = "Админ"
+                    else:
+                        icon = "👤"
+                        role = "Пользователь"
+                    lines.append(f"{icon} {mention} • {role}")
+                
+                embed.description = "\n".join(lines)
+                total = len(users)
+                admins_count = sum(1 for u in users if u[5])
+                supers_count = sum(1 for u in users if u[6])
+                embed.set_footer(text=f"Всего: {total} • Админов: {admins_count} • Супер-админов: {supers_count}")
+            else:
+                embed.description = "❌ Нет пользователей с доступом"
+            
+            await i.response.edit_message(embed=embed, view=self)
+        list_btn.callback = list_cb
+        self.add_item(list_btn)
+        
+        self.add_back_button()
+
+
+class AdminView(BaseMenuView):
+    """Управление администраторами"""
+    def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
+        super().__init__(user_id, guild, previous_view, previous_embed)
+        
+        add_btn = discord.ui.Button(label="➕ Добавить администратора", style=discord.ButtonStyle.success)
+        async def add_cb(i):
+            await i.response.send_modal(AddAdminModal())
+        add_btn.callback = add_cb
+        self.add_item(add_btn)
+        
+        remove_btn = discord.ui.Button(label="➖ Удалить администратора", style=discord.ButtonStyle.danger)
+        async def remove_cb(i):
+            await i.response.send_modal(RemoveAdminModal())
+        remove_btn.callback = remove_cb
+        self.add_item(remove_btn)
+        
+        list_btn = discord.ui.Button(label="📋 Список админов", style=discord.ButtonStyle.secondary)
+        async def list_cb(i):
+            admins = db.get_admins()
+            embed = discord.Embed(
+                title="👑 **АДМИНИСТРАТОРЫ**",
+                color=0xffd700,
+                timestamp=datetime.now()
+            )
+            
+            if admins:
+                lines = []
+                for admin_id, added_by, added_at, is_super, username in admins:
+                    mention = format_mention(self.guild, admin_id, 'user')
+                    if is_super:
+                        lines.append(f"👑👑 {mention} • **Супер-админ**")
+                    else:
+                        lines.append(f"👑 {mention}")
+                embed.description = "\n".join(lines)
+                embed.set_footer(text=f"Всего: {len(admins)}")
+            else:
+                embed.description = "❌ Нет администраторов"
+            
+            await i.response.edit_message(embed=embed, view=self)
+        list_btn.callback = list_cb
+        self.add_item(list_btn)
+        
+        self.add_back_button()
 
 
 class GlobalSettingsView(BaseMenuView):
@@ -303,51 +406,6 @@ class GlobalSettingsView(BaseMenuView):
         
         embed.set_footer(text="Настройки CAPT и авто-рекламы в отдельных каналах")
         return embed
-
-
-class AdminView(BaseMenuView):
-    def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
-        super().__init__(user_id, guild, previous_view, previous_embed)
-        
-        add_btn = discord.ui.Button(label="➕ Добавить администратора", style=discord.ButtonStyle.success)
-        async def add_cb(i):
-            await i.response.send_modal(AddAdminModal())
-        add_btn.callback = add_cb
-        self.add_item(add_btn)
-        
-        remove_btn = discord.ui.Button(label="➖ Удалить администратора", style=discord.ButtonStyle.danger)
-        async def remove_cb(i):
-            await i.response.send_modal(RemoveAdminModal())
-        remove_btn.callback = remove_cb
-        self.add_item(remove_btn)
-        
-        list_btn = discord.ui.Button(label="📋 Список админов", style=discord.ButtonStyle.secondary)
-        async def list_cb(i):
-            admins = db.get_admins()
-            embed = discord.Embed(
-                title="👑 **АДМИНИСТРАТОРЫ**",
-                color=0xffd700,
-                timestamp=datetime.now()
-            )
-            
-            if admins:
-                lines = []
-                for admin_id, added_by, added_at, is_super, username in admins:
-                    mention = format_mention(self.guild, admin_id, 'user')
-                    if is_super:
-                        lines.append(f"👑👑 {mention} • **Супер-админ**")
-                    else:
-                        lines.append(f"👑 {mention}")
-                embed.description = "\n".join(lines)
-                embed.set_footer(text=f"Всего: {len(admins)}")
-            else:
-                embed.description = "❌ Нет администраторов"
-            
-            await i.response.edit_message(embed=embed, view=self)
-        list_btn.callback = list_cb
-        self.add_item(list_btn)
-        
-        self.add_back_button()
 
 
 class EventSettingsView(BaseMenuView):
