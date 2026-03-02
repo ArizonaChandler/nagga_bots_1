@@ -979,6 +979,8 @@ class SetCaptRegChannelsModal(discord.ui.Modal, title="🎯 НАСТРОЙКА �
                 ephemeral=True
             )
 
+# ===== МОДАЛКА ДЛЯ НАСТРОЙКИ КАНАЛА НАСТРОЕК CAPT =====
+
 class SetCaptSettingsChannelModal(discord.ui.Modal, title="⚙️ КАНАЛ НАСТРОЕК CAPT"):
     def __init__(self, guild=None):
         super().__init__()
@@ -1038,9 +1040,6 @@ class SetCaptSettingsChannelModal(discord.ui.Modal, title="⚙️ КАНАЛ Н�
                 f"✅ Канал настроек CAPT создан: {channel.mention}",
                 ephemeral=True
             )
-            
-        except Exception as e:
-            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
             
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
