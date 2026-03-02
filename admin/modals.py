@@ -263,7 +263,6 @@ class AddEventModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕРОПРИ
             
         except Exception as e:
             print(f"Ошибка в AddEventModal: {e}")
-            # Здесь может быть ошибка с datetime, но мы её уже отлавливаем выше
             await interaction.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
 
 
@@ -392,7 +391,6 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
         db.log_event_action(self.event_id, "taken", str(interaction.user.id),
                            f"Группа: {self.group_code.value}, Место: {self.meeting_place.value}")
         
-        # ===== НОВЫЙ КОД ДЛЯ ОТПРАВКИ ВО ВСЕ КАНАЛЫ =====
         # Получаем список каналов для оповещений
         announce_channels = CONFIG.get('announce_channels', [])
         
@@ -476,8 +474,6 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
             
             print(f"✅ Отправлено в {sent_count} каналов оповещений")
         
-        # ===== КОНЕЦ НОВОГО КОДА =====
-        
         # Определяем время сбора для ответа пользователю
         if meeting_time:
             collection_time = meeting_time
@@ -502,6 +498,7 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
                 self.group_code.value,
                 self.meeting_place.value
             )
+
 
 class SetAlarmChannelsModal(discord.ui.Modal, title="🔔 НАСТРОЙКА КАНАЛОВ НАПОМИНАНИЙ"):
     def __init__(self, guild=None):
@@ -799,6 +796,7 @@ class SetAnnounceRolesModal(discord.ui.Modal, title="📢 РОЛИ ДЛЯ ОПО
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
 
+
 # ===== НОВЫЕ МОДАЛКИ ДЛЯ СИСТЕМЫ РЕГИСТРАЦИИ НА CAPT =====
 
 class SetCaptAlertChannelModal(discord.ui.Modal, title="📢 КАНАЛ ДЛЯ @EVERYONE"):
@@ -906,6 +904,8 @@ class SetCaptRoleModal(discord.ui.Modal, title="🎭 РОЛЬ ДЛЯ РАССЫ�
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
+
+# ===== ЭТОТ КЛАСС ОСТАВЛЯЕМ ТОЛЬКО ОДИН РАЗ =====
 class SetCaptRegChannelsModal(discord.ui.Modal, title="🎯 НАСТРОЙКА КАНАЛОВ CAPT"):
     def __init__(self, guild=None):
         super().__init__()
@@ -930,7 +930,7 @@ class SetCaptRegChannelsModal(discord.ui.Modal, title="🎯 НАСТРОЙКА �
         from core.config import CONFIG, save_config
         from core.database import db
         
-        try:  # ← ЭТОТ БЛОК ДОЛЖЕН БЫТЬ!
+        try:
             # Проверяем, что каналы существуют
             guild = interaction.client.get_guild(int(CONFIG.get('server_id')))
             if not guild:
@@ -981,6 +981,7 @@ class SetCaptRegChannelsModal(discord.ui.Modal, title="🎯 НАСТРОЙКА �
             
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
 
 # ===== МОДАЛКА ДЛЯ НАСТРОЙКИ КАНАЛА НАСТРОЕК CAPT =====
 
