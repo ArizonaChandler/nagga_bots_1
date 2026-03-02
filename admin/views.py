@@ -85,7 +85,7 @@ class SettingsView(BaseMenuView):
     def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
         super().__init__(user_id, guild, previous_view, previous_embed)
         
-        # 🎨 MCL - оставляем
+        # 🎨 MCL
         mcl_btn = discord.ui.Button(
             label="🎨 MCL", 
             style=discord.ButtonStyle.secondary, 
@@ -106,7 +106,7 @@ class SettingsView(BaseMenuView):
         mcl_btn.callback = mcl_cb
         self.add_item(mcl_btn)
         
-        # 🌍 Глобальные - оставляем
+        # 🌍 Глобальные
         global_btn = discord.ui.Button(
             label="🌍 Глобальные", 
             style=discord.ButtonStyle.secondary, 
@@ -126,47 +126,7 @@ class SettingsView(BaseMenuView):
         global_btn.callback = global_cb
         self.add_item(global_btn)
         
-        # ===== НОВАЯ КНОПКА CAPT РЕГИСТРАЦИИ =====
-        # Вместо старой CAPT теперь здесь новая система
-        
-        capt_reg_btn = discord.ui.Button(
-            label="🎯 CAPT РЕГИСТРАЦИЯ", 
-            style=discord.ButtonStyle.danger, 
-            emoji="🎯", 
-            row=1
-        )
-        async def capt_reg_cb(i):
-            # Создаем embed с информацией о текущих настройках CAPT
-            embed = discord.Embed(
-                title="🎯 **НАСТРОЙКА CAPT РЕГИСТРАЦИИ**",
-                description="Управление системой регистрации на CAPT",
-                color=0xff0000
-            )
-            
-            # Получаем текущие настройки
-            main_channel_id = CONFIG.get('capt_reg_main_channel')
-            reserve_channel_id = CONFIG.get('capt_reg_reserve_channel')
-            alert_channel_id = CONFIG.get('capt_alert_channel')
-            capt_role_id = CONFIG.get('capt_role_id')
-            
-            # Формируем информацию
-            main_channel = format_mention(self.guild, main_channel_id, 'channel') if main_channel_id else "`Не настроен`"
-            reserve_channel = format_mention(self.guild, reserve_channel_id, 'channel') if reserve_channel_id else "`Не настроен`"
-            alert_channel = format_mention(self.guild, alert_channel_id, 'channel') if alert_channel_id else "`Не настроен`"
-            capt_role = format_mention(self.guild, capt_role_id, 'role') if capt_role_id else "`Не настроена`"
-            
-            embed.add_field(name="🔴 Канал модерации", value=main_channel, inline=False)
-            embed.add_field(name="🟡 Канал пользователей", value=reserve_channel, inline=False)
-            embed.add_field(name="📢 Канал оповещений", value=alert_channel, inline=False)
-            embed.add_field(name="🎭 Роль для рассылки", value=capt_role, inline=False)
-            
-            # Создаем view с кнопками настроек CAPT
-            view = CaptRegistrationSettingsView(self.user_id, self.guild, self, embed)
-            await i.response.edit_message(embed=embed, view=view)
-        capt_reg_btn.callback = capt_reg_cb
-        self.add_item(capt_reg_btn)
-        
-        # ✅ КНОПКА "НАЗАД" - ВОЗВРАТ В ГЛАВНОЕ МЕНЮ АДМИНКИ
+        # ✅ КНОПКА "НАЗАД"
         back_btn = discord.ui.Button(
             label="◀ Назад",
             style=discord.ButtonStyle.secondary,
