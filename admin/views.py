@@ -202,7 +202,7 @@ class GlobalSettingsView(BaseMenuView):
             await i.response.edit_message(embed=embed, view=view)
         admin_btn.callback = admin_cb
         self.add_item(admin_btn)
-        
+        """
         # РЯД 2: СИСТЕМА МЕРОПРИЯТИЙ
         alarm_btn = discord.ui.Button(
             label="🔔 Мероприятия",
@@ -279,7 +279,7 @@ class GlobalSettingsView(BaseMenuView):
             await i.response.send_modal(SetAdSettingsChannelModal(self.guild))
         ad_settings_channel_btn.callback = ad_settings_channel_cb
         self.add_item(ad_settings_channel_btn)
-        
+        """
         # РЯД 5: НАЗАД
         self.add_back_button(row=5)
     
