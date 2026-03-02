@@ -121,31 +121,33 @@ async def on_ready():
         name="!info | v1.3"
     ))
     
-    # ВРЕМЕННАЯ ПРОВЕРКА
-    print(f"🔍 capt_settings_channel: {CONFIG.get('capt_settings_channel')}")
-    print(f"🔍 ad_settings_channel: {CONFIG.get('ad_settings_channel')}")
-    
-    # Инициализация постоянных кнопок CAPT регистрации
+    # Инициализация CAPT регистрации
     try:
         from capt_registration.manager import capt_reg_manager
         print("🔄 Инициализация CAPT регистрации...")
         await capt_reg_manager.initialize_buttons(bot)
     except Exception as e:
         print(f"❌ Ошибка инициализации CAPT регистрации: {e}")
-        import traceback
         traceback.print_exc()
-
-    # Инициализация канала настроек авто-рекламы
+    
+    # Инициализация канала авто-рекламы
     try:
         from advertising.core import advertiser
         print("🔄 Инициализация канала авто-рекламы...")
         if advertiser:
             await advertiser.initialize_settings_channel(bot)
-        else:
-            print("❌ advertiser не инициализирован")
     except Exception as e:
         print(f"❌ Ошибка инициализации авто-рекламы: {e}")
-        import traceback
+        traceback.print_exc()
+    
+    # Инициализация канала мероприятий
+    try:
+        from events.scheduler import scheduler
+        print("🔄 Инициализация канала мероприятий...")
+        if scheduler:
+            await scheduler.initialize_settings_channel(bot)
+    except Exception as e:
+        print(f"❌ Ошибка инициализации мероприятий: {e}")
         traceback.print_exc()
 
     print("="*60 + "\n")

@@ -417,40 +417,69 @@ class EventScheduler:
 
     async def initialize_settings_channel(self, bot):
         """Инициализация канала настроек мероприятий"""
+        logger.info("="*50)
+        logger.info("🔍 НАЧАЛО ИНИЦИАЛИЗАЦИИ КАНАЛА МЕРОПРИЯТИЙ")
+        
         settings_channel_id = CONFIG.get('events_settings_channel')
+        logger.info(f"📢 events_settings_channel из CONFIG: {settings_channel_id}")
+        
         if not settings_channel_id:
-            return
+            logger.warning("❌ events_settings_channel не настроен в CONFIG")
+            return False
         
         try:
+            # Получаем канал
             channel = bot.get_channel(int(settings_channel_id))
             if not channel:
                 logger.error(f"❌ Канал настроек мероприятий {settings_channel_id} не найден")
-                return
+                return False
             
-            from events.settings_view import EventsSettingsView
+            logger.info(f"✅ Канал найден: #{channel.name} (ID: {channel.id})")
             
-            # Ищем ТОЛЬКО сообщение мероприятий
+            # Импортируем view
+            try:
+                from events.settings_view import EventsSettingsView
+                logger.info("✅ EventsSettingsView успешно импортирован")
+            except ImportError as e:
+                logger.error(f"❌ Ошибка импорта EventsSettingsView: {e}")
+                return False
+            
+            # Ищем существующее сообщение мероприятий
             events_message_exists = False
+            message_count = 0
+            
             async for msg in channel.history(limit=50):
+                message_count += 1
                 if msg.author == bot.user and msg.embeds:
-                    # Если это сообщение мероприятий - обновляем
+                    # Если это наше сообщение - обновляем
                     if msg.embeds and "ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ" in msg.embeds[0].title:
                         await msg.edit(view=EventsSettingsView())
                         events_message_exists = True
-                        logger.info(f"✅ Обновлено сообщение мероприятий в #{channel.name}")
-                    # Остальные сообщения НЕ ТРОГАЕМ!
+                        logger.info(f"✅ Обновлено существующее сообщение мероприятий (ID: {msg.id})")
+                        break
+                    else:
+                        logger.debug(f"📝 Найдено чужое сообщение бота: {msg.embeds[0].title if msg.embeds else 'без embed'}")
+            
+            logger.info(f"📊 Проверено сообщений: {message_count}")
             
             if not events_message_exists:
+                logger.info("📝 Создаем новое сообщение с настройками мероприятий")
+                
                 embed = discord.Embed(
                     title="🔔 **ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ**",
                     description="Управление автоматическими напоминаниями о мероприятиях",
                     color=0xffa500
                 )
+                
                 await channel.send(embed=embed, view=EventsSettingsView())
                 logger.info(f"✅ Новое сообщение мероприятий отправлено в #{channel.name}")
             
+            logger.info("="*50)
+            return True
+            
         except Exception as e:
-            logger.error(f"❌ Ошибка инициализации канала настроек мероприятий: {e}")
+            logger.error(f"❌ Критическая ошибка инициализации канала настроек: {e}", exc_info=True)
+            return False
 
 scheduler = None
 
