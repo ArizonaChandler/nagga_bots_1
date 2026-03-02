@@ -96,7 +96,7 @@ class EventsSettingsView(PermanentView):
         
         days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
         
-        for event in events[:10]:  # Показываем первые 10
+        for event in events[:10]:
             status = "✅" if event['enabled'] else "❌"
             embed.add_field(
                 name=f"{status} {event['name']}",
@@ -149,24 +149,6 @@ class EventsSettingsView(PermanentView):
         )
         
         await interaction.followup.send(embed=embed, ephemeral=True)
-    
-    @discord.ui.button(
-        label="🔄 Генерация расписания", 
-        style=discord.ButtonStyle.primary,
-        emoji="🔄",
-        row=4,
-        custom_id="events_settings_generate"
-    )
-    async def generate_schedule(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Сгенерировать расписание на 14 дней"""
-        await interaction.response.defer(ephemeral=True)
-        
-        count = db.generate_schedule(days_ahead=14)
-        
-        await interaction.followup.send(
-            f"✅ Расписание сгенерировано на 14 дней вперёд",
-            ephemeral=True
-        )
 
 
 # ===== МОДАЛКИ ДЛЯ НАСТРОЕК =====
