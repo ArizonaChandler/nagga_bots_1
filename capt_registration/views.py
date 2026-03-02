@@ -321,7 +321,7 @@ class ModerationView(PermanentView):
         logger.debug(f"Кнопки модерации {'активированы' if registration_active else 'деактивированы'}")
     
     @discord.ui.button(
-        label="▶️ НАЧАТЬ", 
+        label="▶️ НАЧАТЬ РЕГИСТРАЦИЮ", 
         style=discord.ButtonStyle.success,
         row=0,
         custom_id="capt_reg_start"
@@ -332,7 +332,7 @@ class ModerationView(PermanentView):
         await interaction.response.send_modal(StartRegistrationModal())
     
     @discord.ui.button(
-        label="⏹️ ЗАВЕРШИТЬ", 
+        label="⏹️ ЗАВЕРШИТЬ РЕГИСТРАЦИЮ", 
         style=discord.ButtonStyle.danger,
         row=0,
         disabled=True,
@@ -365,7 +365,7 @@ class ModerationView(PermanentView):
                 pass
     
     @discord.ui.button(
-        label="➕ В ОСНОВНОЙ", 
+        label="➕ ДОБАВИТЬ В ОСНОВНОЙ", 
         style=discord.ButtonStyle.primary,
         row=1,
         disabled=True,
@@ -377,7 +377,7 @@ class ModerationView(PermanentView):
         await interaction.response.send_modal(MoveToMainModal())
     
     @discord.ui.button(
-        label="➡️ В РЕЗЕРВ", 
+        label="➡️ ПЕРЕВЕСТИ В РЕЗЕРВ", 
         style=discord.ButtonStyle.secondary,
         row=1,
         disabled=True,
@@ -424,7 +424,7 @@ class ModerationView(PermanentView):
         )
     
     @discord.ui.button(
-        label="📨 РАССЫЛКА", 
+        label="📨 РАССЫЛКА В ЛС", 
         style=discord.ButtonStyle.danger,
         row=3,
         disabled=True,
@@ -444,7 +444,7 @@ class ModerationView(PermanentView):
         await interaction.response.send_modal(CaptRegSendModal(capt_reg_manager.capt_info))
     
     @discord.ui.button(
-        label="🔄 ПОВТОР", 
+        label="🔄 ПОВТОРНЫЙ @EVERYONE", 
         style=discord.ButtonStyle.primary,
         row=4,
         disabled=True,
@@ -465,7 +465,7 @@ class ModerationView(PermanentView):
         await interaction.response.send_message("✅ Повторное @everyone оповещение отправлено!", ephemeral=True)
     
     @discord.ui.button(
-        label="🎤 ПРОВЕРКА", 
+        label="🎤 ПРОВЕРКА ПО ВОЙСУ", 
         style=discord.ButtonStyle.success,
         row=4,
         disabled=True,
