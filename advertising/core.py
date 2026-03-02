@@ -237,24 +237,19 @@ class AutoAdvertiser:
             
             from advertising.settings_view import AdSettingsView
             
-            # Проверяем, есть ли уже сообщение с настройками авто-рекламы
-            ad_message_exists = False
+            # Очищаем старые сообщения бота
             async for msg in channel.history(limit=20):
-                if msg.author == bot.user and msg.embeds and "ПАНЕЛЬ УПРАВЛЕНИЯ АВТО-РЕКЛАМОЙ" in msg.embeds[0].title:
-                    ad_message_exists = True
-                    break
+                if msg.author == bot.user:
+                    await msg.delete()
             
-            if not ad_message_exists:
-                # Отправляем новое сообщение с кнопками настроек
-                embed = discord.Embed(
-                    title="📢 **ПАНЕЛЬ УПРАВЛЕНИЯ АВТО-РЕКЛАМОЙ**",
-                    description="Настройка параметров автоматической рекламы",
-                    color=0x00ff00
-                )
-                await channel.send(embed=embed, view=AdSettingsView())
-                logger.info(f"✅ Сообщение с настройками авто-рекламы отправлено в #{channel.name}")
-            else:
-                logger.info(f"ℹ️ Сообщение с настройками авто-рекламы уже существует в #{channel.name}")
+            # Отправляем новое сообщение с кнопками настроек
+            embed = discord.Embed(
+                title="📢 **ПАНЕЛЬ УПРАВЛЕНИЯ АВТО-РЕКЛАМОЙ**",
+                description="Настройка параметров автоматической рекламы",
+                color=0x00ff00
+            )
+            await channel.send(embed=embed, view=AdSettingsView())
+            logger.info(f"✅ Канал настроек авто-рекламы инициализирован: #{channel.name}")
             
         except Exception as e:
             logger.error(f"❌ Ошибка инициализации канала настроек: {e}")

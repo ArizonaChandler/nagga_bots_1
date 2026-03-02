@@ -80,6 +80,7 @@ class MainView(BaseMenuView):
         embed.set_footer(text="📁 Полезные файлы доступны всем")
         return embed
 
+
 class SettingsView(BaseMenuView):
     """Главное меню настроек (!settings)"""
     def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
@@ -155,52 +156,12 @@ class SettingsView(BaseMenuView):
         return embed
 
 
-class CaptSettingsView(BaseMenuView):
-    def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
-        super().__init__(user_id, guild, previous_view, previous_embed)
-        
-        role_btn = discord.ui.Button(label="🎭 Установить роль", style=discord.ButtonStyle.secondary)
-        async def role_cb(i):
-            await i.response.send_modal(SetRoleModal())
-        role_btn.callback = role_cb
-        self.add_item(role_btn)
-        
-        channel_btn = discord.ui.Button(label="💬 Установить чат ошибок", style=discord.ButtonStyle.secondary)
-        async def channel_cb(i):
-            await i.response.send_modal(SetCaptChannelModal())
-        channel_btn.callback = channel_cb
-        self.add_item(channel_btn)
-        
-        self.add_back_button()
-
-
-class MclSettingsView(BaseMenuView):
-    def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
-        super().__init__(user_id, guild, previous_view, previous_embed)
-        
-        channel_btn = discord.ui.Button(label="💬 Установить канал", style=discord.ButtonStyle.secondary)
-        async def channel_cb(i):
-            await i.response.send_modal(SetMclChannelModal())
-        channel_btn.callback = channel_cb
-        self.add_item(channel_btn)
-        
-        color_btn = discord.ui.Button(label="🎨 Установить цвета", style=discord.ButtonStyle.secondary)
-        async def color_cb(i):
-            await i.response.send_modal(SetDualColorModal())
-        color_btn.callback = color_cb
-        self.add_item(color_btn)
-        
-        self.add_back_button()
-
-
 class GlobalSettingsView(BaseMenuView):
-    """Глобальные настройки - красивое расположение"""
+    """Глобальные настройки"""
     def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
         super().__init__(user_id, guild, previous_view, previous_embed)
         
-        # ===== РЯД 0: ОСНОВНЫЕ НАСТРОЙКИ СЕРВЕРА =====
-        
-        # 🌍 Установить сервер
+        # РЯД 0: ОСНОВНЫЕ НАСТРОЙКИ СЕРВЕРА
         server_btn = discord.ui.Button(
             label="🌍 Установить сервер",
             style=discord.ButtonStyle.primary,
@@ -212,9 +173,7 @@ class GlobalSettingsView(BaseMenuView):
         server_btn.callback = server_cb
         self.add_item(server_btn)
         
-        # ===== РЯД 1: УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ =====
-        
-        # 👥 Управление доступом
+        # РЯД 1: УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ
         users_btn = discord.ui.Button(
             label="👥 Управление доступом",
             style=discord.ButtonStyle.secondary,
@@ -228,7 +187,6 @@ class GlobalSettingsView(BaseMenuView):
         users_btn.callback = users_cb
         self.add_item(users_btn)
         
-        # 👑 Управление админами
         admin_btn = discord.ui.Button(
             label="👑 Управление админами",
             style=discord.ButtonStyle.secondary,
@@ -245,9 +203,7 @@ class GlobalSettingsView(BaseMenuView):
         admin_btn.callback = admin_cb
         self.add_item(admin_btn)
         
-        # ===== РЯД 2: СИСТЕМА МЕРОПРИЯТИЙ =====
-        
-        # 🔔 Настройка оповещений (МП)
+        # РЯД 2: СИСТЕМА МЕРОПРИЯТИЙ
         alarm_btn = discord.ui.Button(
             label="🔔 Мероприятия",
             style=discord.ButtonStyle.primary,
@@ -266,18 +222,52 @@ class GlobalSettingsView(BaseMenuView):
         alarm_btn.callback = alarm_cb
         self.add_item(alarm_btn)
         
+        # РЯД 3: НАСТРОЙКИ КАНАЛОВ CAPT
+        capt_channels_btn = discord.ui.Button(
+            label="🎯 Каналы CAPT",
+            style=discord.ButtonStyle.danger,
+            emoji="🎯",
+            row=3
+        )
+        async def capt_channels_cb(i):
+            await i.response.send_modal(SetCaptRegChannelsModal(self.guild))
+        capt_channels_btn.callback = capt_channels_cb
+        self.add_item(capt_channels_btn)
+        
+        capt_alert_btn = discord.ui.Button(
+            label="📢 Канал @everyone",
+            style=discord.ButtonStyle.danger,
+            emoji="📢",
+            row=3
+        )
+        async def capt_alert_cb(i):
+            await i.response.send_modal(SetCaptAlertChannelModal(self.guild))
+        capt_alert_btn.callback = capt_alert_cb
+        self.add_item(capt_alert_btn)
+        
+        capt_role_btn = discord.ui.Button(
+            label="🎭 Роль для ЛС",
+            style=discord.ButtonStyle.danger,
+            emoji="🎭",
+            row=3
+        )
+        async def capt_role_cb(i):
+            await i.response.send_modal(SetCaptRoleModal(self.guild))
+        capt_role_btn.callback = capt_role_cb
+        self.add_item(capt_role_btn)
+        
         # ⚙️ Канал настроек CAPT
         capt_settings_channel_btn = discord.ui.Button(
             label="⚙️ Канал настроек CAPT",
             style=discord.ButtonStyle.secondary,
             emoji="⚙️",
-            row=3
+            row=4
         )
         async def capt_settings_channel_cb(i):
             await i.response.send_modal(SetCaptSettingsChannelModal(self.guild))
         capt_settings_channel_btn.callback = capt_settings_channel_cb
         self.add_item(capt_settings_channel_btn)
-
+        
         # 📢 Канал настроек авто-рекламы
         ad_settings_channel_btn = discord.ui.Button(
             label="📢 Канал настроек авто-рекламы",
@@ -290,13 +280,10 @@ class GlobalSettingsView(BaseMenuView):
         ad_settings_channel_btn.callback = ad_settings_channel_cb
         self.add_item(ad_settings_channel_btn)
         
-        # ===== РЯД 4: НАЗАД =====
-        
-        # ◀ Кнопка "Назад"
-        self.add_back_button(row=4)
+        # РЯД 5: НАЗАД
+        self.add_back_button(row=5)
     
     async def get_current_embed(self):
-        """Создать embed с текущими глобальными настройками"""
         server_name = await get_server_name(self.guild, CONFIG.get('server_id'))
         
         embed = discord.Embed(
@@ -305,7 +292,6 @@ class GlobalSettingsView(BaseMenuView):
             color=0x7289da
         )
         
-        # Информация о пользователях
         users_count = len(db.get_users())
         admins_count = len(db.get_admins())
         
@@ -315,7 +301,6 @@ class GlobalSettingsView(BaseMenuView):
             inline=True
         )
         
-        # Информация о мероприятиях
         events_count = len(db.get_events(enabled_only=True))
         embed.add_field(
             name="🔔 Мероприятия",
@@ -323,35 +308,7 @@ class GlobalSettingsView(BaseMenuView):
             inline=True
         )
         
-        # Информация о CAPT системе (только статус, без кнопок)
-        capt_main = CONFIG.get('capt_reg_main_channel')
-        capt_reserve = CONFIG.get('capt_reg_reserve_channel')
-        capt_alert = CONFIG.get('capt_alert_channel')
-        capt_role = CONFIG.get('capt_role_id')
-        
-        capt_status = []
-        if capt_main and capt_reserve:
-            capt_status.append("✅ Каналы")
-        else:
-            capt_status.append("❌ Каналы")
-            
-        if capt_alert:
-            capt_status.append("✅ @everyone")
-        else:
-            capt_status.append("❌ @everyone")
-            
-        if capt_role:
-            capt_status.append("✅ Роль")
-        else:
-            capt_status.append("❌ Роль")
-        
-        embed.add_field(
-            name="🎯 CAPT система",
-            value=" • ".join(capt_status),
-            inline=True
-        )
-        
-        embed.set_footer(text="Настройка CAPT теперь в отдельном разделе")
+        embed.set_footer(text="Выберите раздел для настройки")
         return embed
 
 

@@ -19,16 +19,12 @@ __all__ = [
     'GlobalSettingsView', 'AccessView', 'AdminView', 'EventSettingsView',
     'EventsListView', 'EventDetailView', 'CaptRegistrationSettingsView',
     
-    # Modals - старые
+    # Modals
     'SetRoleModal', 'SetCaptChannelModal', 'SetServerModal',
     'AddUserModal', 'RemoveUserModal', 'AddAdminModal', 'RemoveAdminModal',
-    
-    # Modals - система оповещений
     'SetAlarmChannelModal', 'SetAnnounceChannelModal', 'AddEventModal', 
     'EditEventModal', 'TakeEventModal', 'SetAlarmChannelsModal',
     'SetAnnounceChannelsModal', 'SetReminderRolesModal', 'SetAnnounceRolesModal',
-    
-    # Modals - система CAPT
     'SetCaptAlertChannelModal', 'SetCaptRoleModal', 'SetCaptRegChannelsModal',
     'SetCaptSettingsChannelModal', 'SetAdSettingsChannelModal'
 ]

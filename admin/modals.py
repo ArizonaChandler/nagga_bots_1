@@ -1123,6 +1123,7 @@ class SetCaptSettingsChannelModal(discord.ui.Modal, title="⚙️ КАНАЛ Н�
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
+
 # ===== МОДАЛКА ДЛЯ НАСТРОЙКИ КАНАЛА НАСТРОЕК АВТО-РЕКЛАМЫ =====
 
 class SetAdSettingsChannelModal(discord.ui.Modal, title="📢 КАНАЛ НАСТРОЕК АВТО-РЕКЛАМЫ"):
