@@ -261,10 +261,47 @@ class CaptRegSendModal(discord.ui.Modal, title="🚨 ОТПРАВКА CAPT"):
         await capt_core.send_bulk(interaction, members, time_str, message)
 
 
-# ===== ЧАТ МОДЕРАЦИИ (ДЛЯ АДМИНОВ) =====
+# ===== КЛАСС ПОДТВЕРЖДЕНИЯ ДЛЯ ПЕРЕМЕЩЕНИЯ ВСЕХ =====
+
+class ConfirmMoveAllView(discord.ui.View):
+    """Подтверждение перемещения всех участников"""
+    
+    def __init__(self, count: int):
+        super().__init__(timeout=30)
+        self.count = count
+    
+    @discord.ui.button(label="✅ Да, переместить всех", style=discord.ButtonStyle.success)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Сразу отвечаем, чтобы не было ошибки
+        await interaction.response.defer(ephemeral=True)
+        
+        try:
+            success, msg = await capt_reg_manager.move_all_to_main(
+                str(interaction.user.id),
+                interaction.client
+            )
+            
+            await interaction.followup.send(msg, ephemeral=True)
+            await interaction.edit_original_response(
+                content=f"✅ {msg}",
+                view=None
+            )
+        except Exception as e:
+            logger.error(f"Ошибка: {e}", exc_info=True)
+            await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
+    
+    @discord.ui.button(label="❌ Отмена", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(
+            content="❌ Отменено",
+            view=None
+        )
+
+
+# ===== ЧАТ МОДЕРАЦИИ =====
 
 class ModerationView(PermanentView):
-    """View для чата модерации - кнопки управления (доступны всем в чате)"""
+    """View для чата модерации - кнопки управления"""
     
     def __init__(self):
         super().__init__()
@@ -284,93 +321,76 @@ class ModerationView(PermanentView):
         logger.debug(f"Кнопки модерации {'активированы' if registration_active else 'деактивированы'}")
     
     @discord.ui.button(
-        label="▶️ НАЧАТЬ РЕГИСТРАЦИЮ", 
+        label="▶️ НАЧАТЬ", 
         style=discord.ButtonStyle.success,
-        emoji="▶️",
         row=0,
         custom_id="capt_reg_start"
     )
     async def start_registration(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Начать регистрацию (доступно всем в чате)"""
-        logger.info(f"Нажата кнопка 'Начать регистрацию' от {interaction.user}")
-        
-        # УБРАНА ПРОВЕРКА has_access
+        """Начать регистрацию"""
+        logger.info(f"Нажата кнопка 'Начать' от {interaction.user}")
         await interaction.response.send_modal(StartRegistrationModal())
     
     @discord.ui.button(
-        label="⏹️ ЗАВЕРШИТЬ РЕГИСТРАЦИЮ", 
+        label="⏹️ ЗАВЕРШИТЬ", 
         style=discord.ButtonStyle.danger,
-        emoji="⏹️",
         row=0,
         disabled=True,
         custom_id="capt_reg_end"
     )
     async def end_registration(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Завершить регистрацию (доступно всем в чате)"""
-        logger.info(f"Нажата кнопка 'Завершить регистрацию' от {interaction.user}")
-        
-        # УБРАНА ПРОВЕРКА has_access
+        """Завершить регистрацию"""
+        logger.info(f"Нажата кнопка 'Завершить' от {interaction.user}")
         
         try:
-            # Сначала отвечаем, чтобы не было ошибки взаимодействия
             await interaction.response.send_message(
                 "🧹 Завершение регистрации и очистка чата...",
                 ephemeral=True
             )
             
-            # Затем выполняем очистку
             await capt_reg_manager.end_registration(str(interaction.user.id), interaction.client)
             
-            # Деактивируем кнопки после завершения
             self.update_buttons(registration_active=False)
             await interaction.message.edit(view=self)
             
-            # Редактируем наше эфемерное сообщение
             await interaction.edit_original_response(
                 content="✅ Регистрация завершена! Чат очищен."
             )
             
         except Exception as e:
-            logger.error(f"Ошибка при завершении регистрации: {e}", exc_info=True)
+            logger.error(f"Ошибка при завершении: {e}", exc_info=True)
             try:
                 await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
             except:
                 pass
     
     @discord.ui.button(
-        label="➕ ДОБАВИТЬ В ОСНОВНОЙ", 
+        label="➕ В ОСНОВНОЙ", 
         style=discord.ButtonStyle.primary,
-        emoji="➕",
         row=1,
         disabled=True,
         custom_id="capt_reg_add_main"
     )
     async def add_to_main(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Добавить пользователя в основной список (доступно всем в чате)"""
-        logger.info(f"Нажата кнопка 'Добавить в основной' от {interaction.user}")
-        
-        # УБРАНА ПРОВЕРКА has_access
+        """Добавить пользователя в основной список"""
+        logger.info(f"Нажата кнопка 'В основной' от {interaction.user}")
         await interaction.response.send_modal(MoveToMainModal())
     
     @discord.ui.button(
-        label="➡️ ПЕРЕВЕСТИ В РЕЗЕРВ", 
+        label="➡️ В РЕЗЕРВ", 
         style=discord.ButtonStyle.secondary,
-        emoji="➡️",
         row=1,
         disabled=True,
         custom_id="capt_reg_move_reserve"
     )
     async def move_to_reserve(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Перевести пользователя в резерв (доступно всем в чате)"""
-        logger.info(f"Нажата кнопка 'Перевести в резерв' от {interaction.user}")
-        
-        # УБРАНА ПРОВЕРКА has_access
+        """Перевести пользователя в резерв"""
+        logger.info(f"Нажата кнопка 'В резерв' от {interaction.user}")
         await interaction.response.send_modal(MoveToReserveModal())
     
     @discord.ui.button(
-        label="ВСЕХ В ОСНОВНОЙ", 
+        label="⏫ ВСЕХ В ОСНОВНОЙ", 
         style=discord.ButtonStyle.success,
-        emoji="⏫",  # Заменили на один эмодзи
         row=2,
         disabled=True,
         custom_id="capt_reg_move_all"
@@ -379,7 +399,6 @@ class ModerationView(PermanentView):
         """Переместить всех из резерва в основной список"""
         logger.info(f"Нажата кнопка 'Всех в основной' от {interaction.user}")
         
-        # Проверяем, активна ли регистрация
         if not capt_reg_manager.active_session:
             await interaction.response.send_message(
                 "❌ Нет активной регистрации",
@@ -387,47 +406,34 @@ class ModerationView(PermanentView):
             )
             return
         
-        # Спрашиваем подтверждение
+        main_list, reserve_list = capt_reg_manager.get_lists()
+        
+        if not reserve_list:
+            await interaction.response.send_message(
+                "❌ В резерве нет участников",
+                ephemeral=True
+            )
+            return
+        
+        view = ConfirmMoveAllView(len(reserve_list))
+        
         await interaction.response.send_message(
-            "⚠️ Ты уверен, что хочешь переместить **ВСЕХ** из резерва в основной список?",
-            view=ConfirmMoveAllView(),
+            f"⚠️ Переместить **{len(reserve_list)}** участников из резерва в основной?",
+            view=view,
             ephemeral=True
         )
-
-
-    class ConfirmMoveAllView(discord.ui.View):
-        """Подтверждение перемещения всех участников"""
-        
-        def __init__(self):
-            super().__init__(timeout=30)
-        
-        @discord.ui.button(label="✅ Да, переместить всех", style=discord.ButtonStyle.success)
-        async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-            success, msg = await capt_reg_manager.move_all_to_main(
-                str(interaction.user.id),
-                interaction.client
-            )
-            await interaction.response.edit_message(content=msg, view=None)
-        
-        @discord.ui.button(label="❌ Отмена", style=discord.ButtonStyle.secondary)
-        async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-            await interaction.response.edit_message(content="❌ Отменено", view=None)
-
+    
     @discord.ui.button(
-        label="📨 РАССЫЛКА В ЛС", 
+        label="📨 РАССЫЛКА", 
         style=discord.ButtonStyle.danger,
-        emoji="📨",
-        row=2,
+        row=3,
         disabled=True,
         custom_id="capt_reg_send"
     )
     async def send_capt(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Отправить CAPT участникам (доступно всем в чате)"""
-        logger.info(f"Нажата кнопка 'Рассылка в ЛС' от {interaction.user}")
+        """Отправить CAPT участникам"""
+        logger.info(f"Нажата кнопка 'Рассылка' от {interaction.user}")
         
-        # УБРАНА ПРОВЕРКА has_access
-        
-        # Проверяем, активна ли регистрация
         if not capt_reg_manager.active_session or not capt_reg_manager.capt_info:
             await interaction.response.send_message(
                 "❌ Нет активной регистрации",
@@ -438,20 +444,16 @@ class ModerationView(PermanentView):
         await interaction.response.send_modal(CaptRegSendModal(capt_reg_manager.capt_info))
     
     @discord.ui.button(
-        label="🔄 ПОВТОРНЫЙ @EVERYONE", 
+        label="🔄 ПОВТОР", 
         style=discord.ButtonStyle.primary,
-        emoji="🔄",
-        row=3,
+        row=4,
         disabled=True,
         custom_id="capt_reg_reeveryone"
     )
     async def resend_everyone(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Повторно отправить @everyone оповещение (доступно всем в чате)"""
-        logger.info(f"Нажата кнопка 'Повторный @everyone' от {interaction.user}")
+        """Повторно отправить @everyone оповещение"""
+        logger.info(f"Нажата кнопка 'Повтор' от {interaction.user}")
         
-        # УБРАНА ПРОВЕРКА has_access
-        
-        # Проверяем, активна ли регистрация
         if not capt_reg_manager.active_session or not capt_reg_manager.capt_info:
             await interaction.response.send_message(
                 "❌ Нет активной регистрации",
@@ -459,27 +461,20 @@ class ModerationView(PermanentView):
             )
             return
         
-        # Отправляем повторное оповещение
         await capt_reg_manager._send_capt_announcement(interaction.client)
-        
-        await interaction.response.send_message(
-            "✅ Повторное @everyone оповещение отправлено!",
-            ephemeral=True
-        )
+        await interaction.response.send_message("✅ Повторное @everyone оповещение отправлено!", ephemeral=True)
     
     @discord.ui.button(
-        label="🎤 ПРОВЕРКА ПО ВОЙСУ", 
+        label="🎤 ПРОВЕРКА", 
         style=discord.ButtonStyle.success,
-        emoji="🎤",
-        row=3,
+        row=4,
         disabled=True,
         custom_id="capt_reg_voicecheck"
     )
     async def voice_check(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Проверить участников в текущем войс-канале"""
-        logger.info(f"Нажата кнопка 'Проверка по войсу' от {interaction.user}")
+        logger.info(f"Нажата кнопка 'Проверка' от {interaction.user}")
         
-        # Проверяем, активна ли регистрация
         if not capt_reg_manager.active_session:
             await interaction.response.send_message(
                 "❌ Нет активной регистрации",
@@ -487,34 +482,25 @@ class ModerationView(PermanentView):
             )
             return
         
-        # Проверяем, находится ли пользователь в войс-канале
         if not interaction.user.voice or not interaction.user.voice.channel:
             await interaction.response.send_message(
-                "❌ Ты должен находиться в голосовом канале, чтобы использовать эту кнопку",
+                "❌ Ты должен находиться в голосовом канале",
                 ephemeral=True
             )
             return
         
-        # Получаем войс-канал, в котором находится пользователь
         current_voice_channel = interaction.user.voice.channel
-        
-        # Отвечаем сразу, чтобы не было ошибки взаимодействия
         await interaction.response.defer(ephemeral=True)
         
         try:
-            # Получаем списки участников (теперь с ID записей)
             main_list, reserve_list = capt_reg_manager.get_lists()
-            # main_list = [(id, user_id, user_name), ...]
-            # reserve_list = [(id, user_id, user_name), ...]
             
-            # Создаем множества для быстрого поиска
             main_users = {user_id for _, user_id, _ in main_list}
             reserve_users = {user_id for _, user_id, _ in reserve_list}
             
-            # Собираем информацию о всех участниках в текущем войс-канале
-            in_voice_from_main = []      # Из основного списка
-            in_voice_from_reserve = []   # Из резерва
-            in_voice_not_registered = [] # Не зарегистрированы вообще
+            in_voice_from_main = []
+            in_voice_from_reserve = []
+            in_voice_not_registered = []
             
             for member in current_voice_channel.members:
                 user_id = str(member.id)
@@ -527,22 +513,18 @@ class ModerationView(PermanentView):
                 else:
                     in_voice_not_registered.append((user_id, user_name))
             
-            # Проверяем, кто из основного списка не в этом войсе
             not_in_voice = []
             for _, user_id, user_name in main_list:
                 if user_id not in {str(m.id) for m in current_voice_channel.members}:
                     not_in_voice.append((user_id, user_name))
             
-            # Создаем embed с результатами
-            from datetime import datetime
             embed = discord.Embed(
                 title="🎤 ПРОВЕРКА ПО ВОЙСУ",
-                description=f"Проверка в канале: **{current_voice_channel.name}**",
+                description=f"Канал: **{current_voice_channel.name}**",
                 color=0x00ff00,
                 timestamp=datetime.now()
             )
             
-            # Функция для ограничения длины текста
             def limit_text(text, max_len=1000):
                 if len(text) > max_len:
                     lines = text.split('\n')
@@ -558,53 +540,48 @@ class ModerationView(PermanentView):
                     return '\n'.join(visible_lines)
                 return text
             
-            # Из основного списка в войсе
             if in_voice_from_main:
-                in_voice_text = ""
+                text = ""
                 for i, (user_id, user_name) in enumerate(in_voice_from_main, 1):
-                    in_voice_text += f"{i}. <@{user_id}> — {user_name}\n"
+                    text += f"{i}. <@{user_id}>\n"
                 embed.add_field(
-                    name=f"✅ В ОСНОВНОМ СПИСКЕ И В ВОЙСЕ ({len(in_voice_from_main)})",
-                    value=limit_text(in_voice_text),
+                    name=f"✅ В ОСНОВНОМ И В ВОЙСЕ ({len(in_voice_from_main)})",
+                    value=limit_text(text),
                     inline=False
                 )
             
-            # Из резерва в войсе
             if in_voice_from_reserve:
-                reserve_voice_text = ""
+                text = ""
                 for i, (user_id, user_name) in enumerate(in_voice_from_reserve, 1):
-                    reserve_voice_text += f"{i}. <@{user_id}> — {user_name}\n"
+                    text += f"{i}. <@{user_id}>\n"
                 embed.add_field(
                     name=f"⏳ В РЕЗЕРВЕ И В ВОЙСЕ ({len(in_voice_from_reserve)})",
-                    value=limit_text(reserve_voice_text),
+                    value=limit_text(text),
                     inline=False
                 )
             
-            # Не зарегистрированные в войсе
             if in_voice_not_registered:
-                not_reg_text = ""
+                text = ""
                 for i, (user_id, user_name) in enumerate(in_voice_not_registered, 1):
-                    not_reg_text += f"{i}. <@{user_id}> — {user_name}\n"
+                    text += f"{i}. <@{user_id}>\n"
                 embed.add_field(
-                    name=f"⚪ В ВОЙСЕ, НО НЕ ЗАРЕГИСТРИРОВАНЫ ({len(in_voice_not_registered)})",
-                    value=limit_text(not_reg_text),
+                    name=f"⚪ В ВОЙСЕ НЕ ЗАРЕГИСТРИРОВАНЫ ({len(in_voice_not_registered)})",
+                    value=limit_text(text),
                     inline=False
                 )
             
-            # Из основного списка не в войсе
             if not_in_voice:
-                not_in_voice_text = ""
+                text = ""
                 for i, (user_id, user_name) in enumerate(not_in_voice, 1):
-                    not_in_voice_text += f"{i}. <@{user_id}> — {user_name}\n"
+                    text += f"{i}. <@{user_id}>\n"
                 embed.add_field(
-                    name=f"❌ В ОСНОВНОМ СПИСКЕ, НО НЕ В ЭТОМ ВОЙСЕ ({len(not_in_voice)})",
-                    value=limit_text(not_in_voice_text),
+                    name=f"❌ В ОСНОВНОМ НЕ В ВОЙСЕ ({len(not_in_voice)})",
+                    value=limit_text(text),
                     inline=False
                 )
             
-            # Информация о текущем войс-канале
             member_mentions = []
-            for member in current_voice_channel.members[:5]:  # Показываем первых 5
+            for member in current_voice_channel.members[:5]:
                 member_mentions.append(member.mention)
             
             voice_info = f"👥 **Всего в канале:** {len(current_voice_channel.members)}"
@@ -614,25 +591,19 @@ class ModerationView(PermanentView):
                     voice_info += f" и ещё {len(current_voice_channel.members) - 5}"
             
             embed.add_field(
-                name=f"🔊 Текущий войс-канал",
+                name="🔊 Текущий войс-канал",
                 value=limit_text(voice_info, 500),
                 inline=False
             )
             
-            # Если вообще никого нет
-            if not in_voice_from_main and not in_voice_from_reserve and not in_voice_not_registered and not not_in_voice:
-                embed.description += "\n\nВ этом войс-канале никого нет, а список участников пуст."
-            
-            embed.set_footer(text=f"Всего в основном списке: {len(main_list)} • Проверка: {interaction.user.display_name}")
+            embed.set_footer(text=f"Всего в основном: {len(main_list)} • Проверка: {interaction.user.display_name}")
             
             await interaction.followup.send(embed=embed, ephemeral=True)
             
         except Exception as e:
-            logger.error(f"Ошибка при проверке по войсу: {e}", exc_info=True)
-            await interaction.followup.send(
-                f"❌ Ошибка при проверке: {e}",
-                ephemeral=True
-            )
+            logger.error(f"Ошибка при проверке: {e}", exc_info=True)
+            await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
+
 
 # ===== ЧАТ ДЛЯ ВСЕХ =====
 
@@ -642,7 +613,6 @@ class PublicView(PermanentView):
     def __init__(self):
         super().__init__()
         logger.debug("PublicView создан")
-        # По умолчанию кнопки неактивны
         self.set_registration_active(False)
     
     def set_registration_active(self, active: bool):
@@ -655,7 +625,6 @@ class PublicView(PermanentView):
     @discord.ui.button(
         label="✅ ПРИСОЕДИНИТЬСЯ", 
         style=discord.ButtonStyle.success,
-        emoji="✅",
         row=0,
         disabled=True,
         custom_id="capt_reg_join"
@@ -664,12 +633,8 @@ class PublicView(PermanentView):
         """Присоединиться к регистрации"""
         logger.info(f"Нажата кнопка 'Присоединиться' от {interaction.user}")
         
-        # Проверяем, активна ли регистрация
         if not capt_reg_manager.active_session:
-            await interaction.response.send_message(
-                "❌ Регистрация ещё не начата", 
-                ephemeral=True
-            )
+            await interaction.response.send_message("❌ Регистрация ещё не начата", ephemeral=True)
             return
         
         success, msg = await capt_reg_manager.add_participant(
@@ -683,7 +648,6 @@ class PublicView(PermanentView):
     @discord.ui.button(
         label="❌ ОТСОЕДИНИТЬСЯ", 
         style=discord.ButtonStyle.danger,
-        emoji="❌",
         row=0,
         disabled=True,
         custom_id="capt_reg_leave"
