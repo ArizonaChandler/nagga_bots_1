@@ -446,10 +446,10 @@ class CaptRegistrationManager:
                 if current_list == 'main':
                     return False, "❌ Эта запись уже в основном списке"
                 
-                # Переводим в основной
+                # Переводим в основной и ОБНОВЛЯЕМ время регистрации на текущее
                 cursor.execute('''
                     UPDATE capt_registrations 
-                    SET list_type = 'main'
+                    SET list_type = 'main', registered_at = CURRENT_TIMESTAMP
                     WHERE id = ?
                 ''', (target_reg_id,))
                 
@@ -488,10 +488,10 @@ class CaptRegistrationManager:
                 if current_list == 'reserve':
                     return False, "❌ Эта запись уже в резерве"
                 
-                # Переводим в резерв
+                # Переводим в резерв и ОБНОВЛЯЕМ время регистрации на текущее
                 cursor.execute('''
                     UPDATE capt_registrations 
-                    SET list_type = 'reserve'
+                    SET list_type = 'reserve', registered_at = CURRENT_TIMESTAMP
                     WHERE id = ?
                 ''', (target_reg_id,))
                 
@@ -538,24 +538,24 @@ class CaptRegistrationManager:
             return False, f"❌ Ошибка: {e}"
     
     def get_lists(self):
-        """Получить текущие списки с ID записей"""
+        """Получить текущие списки с ID записей, отсортированные по времени регистрации"""
         with db.get_connection() as conn:
             cursor = conn.cursor()
-            # Основной список - сортируем по registered_at
+            # Основной список - сортируем по registered_at (кто раньше стал в основной)
             cursor.execute('''
                 SELECT id, user_id, user_name FROM capt_registrations 
                 WHERE is_active = 1 AND list_type = 'main'
                 ORDER BY registered_at
             ''')
-            main_list = cursor.fetchall()  # (id, user_id, user_name)
+            main_list = cursor.fetchall()
             
-            # Резервный список - сортируем по registered_at
+            # Резервный список - сортируем по registered_at (кто раньше стал в резерв)
             cursor.execute('''
                 SELECT id, user_id, user_name FROM capt_registrations 
                 WHERE is_active = 1 AND list_type = 'reserve'
                 ORDER BY registered_at
             ''')
-            reserve_list = cursor.fetchall()  # (id, user_id, user_name)
+            reserve_list = cursor.fetchall()
             
             return main_list, reserve_list
     
