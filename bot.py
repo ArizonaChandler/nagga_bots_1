@@ -184,51 +184,31 @@ async def on_ready():
                     await apps_channel.send(embed=embed, view=ApplicationPublicView())
                     print(f"✅ Создана кнопка подачи заявок в #{apps_channel.name}")
         
-        # Инициализация канала настроек (здесь будут и настройки, и модерация)
+        # Инициализация канала настроек (здесь объединенная панель)
         settings_channel_id = CONFIG.get('applications_settings_channel')
         if settings_channel_id:
             settings_channel = bot.get_channel(int(settings_channel_id))
             if settings_channel:
-                from applications.settings_view import ApplicationsSettingsView
-                from applications.admin_views import ApplicationsModerationPanel
+                from applications.settings_view import ApplicationsCombinedPanel
                 
-                # ===== СООБЩЕНИЕ 1: Панель настроек =====
-                settings_exists = False
+                # Ищем существующее сообщение с объединенной панелью
+                panel_exists = False
                 async for msg in settings_channel.history(limit=50):
                     if msg.author == bot.user and msg.embeds:
-                        if msg.embeds and "ПАНЕЛЬ УПРАВЛЕНИЯ ЗАЯВКАМИ" in msg.embeds[0].title:
-                            await msg.edit(view=ApplicationsSettingsView())
-                            settings_exists = True
-                            print(f"✅ Обновлена панель настроек заявок в #{settings_channel.name}")
+                        if msg.embeds and "УПРАВЛЕНИЕ И МОДЕРАЦИЯ ЗАЯВОК" in msg.embeds[0].title:
+                            await msg.edit(view=ApplicationsCombinedPanel())
+                            panel_exists = True
+                            print(f"✅ Обновлена объединенная панель в #{settings_channel.name}")
                             break
                 
-                if not settings_exists:
+                if not panel_exists:
                     embed = discord.Embed(
-                        title="📝 **ПАНЕЛЬ УПРАВЛЕНИЯ ЗАЯВКАМИ**",
-                        description="Настройка системы заявок в семью",
+                        title="📋 **УПРАВЛЕНИЕ И МОДЕРАЦИЯ ЗАЯВОК**",
+                        description="Настройка системы и управление заявками",
                         color=0x00ff00
                     )
-                    await settings_channel.send(embed=embed, view=ApplicationsSettingsView())
-                    print(f"✅ Создана панель настроек заявок в #{settings_channel.name}")
-                
-                # ===== СООБЩЕНИЕ 2: Панель модерации =====
-                mod_panel_exists = False
-                async for msg in settings_channel.history(limit=50):
-                    if msg.author == bot.user and msg.embeds:
-                        if msg.embeds and "ПАНЕЛЬ МОДЕРАЦИИ ЗАЯВОК" in msg.embeds[0].title:
-                            await msg.edit(view=ApplicationsModerationPanel())
-                            mod_panel_exists = True
-                            print(f"✅ Обновлена панель модерации в #{settings_channel.name}")
-                            break
-                
-                if not mod_panel_exists:
-                    embed = discord.Embed(
-                        title="📋 **ПАНЕЛЬ МОДЕРАЦИИ ЗАЯВОК**",
-                        description="Управление заявками в семью",
-                        color=0xffa500
-                    )
-                    await settings_channel.send(embed=embed, view=ApplicationsModerationPanel())
-                    print(f"✅ Создана панель модерации в #{settings_channel.name}")
+                    await settings_channel.send(embed=embed, view=ApplicationsCombinedPanel())
+                    print(f"✅ Создана объединенная панель в #{settings_channel.name}")
                 
     except Exception as e:
         print(f"❌ Ошибка инициализации системы заявок: {e}")
