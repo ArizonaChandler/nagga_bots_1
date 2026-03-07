@@ -71,11 +71,12 @@ class ApplicationsSettingsView(PermanentView):
         )
         
         guild = interaction.guild
+        settings = app_manager.get_settings()  # Получаем настройки
         
-        apps_channel = format_mention(guild, app_manager.applications_channel, 'channel') if app_manager.applications_channel else "`Не настроен`"
-        log_channel = format_mention(guild, app_manager.applications_log_channel, 'channel') if app_manager.applications_log_channel else "`Не настроен`"
-        recruit_role = format_mention(guild, app_manager.applications_recruit_role, 'role') if app_manager.applications_recruit_role else "`Не настроена`"
-        member_role = format_mention(guild, app_manager.applications_member_role, 'role') if app_manager.applications_member_role else "`Не настроена`"
+        apps_channel = format_mention(guild, settings.get('applications_channel'), 'channel') if settings.get('applications_channel') else "`Не настроен`"
+        log_channel = format_mention(guild, settings.get('applications_log_channel'), 'channel') if settings.get('applications_log_channel') else "`Не настроен`"
+        recruit_role = format_mention(guild, settings.get('applications_recruit_role'), 'role') if settings.get('applications_recruit_role') else "`Не настроена`"
+        member_role = format_mention(guild, settings.get('applications_member_role'), 'role') if settings.get('applications_member_role') else "`Не настроена`"
         
         embed.add_field(name="📝 Канал заявок", value=apps_channel, inline=False)
         embed.add_field(name="📋 Канал логов", value=log_channel, inline=False)
