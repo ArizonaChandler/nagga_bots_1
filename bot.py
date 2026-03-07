@@ -165,33 +165,60 @@ async def on_ready():
         if apps_channel_id:
             apps_channel = bot.get_channel(int(apps_channel_id))
             if apps_channel:
-                async for msg in apps_channel.history(limit=10):
-                    if msg.author == bot.user:
-                        await msg.delete()
+                # Ищем существующее сообщение с кнопкой подачи заявок
+                app_public_exists = False
+                async for msg in apps_channel.history(limit=50):
+                    if msg.author == bot.user and msg.embeds:
+                        if msg.embeds and "ПОДАЧА ЗАЯВОК В СЕМЬЮ" in msg.embeds[0].title:
+                            await msg.edit(view=ApplicationPublicView())
+                            app_public_exists = True
+                            print(f"✅ Обновлена кнопка подачи заявок в #{apps_channel.name}")
+                            break
                 
-                embed = discord.Embed(
-                    title="📝 ПОДАЧА ЗАЯВОК В СЕМЬЮ",
-                    description="Нажмите кнопку ниже, чтобы подать заявку",
-                    color=0x00ff00
-                )
-                await apps_channel.send(embed=embed, view=ApplicationPublicView())
-                print(f"✅ Кнопка заявок отправлена в #{apps_channel.name}")
+                if not app_public_exists:
+                    embed = discord.Embed(
+                        title="📝 ПОДАЧА ЗАЯВОК В СЕМЬЮ",
+                        description="Нажмите кнопку ниже, чтобы подать заявку",
+                        color=0x00ff00
+                    )
+                    await apps_channel.send(embed=embed, view=ApplicationPublicView())
+                    print(f"✅ Создана кнопка подачи заявок в #{apps_channel.name}")
         
-        # ===== НОВОЕ: Инициализация панели модерации =====
-        # Получаем канал для модерации заявок (тот же, куда приходят заявки)
-        if apps_channel_id:
-            mod_channel = bot.get_channel(int(apps_channel_id))
-            if mod_channel:
+        # Инициализация канала настроек (здесь будут и настройки, и модерация)
+        settings_channel_id = CONFIG.get('applications_settings_channel')
+        if settings_channel_id:
+            settings_channel = bot.get_channel(int(settings_channel_id))
+            if settings_channel:
+                from applications.settings_view import ApplicationsSettingsView
                 from applications.admin_views import ApplicationsModerationPanel
                 
-                # Ищем существующее сообщение с панелью модерации
+                # ===== СООБЩЕНИЕ 1: Панель настроек =====
+                settings_exists = False
+                async for msg in settings_channel.history(limit=50):
+                    if msg.author == bot.user and msg.embeds:
+                        if msg.embeds and "ПАНЕЛЬ УПРАВЛЕНИЯ ЗАЯВКАМИ" in msg.embeds[0].title:
+                            await msg.edit(view=ApplicationsSettingsView())
+                            settings_exists = True
+                            print(f"✅ Обновлена панель настроек заявок в #{settings_channel.name}")
+                            break
+                
+                if not settings_exists:
+                    embed = discord.Embed(
+                        title="📝 **ПАНЕЛЬ УПРАВЛЕНИЯ ЗАЯВКАМИ**",
+                        description="Настройка системы заявок в семью",
+                        color=0x00ff00
+                    )
+                    await settings_channel.send(embed=embed, view=ApplicationsSettingsView())
+                    print(f"✅ Создана панель настроек заявок в #{settings_channel.name}")
+                
+                # ===== СООБЩЕНИЕ 2: Панель модерации =====
                 mod_panel_exists = False
-                async for msg in mod_channel.history(limit=20):
+                async for msg in settings_channel.history(limit=50):
                     if msg.author == bot.user and msg.embeds:
                         if msg.embeds and "ПАНЕЛЬ МОДЕРАЦИИ ЗАЯВОК" in msg.embeds[0].title:
                             await msg.edit(view=ApplicationsModerationPanel())
                             mod_panel_exists = True
-                            print(f"✅ Панель модерации обновлена в #{mod_channel.name}")
+                            print(f"✅ Обновлена панель модерации в #{settings_channel.name}")
                             break
                 
                 if not mod_panel_exists:
@@ -200,26 +227,8 @@ async def on_ready():
                         description="Управление заявками в семью",
                         color=0xffa500
                     )
-                    await mod_channel.send(embed=embed, view=ApplicationsModerationPanel())
-                    print(f"✅ Панель модерации создана в #{mod_channel.name}")
-        
-        # Инициализация канала настроек
-        settings_channel_id = CONFIG.get('applications_settings_channel')
-        if settings_channel_id:
-            settings_channel = bot.get_channel(int(settings_channel_id))
-            if settings_channel:
-                from applications.settings_view import ApplicationsSettingsView
-                async for msg in settings_channel.history(limit=10):
-                    if msg.author == bot.user:
-                        await msg.delete()
-                
-                embed = discord.Embed(
-                    title="📝 **ПАНЕЛЬ УПРАВЛЕНИЯ ЗАЯВКАМИ**",
-                    description="Настройка системы заявок в семью",
-                    color=0x00ff00
-                )
-                await settings_channel.send(embed=embed, view=ApplicationsSettingsView())
-                print(f"✅ Панель настроек заявок отправлена в #{settings_channel.name}")
+                    await settings_channel.send(embed=embed, view=ApplicationsModerationPanel())
+                    print(f"✅ Создана панель модерации в #{settings_channel.name}")
                 
     except Exception as e:
         print(f"❌ Ошибка инициализации системы заявок: {e}")
