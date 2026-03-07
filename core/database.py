@@ -2,7 +2,6 @@
 import sqlite3
 from datetime import datetime
 import pytz
-from core.config import CONFIG
 
 class Database:
     def __init__(self):
@@ -822,6 +821,7 @@ class Database:
 
     def load_application_settings(self):
         """Загрузить все настройки системы заявок в CONFIG"""
+        from core.config import CONFIG  # ← импорт внутри метода
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT key, value FROM application_settings')

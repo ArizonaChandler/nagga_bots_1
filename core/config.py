@@ -2,7 +2,7 @@
 import os
 import json
 from dotenv import load_dotenv
-from core.database import db
+from core.database import Database
 
 load_dotenv()
 
@@ -34,6 +34,8 @@ CONFIG = {
     'applications_member_role': None,
     'applications_settings_channel': None,
 }
+
+db = Database()
 
 def load_config():
     settings = db.get_all_settings()
