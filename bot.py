@@ -157,8 +157,11 @@ async def on_ready():
 
     # Инициализация системы заявок
     try:       
+        # Получаем настройки
+        settings = app_manager.get_settings()
+        
         # Инициализация канала с публичной кнопкой
-        apps_channel_id = app_manager.applications_channel
+        apps_channel_id = settings.get('applications_channel')
         if apps_channel_id:
             apps_channel = bot.get_channel(int(apps_channel_id))
             if apps_channel:
