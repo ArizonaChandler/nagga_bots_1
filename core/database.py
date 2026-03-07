@@ -544,7 +544,7 @@ class Database:
         import pytz
         
         msk_tz = pytz.timezone('Europe/Moscow')
-        now = datetime.now(msk_tz)
+        now = datetime.now(msk_tz)  # aware datetime
         today = now.date()
         
         with self.get_connection() as conn:
@@ -555,11 +555,13 @@ class Database:
                 for day_offset in range(days_ahead):
                     check_date = today + timedelta(days=day_offset)
                     if check_date.weekday() == event['weekday']:
-                        if day_offset == 0:
-                            event_time = datetime.strptime(event['event_time'], "%H:%M").time()
-                            event_datetime = datetime.combine(check_date, event_time)
-                            if event_datetime < now:
-                                continue
+                        # Создаем aware datetime для времени мероприятия
+                        event_time = datetime.strptime(event['event_time'], "%H:%M").time()
+                        event_datetime = msk_tz.localize(datetime.combine(check_date, event_time))
+                        
+                        # Пропускаем, если время уже прошло сегодня
+                        if day_offset == 0 and event_datetime < now:
+                            continue
                         
                         cursor.execute('''
                             INSERT OR IGNORE INTO event_schedule 
@@ -576,7 +578,7 @@ class Database:
         import pytz
         
         msk_tz = pytz.timezone('Europe/Moscow')
-        today = datetime.now(msk_tz).date()
+        today = datetime.now(msk_tz).date()  # aware -> date
         weekday = today.weekday()
         
         with self.get_connection() as conn:
