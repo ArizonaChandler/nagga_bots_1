@@ -46,4 +46,23 @@ class ApplicationManager:
         """Назначить обзвон"""
         return db.set_interviewing(app_id, reviewer_id)
 
+    def reset_user_applications(self, user_id: str, reset_by: str = None):
+        """Сбросить все заявки пользователя (для возможности подать новую)"""
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Удаляем все заявки пользователя
+            cursor.execute('''
+                DELETE FROM applications 
+                WHERE user_id = ?
+            ''', (user_id,))
+            
+            deleted_count = cursor.rowcount
+            conn.commit()
+            
+            if deleted_count > 0 and reset_by:
+                db.log_action(reset_by, "RESET_USER_APPLICATIONS", f"User {user_id}, deleted {deleted_count} applications")
+            
+            return deleted_count > 0, f"✅ Удалено {deleted_count} заявок пользователя"
+
 app_manager = ApplicationManager()
