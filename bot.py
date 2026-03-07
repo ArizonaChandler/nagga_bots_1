@@ -160,17 +160,15 @@ async def on_ready():
         # Получаем настройки
         settings = app_manager.get_settings()
         
-        # Инициализация канала с публичной кнопкой
+        # Инициализация канала с публичной кнопкой (для подачи заявок)
         apps_channel_id = settings.get('applications_channel')
         if apps_channel_id:
             apps_channel = bot.get_channel(int(apps_channel_id))
             if apps_channel:
-                # Очищаем старые сообщения
                 async for msg in apps_channel.history(limit=10):
                     if msg.author == bot.user:
                         await msg.delete()
                 
-                # Отправляем кнопку подачи заявок
                 embed = discord.Embed(
                     title="📝 ПОДАЧА ЗАЯВОК В СЕМЬЮ",
                     description="Нажмите кнопку ниже, чтобы подать заявку",
@@ -178,6 +176,32 @@ async def on_ready():
                 )
                 await apps_channel.send(embed=embed, view=ApplicationPublicView())
                 print(f"✅ Кнопка заявок отправлена в #{apps_channel.name}")
+        
+        # ===== НОВОЕ: Инициализация панели модерации =====
+        # Получаем канал для модерации заявок (тот же, куда приходят заявки)
+        if apps_channel_id:
+            mod_channel = bot.get_channel(int(apps_channel_id))
+            if mod_channel:
+                from applications.admin_views import ApplicationsModerationPanel
+                
+                # Ищем существующее сообщение с панелью модерации
+                mod_panel_exists = False
+                async for msg in mod_channel.history(limit=20):
+                    if msg.author == bot.user and msg.embeds:
+                        if msg.embeds and "ПАНЕЛЬ МОДЕРАЦИИ ЗАЯВОК" in msg.embeds[0].title:
+                            await msg.edit(view=ApplicationsModerationPanel())
+                            mod_panel_exists = True
+                            print(f"✅ Панель модерации обновлена в #{mod_channel.name}")
+                            break
+                
+                if not mod_panel_exists:
+                    embed = discord.Embed(
+                        title="📋 **ПАНЕЛЬ МОДЕРАЦИИ ЗАЯВОК**",
+                        description="Управление заявками в семью",
+                        color=0xffa500
+                    )
+                    await mod_channel.send(embed=embed, view=ApplicationsModerationPanel())
+                    print(f"✅ Панель модерации создана в #{mod_channel.name}")
         
         # Инициализация канала настроек
         settings_channel_id = CONFIG.get('applications_settings_channel')
