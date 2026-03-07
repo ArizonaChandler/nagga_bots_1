@@ -29,6 +29,11 @@ from events.scheduler import setup as setup_scheduler
 from advertising.core import setup as setup_advertising
 from advertising.commands import setup as setup_ad_commands
 
+# Импорт систем заявок
+from applications.manager import app_manager
+from applications.views import ApplicationPublicView
+from applications.admin_views import ApplicationsModerationPanel
+
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -151,11 +156,7 @@ async def on_ready():
         traceback.print_exc()
 
     # Инициализация системы заявок
-    try:
-        from applications.models import app_manager
-        from applications.views import ApplicationPublicView
-        from applications.admin_views import ApplicationsModerationPanel
-        
+    try:       
         # Инициализация канала с публичной кнопкой
         apps_channel_id = app_manager.applications_channel
         if apps_channel_id:

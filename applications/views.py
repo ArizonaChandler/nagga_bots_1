@@ -1,10 +1,10 @@
 """Кнопки для пользователей"""
 import discord
+from datetime import datetime
+from core.config import CONFIG
 from applications.base import PermanentView
 from applications.modals import ApplicationModal
 from applications.manager import app_manager
-from datetime import datetime
-from core.config import CONFIG
 
 class ApplicationPublicView(PermanentView):
     """Публичная кнопка для подачи заявок"""
@@ -33,7 +33,6 @@ class ApplicationModerationView(discord.ui.View):
     @discord.ui.button(label="✅ ПРИНЯТЬ", style=discord.ButtonStyle.success, row=0)
     async def accept_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Принять заявку"""
-        
         # Делаем кнопки неактивными сразу
         for child in self.children:
             child.disabled = True
@@ -45,7 +44,6 @@ class ApplicationModerationView(discord.ui.View):
     @discord.ui.button(label="📞 ВЫЗВАТЬ НА ОБЗВОН", style=discord.ButtonStyle.primary, row=0)
     async def interview_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Вызвать на обзвон"""
-        
         # Делаем кнопки неактивными сразу
         for child in self.children:
             child.disabled = True
@@ -61,8 +59,6 @@ class ApplicationModerationView(discord.ui.View):
     
     async def process_accept(self, interaction: discord.Interaction):
         """Обработка принятия заявки"""
-        from core.config import CONFIG
-        
         # Принимаем заявку в БД
         success = app_manager.accept_application(self.application_id, str(interaction.user.id))
         
@@ -122,8 +118,6 @@ class ApplicationModerationView(discord.ui.View):
     
     async def process_interview(self, interaction: discord.Interaction):
         """Обработка вызова на обзвон"""
-        from core.config import CONFIG
-        
         # Отмечаем как обзвон в БД
         success = app_manager.set_interviewing(self.application_id, str(interaction.user.id))
         
@@ -163,9 +157,6 @@ class ApplicationModerationView(discord.ui.View):
         )
         await channel.send(content=recruit_mention, embed=embed)
         
-        # Создаем приватный чат (опционально)
-        # ...
-        
         # Обновляем сообщение
         embed = interaction.message.embeds[0]
         embed.color = 0xffa500
@@ -190,8 +181,6 @@ class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА
         self.application_id = application_id
     
     async def on_submit(self, interaction: discord.Interaction):
-        from core.config import CONFIG
-        
         # Делаем кнопки в исходном сообщении неактивными
         message = interaction.message
         if message and message.embeds:
@@ -241,8 +230,5 @@ class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА
             embed.add_field(name="📝 Причина", value=self.reason.value, inline=False)
             
             # Деактивируем все кнопки в исходном сообщении
-            for child in self.children:
-                child.disabled = True
-            
             await message.edit(embed=embed, view=None)
             await interaction.response.send_message("❌ Заявка отклонена", ephemeral=True)
