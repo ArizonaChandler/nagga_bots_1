@@ -1195,31 +1195,63 @@ class SetApplicationsSettingsChannelModal(discord.ui.Modal, title="📝 КАНА
         from applications.settings_view import ApplicationsSettingsView
         
         try:
-            channel = interaction.guild.get_channel(int(self.channel_id.value))
-            if not channel:
-                await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
+            # Получаем сервер из CONFIG
+            server_id = CONFIG.get('server_id')
+            if not server_id:
+                await interaction.response.send_message(
+                    "❌ Сначала установите ID сервера в Глобальных настройках",
+                    ephemeral=True
+                )
                 return
             
+            guild = interaction.client.get_guild(int(server_id))
+            if not guild:
+                await interaction.response.send_message(
+                    f"❌ Сервер с ID {server_id} не найден",
+                    ephemeral=True
+                )
+                return
+            
+            # Получаем канал
+            channel = guild.get_channel(int(self.channel_id.value))
+            if not channel:
+                await interaction.response.send_message(
+                    f"❌ Канал {self.channel_id.value} не найден на сервере {guild.name}",
+                    ephemeral=True
+                )
+                return
+            
+            # Сохраняем в CONFIG и БД
             CONFIG['applications_settings_channel'] = self.channel_id.value
             db.set_setting('applications_settings_channel', self.channel_id.value, str(interaction.user.id))
             save_config(str(interaction.user.id))
             
-            # Очищаем старые сообщения
-            async for msg in channel.history(limit=10):
-                if msg.author == interaction.client.user:
-                    await msg.delete()
+            # Ищем существующее сообщение с настройками заявок
+            app_settings_exists = False
+            async for msg in channel.history(limit=50):
+                if msg.author == interaction.client.user and msg.embeds:
+                    if msg.embeds and "ПАНЕЛЬ УПРАВЛЕНИЯ ЗАЯВКАМИ" in msg.embeds[0].title:
+                        # Обновляем существующее сообщение
+                        await msg.edit(view=ApplicationsSettingsView())
+                        app_settings_exists = True
+                        await interaction.response.send_message(
+                            f"✅ Панель настроек заявок обновлена в {channel.mention}",
+                            ephemeral=True
+                        )
+                        break
             
-            # Отправляем панель настроек
-            embed = discord.Embed(
-                title="📝 **ПАНЕЛЬ УПРАВЛЕНИЯ ЗАЯВКАМИ**",
-                description="Настройка системы заявок в семью",
-                color=0x00ff00
-            )
-            await channel.send(embed=embed, view=ApplicationsSettingsView())
+            # Если сообщение не найдено - создаём новое
+            if not app_settings_exists:
+                embed = discord.Embed(
+                    title="📝 **ПАНЕЛЬ УПРАВЛЕНИЯ ЗАЯВКАМИ**",
+                    description="Настройка системы заявок в семью",
+                    color=0x00ff00
+                )
+                await channel.send(embed=embed, view=ApplicationsSettingsView())
+                await interaction.response.send_message(
+                    f"✅ Канал настроек заявок создан: {channel.mention}",
+                    ephemeral=True
+                )
             
-            await interaction.response.send_message(
-                f"✅ Канал настроек заявок создан: {channel.mention}",
-                ephemeral=True
-            )
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
