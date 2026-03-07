@@ -1,5 +1,7 @@
 """Модалки для системы заявок"""
 import discord
+from applications.manager import app_manager
+from datetime import datetime
 
 class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"):
     """Модалка для создания заявки"""
@@ -41,7 +43,6 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
     )
     
     async def on_submit(self, interaction: discord.Interaction):
-        from applications.models import app_manager
         
         # Создаем заявку
         app_id, error = app_manager.create_application(
@@ -67,7 +68,9 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
         await interaction.response.send_message(embed=embed, ephemeral=True)
         
         # Отправляем заявку в канал модерации
-        channel_id = app_manager.applications_channel
+        settings = app_manager.get_settings()
+        channel_id = settings.get('applications_channel')
+        
         if channel_id:
             channel = interaction.client.get_channel(int(channel_id))
             if channel:

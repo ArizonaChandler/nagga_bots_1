@@ -2,6 +2,9 @@
 import discord
 from applications.base import PermanentView
 from applications.modals import ApplicationModal
+from applications.manager import app_manager
+from datetime import datetime
+from core.config import CONFIG
 
 class ApplicationPublicView(PermanentView):
     """Публичная кнопка для подачи заявок"""
@@ -30,7 +33,6 @@ class ApplicationModerationView(discord.ui.View):
     @discord.ui.button(label="✅ ПРИНЯТЬ", style=discord.ButtonStyle.success, row=0)
     async def accept_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Принять заявку"""
-        from applications.manager import app_manager
         
         # Делаем кнопки неактивными сразу
         for child in self.children:
@@ -43,7 +45,6 @@ class ApplicationModerationView(discord.ui.View):
     @discord.ui.button(label="📞 ВЫЗВАТЬ НА ОБЗВОН", style=discord.ButtonStyle.primary, row=0)
     async def interview_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Вызвать на обзвон"""
-        from applications.manager import app_manager
         
         # Делаем кнопки неактивными сразу
         for child in self.children:
@@ -60,7 +61,6 @@ class ApplicationModerationView(discord.ui.View):
     
     async def process_accept(self, interaction: discord.Interaction):
         """Обработка принятия заявки"""
-        from applications.manager import app_manager
         from core.config import CONFIG
         
         # Принимаем заявку в БД
@@ -122,7 +122,6 @@ class ApplicationModerationView(discord.ui.View):
     
     async def process_interview(self, interaction: discord.Interaction):
         """Обработка вызова на обзвон"""
-        from applications.manager import app_manager
         from core.config import CONFIG
         
         # Отмечаем как обзвон в БД
@@ -191,7 +190,6 @@ class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА
         self.application_id = application_id
     
     async def on_submit(self, interaction: discord.Interaction):
-        from applications.manager import app_manager
         from core.config import CONFIG
         
         # Делаем кнопки в исходном сообщении неактивными
