@@ -108,6 +108,92 @@ class EventsSettingsView(PermanentView):
             embed.set_footer(text=f"Показано 10 из {len(events)} мероприятий")
         
         await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @discord.ui.button(
+        label="⚙️ Управление МП", 
+        style=discord.ButtonStyle.primary,
+        emoji="⚙️",
+        row=3,
+        custom_id="events_settings_manage"
+    )
+    async def manage_events(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Управление существующими мероприятиями"""
+        await interaction.response.defer(ephemeral=True)
+        
+        # Получаем все мероприятия
+        events = db.get_events(enabled_only=False)  # получаем и активные и неактивные
+        
+        if not events:
+            await interaction.followup.send("📅 Нет созданных мероприятий", ephemeral=True)
+            return
+        
+        # Создаем embed со списком
+        embed = discord.Embed(
+            title="⚙️ УПРАВЛЕНИЕ МЕРОПРИЯТИЯМИ",
+            description="Выберите мероприятие для редактирования",
+            color=0x00ff00,
+            timestamp=datetime.now()
+        )
+        
+        days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+        
+        for event in events[:10]:  # Показываем первые 10
+            status = "✅" if event['enabled'] else "❌"
+            embed.add_field(
+                name=f"{status} {event['name']} (ID: {event['id']})",
+                value=f"{days[event['weekday']]} {event['event_time']}",
+                inline=False
+            )
+        
+        if len(events) > 10:
+            embed.set_footer(text=f"Показано 10 из {len(events)} мероприятий")
+        
+        # Создаем Select меню для выбора мероприятия
+        class EventSelect(discord.ui.Select):
+            def __init__(self):
+                options = []
+                for event in events[:25]:  # Discord лимит - 25 опций
+                    status = "✅" if event['enabled'] else "❌"
+                    options.append(
+                        discord.SelectOption(
+                            label=f"{event['name'][:50]}",
+                            description=f"{days[event['weekday']]} {event['event_time']}",
+                            value=str(event['id']),
+                            emoji="✅" if event['enabled'] else "❌"
+                        )
+                    )
+                
+                super().__init__(
+                    placeholder="Выберите мероприятие...",
+                    min_values=1,
+                    max_values=1,
+                    options=options
+                )
+            
+            async def callback(self, interaction: discord.Interaction):
+                event_id = int(self.values[0])
+                event = db.get_event(event_id)
+                
+                if not event:
+                    await interaction.response.send_message("❌ Мероприятие не найдено", ephemeral=True)
+                    return
+                
+                # Показываем меню управления конкретным мероприятием
+                view = EventManageView(event_id, event['name'], event['weekday'], event['event_time'], event['enabled'])
+                embed = discord.Embed(
+                    title=f"⚙️ УПРАВЛЕНИЕ: {event['name']}",
+                    color=0xffa500
+                )
+                embed.add_field(name="📅 День", value=days[event['weekday']], inline=True)
+                embed.add_field(name="⏰ Время", value=event['event_time'], inline=True)
+                embed.add_field(name="📊 Статус", value="✅ Активен" if event['enabled'] else "❌ Отключен", inline=True)
+                
+                await interaction.response.edit_message(embed=embed, view=view)
+        
+        view = discord.ui.View(timeout=60)
+        view.add_item(EventSelect())
+        
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
     
     @discord.ui.button(
         label="📊 Статистика", 
@@ -149,6 +235,80 @@ class EventsSettingsView(PermanentView):
         )
         
         await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+class EventManageView(discord.ui.View):
+    """Управление конкретным мероприятием"""
+    
+    def __init__(self, event_id: int, event_name: str, weekday: int, event_time: str, enabled: bool):
+        super().__init__(timeout=60)
+        self.event_id = event_id
+        self.event_name = event_name
+        self.weekday = weekday
+        self.event_time = event_time
+        self.enabled = enabled
+    
+    @discord.ui.button(label="✏️ Редактировать", style=discord.ButtonStyle.primary, emoji="✏️", row=0)
+    async def edit_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Редактировать мероприятие"""
+        modal = EditEventSettingsModal(self.event_id, self.event_name, self.weekday, self.event_time)
+        await interaction.response.send_modal(modal)
+    
+    @discord.ui.button(label="🔄 Переключить статус", style=discord.ButtonStyle.secondary, emoji="🔄", row=0)
+    async def toggle_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Включить/выключить мероприятие"""
+        new_status = not self.enabled
+        db.update_event(self.event_id, enabled=1 if new_status else 0)
+        db.log_event_action(self.event_id, "toggled", str(interaction.user.id), 
+                           f"Статус: {'включен' if new_status else 'отключен'}")
+        
+        await interaction.response.send_message(
+            f"✅ Мероприятие {'включено' if new_status else 'отключено'}",
+            ephemeral=True
+        )
+        
+        # Обновляем кнопку
+        self.enabled = new_status
+    
+    @discord.ui.button(label="🗑️ Удалить", style=discord.ButtonStyle.danger, emoji="🗑️", row=1)
+    async def delete_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Удалить мероприятие"""
+        # Создаем подтверждение
+        view = ConfirmDeleteEventView(self.event_id, self.event_name)
+        await interaction.response.send_message(
+            f"❓ Ты уверен, что хочешь удалить **{self.event_name}**?",
+            view=view,
+            ephemeral=True
+        )
+
+
+class ConfirmDeleteEventView(discord.ui.View):
+    """Подтверждение удаления мероприятия"""
+    
+    def __init__(self, event_id: int, event_name: str):
+        super().__init__(timeout=30)
+        self.event_id = event_id
+        self.event_name = event_name
+    
+    @discord.ui.button(label="✅ Да, удалить", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        success = db.delete_event(self.event_id, soft=False)
+        
+        if success:
+            db.log_event_action(self.event_id, "deleted", str(interaction.user.id))
+            await interaction.response.edit_message(
+                content=f"✅ Мероприятие **{self.event_name}** удалено",
+                view=None
+            )
+        else:
+            await interaction.response.edit_message(
+                content="❌ Не удалось удалить мероприятие",
+                view=None
+            )
+    
+    @discord.ui.button(label="❌ Отмена", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="❌ Удаление отменено", view=None)
 
 
 # ===== МОДАЛКИ ДЛЯ НАСТРОЕК =====
@@ -448,6 +608,79 @@ class AddEventSettingsModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕР
             
             await interaction.response.send_message(
                 f"✅ Мероприятие добавлено!\n"
+                f"📌 {self.event_name.value}\n"
+                f"📅 {days[day]} в {self.event_time.value}",
+                ephemeral=True
+            )
+            
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
+
+class EditEventSettingsModal(discord.ui.Modal, title="✏️ РЕДАКТИРОВАТЬ МЕРОПРИЯТИЕ"):
+    def __init__(self, event_id: int, current_name: str, current_weekday: int, current_time: str):
+        super().__init__()
+        self.event_id = event_id
+        
+        self.event_name = discord.ui.TextInput(
+            label="Название мероприятия",
+            default=current_name,
+            max_length=100,
+            required=True
+        )
+        self.add_item(self.event_name)
+        
+        self.weekday = discord.ui.TextInput(
+            label="День недели (0-6, где 0 - Пн)",
+            default=str(current_weekday),
+            max_length=1,
+            required=True
+        )
+        self.add_item(self.weekday)
+        
+        self.event_time = discord.ui.TextInput(
+            label="Время (ЧЧ:ММ)",
+            default=current_time,
+            max_length=5,
+            required=True
+        )
+        self.add_item(self.event_time)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            # Проверяем день недели
+            try:
+                day = int(self.weekday.value)
+                if day < 0 or day > 6:
+                    await interaction.response.send_message("❌ День недели должен быть от 0 до 6", ephemeral=True)
+                    return
+            except ValueError:
+                await interaction.response.send_message("❌ День недели должен быть числом", ephemeral=True)
+                return
+            
+            # Проверяем время
+            try:
+                from datetime import datetime
+                datetime.strptime(self.event_time.value, "%H:%M")
+            except ValueError:
+                await interaction.response.send_message("❌ Неверный формат времени", ephemeral=True)
+                return
+            
+            # Обновляем мероприятие
+            db.update_event(
+                self.event_id,
+                name=self.event_name.value,
+                weekday=day,
+                event_time=self.event_time.value
+            )
+            
+            db.log_event_action(self.event_id, "edited", str(interaction.user.id),
+                               f"Новое: {self.event_name.value} {self.event_time.value}")
+            
+            days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+            
+            await interaction.response.send_message(
+                f"✅ Мероприятие обновлено!\n"
                 f"📌 {self.event_name.value}\n"
                 f"📅 {days[day]} в {self.event_time.value}",
                 ephemeral=True
