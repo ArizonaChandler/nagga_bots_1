@@ -306,31 +306,12 @@ class GlobalSettingsView(BaseMenuView):
         admin_btn.callback = admin_cb
         self.add_item(admin_btn)
         
-        # РЯД 2: СИСТЕМА МЕРОПРИЯТИЙ
-        alarm_btn = discord.ui.Button(
-            label="🔔 Мероприятия",
-            style=discord.ButtonStyle.primary,
-            emoji="🔔",
-            row=2
-        )
-        async def alarm_cb(i):
-            from admin.views import EventSettingsView
-            view = EventSettingsView(self.user_id, self.guild, self, await self.get_current_embed())
-            embed = discord.Embed(
-                title="🔔 **СИСТЕМА МЕРОПРИЯТИЙ**",
-                description="Управление автоматическими напоминаниями",
-                color=0xffa500
-            )
-            await i.response.edit_message(embed=embed, view=view)
-        alarm_btn.callback = alarm_cb
-        self.add_item(alarm_btn)
-        
-        # РЯД 3: НАСТРОЙКИ КАНАЛОВ УПРАВЛЕНИЯ
+        # РЯД 2: НАСТРОЙКИ КАНАЛОВ УПРАВЛЕНИЯ (ЧАСТЬ 1)
         capt_settings_channel_btn = discord.ui.Button(
             label="⚙️ Канал настроек CAPT",
             style=discord.ButtonStyle.secondary,
             emoji="⚙️",
-            row=3
+            row=2
         )
         async def capt_settings_channel_cb(i):
             await i.response.send_modal(SetCaptSettingsChannelModal(self.guild))
@@ -341,7 +322,7 @@ class GlobalSettingsView(BaseMenuView):
             label="📢 Канал настроек авто-рекламы",
             style=discord.ButtonStyle.secondary,
             emoji="📢",
-            row=3
+            row=2
         )
         async def ad_settings_channel_cb(i):
             await i.response.send_modal(SetAdSettingsChannelModal(self.guild))
@@ -352,18 +333,19 @@ class GlobalSettingsView(BaseMenuView):
             label="🔔 Канал настроек мероприятий",
             style=discord.ButtonStyle.secondary,
             emoji="🔔",
-            row=3
+            row=2
         )
         async def events_settings_channel_cb(i):
             await i.response.send_modal(SetEventsSettingsChannelModal(self.guild))
         events_settings_channel_btn.callback = events_settings_channel_cb
         self.add_item(events_settings_channel_btn)
         
+        # РЯД 3: НАСТРОЙКИ КАНАЛОВ УПРАВЛЕНИЯ (ЧАСТЬ 2)
         apps_settings_channel_btn = discord.ui.Button(
             label="📝 Канал настроек заявок",
             style=discord.ButtonStyle.secondary,
             emoji="📝",
-            row=4  # выбери подходящий ряд
+            row=3
         )
         async def apps_settings_channel_cb(i):
             await i.response.send_modal(SetApplicationsSettingsChannelModal(self.guild))
@@ -371,7 +353,7 @@ class GlobalSettingsView(BaseMenuView):
         self.add_item(apps_settings_channel_btn)
 
         # РЯД 4: НАЗАД
-        self.add_back_button(row=5)
+        self.add_back_button(row=4)
     
     async def get_current_embed(self):
         server_name = await get_server_name(self.guild, CONFIG.get('server_id'))
@@ -426,7 +408,7 @@ class GlobalSettingsView(BaseMenuView):
             inline=True
         )
         
-        embed.set_footer(text="Настройки CAPT и авто-рекламы в отдельных каналах")
+        embed.set_footer(text="Все системы настраиваются в отдельных каналах")
         return embed
 
 
