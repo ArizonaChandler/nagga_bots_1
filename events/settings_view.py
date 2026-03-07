@@ -118,82 +118,136 @@ class EventsSettingsView(PermanentView):
     )
     async def manage_events(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Управление существующими мероприятиями"""
-        await interaction.response.defer(ephemeral=True)
-        
-        # Получаем все мероприятия
-        events = db.get_events(enabled_only=False)  # получаем и активные и неактивные
+        # Получаем ВСЕ мероприятия
+        events = db.get_events(enabled_only=False)
         
         if not events:
-            await interaction.followup.send("📅 Нет созданных мероприятий", ephemeral=True)
+            await interaction.response.send_message("📅 Нет созданных мероприятий", ephemeral=True)
             return
         
-        # Создаем embed со списком
-        embed = discord.Embed(
-            title="⚙️ УПРАВЛЕНИЕ МЕРОПРИЯТИЯМИ",
-            description="Выберите мероприятие для редактирования",
-            color=0x00ff00,
-            timestamp=datetime.now()
-        )
+        # Создаем пагинированное меню
+        view = EventPaginatedView(events, 0)
+        await interaction.response.send_message(embed=view.get_embed(), view=view, ephemeral=True)
+
+
+    class EventPaginatedView(discord.ui.View):
+        """Пагинированное меню для выбора мероприятия"""
         
-        days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-        
-        for event in events[:10]:  # Показываем первые 10
-            status = "✅" if event['enabled'] else "❌"
-            embed.add_field(
-                name=f"{status} {event['name']} (ID: {event['id']})",
-                value=f"{days[event['weekday']]} {event['event_time']}",
-                inline=False
-            )
-        
-        if len(events) > 10:
-            embed.set_footer(text=f"Показано 10 из {len(events)} мероприятий")
-        
-        # Создаем Select меню для выбора мероприятия
-        class EventSelect(discord.ui.Select):
-            def __init__(self):
-                options = []
-                for event in events[:25]:  # Discord лимит - 25 опций
-                    status = "✅" if event['enabled'] else "❌"
-                    options.append(
-                        discord.SelectOption(
-                            label=f"{event['name'][:50]}",
-                            description=f"{days[event['weekday']]} {event['event_time']}",
-                            value=str(event['id']),
-                            emoji="✅" if event['enabled'] else "❌"
-                        )
-                    )
-                
-                super().__init__(
-                    placeholder="Выберите мероприятие...",
-                    min_values=1,
-                    max_values=1,
-                    options=options
-                )
+        def __init__(self, events, page):
+            super().__init__(timeout=60)
+            self.events = events
+            self.page = page
+            self.items_per_page = 25
+            self.total_pages = (len(events) + self.items_per_page - 1) // self.items_per_page
             
-            async def callback(self, interaction: discord.Interaction):
-                event_id = int(self.values[0])
-                event = db.get_event(event_id)
-                
-                if not event:
-                    await interaction.response.send_message("❌ Мероприятие не найдено", ephemeral=True)
-                    return
-                
-                # Показываем меню управления конкретным мероприятием
-                view = EventManageView(event_id, event['name'], event['weekday'], event['event_time'], event['enabled'])
-                embed = discord.Embed(
-                    title=f"⚙️ УПРАВЛЕНИЕ: {event['name']}",
-                    color=0xffa500
-                )
-                embed.add_field(name="📅 День", value=days[event['weekday']], inline=True)
-                embed.add_field(name="⏰ Время", value=event['event_time'], inline=True)
-                embed.add_field(name="📊 Статус", value="✅ Активен" if event['enabled'] else "❌ Отключен", inline=True)
-                
-                await interaction.response.edit_message(embed=embed, view=view)
+            self.update_buttons()
         
-        view = discord.ui.View(timeout=60)
-        view.add_item(EventSelect())
+        def get_current_page_events(self):
+            start = self.page * self.items_per_page
+            end = start + self.items_per_page
+            return self.events[start:end]
         
-        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+        def get_embed(self):
+            current_events = self.get_current_page_events()
+            start = self.page * self.items_per_page + 1
+            end = min((self.page + 1) * self.items_per_page, len(self.events))
+            
+            embed = discord.Embed(
+                title="⚙️ УПРАВЛЕНИЕ МЕРОПРИЯТИЯМИ",
+                description=f"Всего мероприятий: **{len(self.events)}**\nСтраница {self.page + 1} из {self.total_pages}",
+                color=0x00ff00,
+                timestamp=datetime.now()
+            )
+            
+            days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+            
+            events_text = ""
+            for i, event in enumerate(current_events, start):
+                status = "✅" if event['enabled'] else "❌"
+                events_text += f"{status} **{i}.** {event['name']} — {days[event['weekday']]} {event['event_time']}\n"
+            
+            if events_text:
+                embed.add_field(name="📋 Список мероприятий", value=events_text[:1024], inline=False)
+            
+            # Статистика
+            active_count = sum(1 for e in self.events if e['enabled'])
+            inactive_count = len(self.events) - active_count
+            embed.add_field(name="✅ Активные", value=str(active_count), inline=True)
+            embed.add_field(name="❌ Неактивные", value=str(inactive_count), inline=True)
+            
+            return embed
+        
+        def update_buttons(self):
+            self.clear_items()
+            
+            # Кнопки пагинации
+            if self.page > 0:
+                prev_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary)
+                async def prev_callback(interaction):
+                    self.page -= 1
+                    self.update_buttons()
+                    await interaction.response.edit_message(embed=self.get_embed(), view=self)
+                prev_btn.callback = prev_callback
+                self.add_item(prev_btn)
+            
+            if self.page < self.total_pages - 1:
+                next_btn = discord.ui.Button(label="Вперёд ▶", style=discord.ButtonStyle.secondary)
+                async def next_callback(interaction):
+                    self.page += 1
+                    self.update_buttons()
+                    await interaction.response.edit_message(embed=self.get_embed(), view=self)
+                next_btn.callback = next_callback
+                self.add_item(next_btn)
+            
+            # Добавляем Select меню для текущей страницы
+            class EventSelect(discord.ui.Select):
+                def __init__(self, page_events, all_events, page_num):
+                    options = []
+                    days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+                    
+                    for event in page_events:
+                        status = "✅" if event['enabled'] else "❌"
+                        name = event['name'][:45] + "..." if len(event['name']) > 45 else event['name']
+                        
+                        options.append(
+                            discord.SelectOption(
+                                label=f"{name}",
+                                description=f"{days[event['weekday']]} {event['event_time']}",
+                                value=str(event['id']),
+                                emoji="✅" if event['enabled'] else "❌"
+                            )
+                        )
+                    
+                    super().__init__(
+                        placeholder=f"Страница {page_num + 1} - выберите мероприятие",
+                        min_values=1,
+                        max_values=1,
+                        options=options
+                    )
+                    self.all_events = all_events
+                
+                async def callback(self, interaction: discord.Interaction):
+                    event_id = int(self.values[0])
+                    event = db.get_event(event_id)
+                    
+                    if not event:
+                        await interaction.response.send_message("❌ Мероприятие не найдено", ephemeral=True)
+                        return
+                    
+                    days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+                    
+                    view = EventManageView(event_id, event['name'], event['weekday'], event['event_time'], event['enabled'])
+                    embed = discord.Embed(
+                        title=f"⚙️ УПРАВЛЕНИЕ: {event['name']}",
+                        color=0xffa500
+                    )
+                    embed.add_field(name="📅 День", value=days[event['weekday']], inline=True)
+                    embed.add_field(name="⏰ Время", value=event['event_time'], inline=True)
+                    embed.add_field(name="📊 Статус", value="✅ Активен" if event['enabled'] else "❌ Отключен", inline=True)
+                    
+                    await interaction.response.edit_message(embed=embed, view=view)
+            
+            self.add_item(EventSelect(self.get_current_page_events(), self.events, self.page))
     
     @discord.ui.button(
         label="📊 Статистика", 
@@ -688,4 +742,3 @@ class EditEventSettingsModal(discord.ui.Modal, title="✏️ РЕДАКТИРО�
             
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
-
