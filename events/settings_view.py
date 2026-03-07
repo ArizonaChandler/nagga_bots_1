@@ -688,3 +688,4 @@ class EditEventSettingsModal(discord.ui.Modal, title="✏️ РЕДАКТИРО�
             
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
