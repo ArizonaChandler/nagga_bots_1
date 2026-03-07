@@ -59,7 +59,7 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
             await interaction.response.send_message(error, ephemeral=True)
             return
         
-        # Отправляем подтверждение
+        # Отправляем подтверждение пользователю
         embed = discord.Embed(
             title="✅ ЗАЯВКА ОТПРАВЛЕНА",
             description="Ваша заявка принята и передана на рассмотрение. Ожидайте решения.",
@@ -67,8 +67,10 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
         
-        # Отправляем заявку в канал модерации
+        # Получаем настройки
         settings = app_manager.get_settings()
+        
+        # ===== Отправляем в канал для заявок, а не в текущий =====
         channel_id = settings.get('applications_channel')
         
         if channel_id:

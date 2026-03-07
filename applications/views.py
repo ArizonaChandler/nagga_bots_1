@@ -44,11 +44,7 @@ class ApplicationModerationView(discord.ui.View):
     @discord.ui.button(label="📞 ВЫЗВАТЬ НА ОБЗВОН", style=discord.ButtonStyle.primary, row=0)
     async def interview_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Вызвать на обзвон"""
-        # Делаем кнопки неактивными сразу
-        for child in self.children:
-            child.disabled = True
-        await interaction.message.edit(view=self)
-        
+        # НЕ деактивируем кнопки - они должны оставаться активными
         # Обрабатываем обзвон
         await self.process_interview(interaction)
     
@@ -131,7 +127,48 @@ class ApplicationModerationView(discord.ui.View):
             await interaction.response.send_message("❌ Заявка не найдена", ephemeral=True)
             return
         
-        # Отправляем ЛС пользователю
+        # ===== НОВЫЙ КОД: СОЗДАЁМ ПРИВАТНЫЙ КАНАЛ =====
+        guild = interaction.guild
+        member = guild.get_member(int(app['user_id']))
+        mod = interaction.user
+        
+        if not member:
+            await interaction.response.send_message("❌ Пользователь не найден на сервере", ephemeral=True)
+            return
+        
+        # Получаем роль рекрута
+        recruit_role_id = CONFIG.get('applications_recruit_role')
+        recruit_role = guild.get_role(int(recruit_role_id)) if recruit_role_id else None
+        
+        # Создаём категорию для заявок (если нет)
+        category_name = "📝 ЗАЯВКИ"
+        category = discord.utils.get(guild.categories, name=category_name)
+        if not category:
+            category = await guild.create_category(category_name)
+        
+        # Создаём приватный канал
+        channel_name = f"заявка-{member.display_name[:20]}"
+        
+        # Права доступа
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            member: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            mod: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        }
+        
+        # Добавляем роль рекрута
+        if recruit_role:
+            overwrites[recruit_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        
+        # Создаём канал
+        interview_channel = await guild.create_text_channel(
+            channel_name,
+            category=category,
+            overwrites=overwrites,
+            topic=f"Обзвон заявки от {member.display_name} | ID: {self.application_id}"
+        )
+        
+        # ===== ОТПРАВКА ЛС =====
         try:
             user = await interaction.client.fetch_user(int(app['user_id']))
             if user:
@@ -140,29 +177,50 @@ class ApplicationModerationView(discord.ui.View):
                     description=f"Вас готовы выслушать в голосовом канале!",
                     color=0xffa500
                 )
+                embed.add_field(
+                    name="📝 Приватный чат",
+                    value=f"Создан канал {interview_channel.mention} для обсуждения",
+                    inline=False
+                )
                 await user.send(embed=embed)
         except:
             pass
         
-        # Отправляем сообщение в сервер с упоминанием
-        guild = interaction.guild
-        recruit_role_id = CONFIG.get('applications_recruit_role')
-        recruit_mention = f"<@&{recruit_role_id}>" if recruit_role_id else "@everyone"
+        # ===== ОТПРАВКА В ПРИВАТНЫЙ КАНАЛ =====
+        embed = discord.Embed(
+            title="📞 ВЫЗОВ НА ОБЗВОН",
+            description=f"Заявка от {member.mention}",
+            color=0xffa500,
+            timestamp=datetime.now()
+        )
+        embed.add_field(name="👤 Модератор", value=mod.mention, inline=True)
+        embed.add_field(name="🎮 Игровой ник", value=app['nickname'], inline=True)
+        embed.add_field(name="🎯 Статик", value=app['static'], inline=True)
+        embed.add_field(name="⏰ Прайм-тайм", value=app['prime_time'], inline=True)
+        embed.add_field(name="📊 Часов в день", value=app['hours_per_day'], inline=True)
         
+        if app['previous_families'] and app['previous_families'] != "Не указано":
+            embed.add_field(name="🏠 Предыдущие семьи", value=app['previous_families'], inline=False)
+        
+        await interview_channel.send(content=f"{mod.mention} {member.mention}", embed=embed)
+        
+        # ===== ОТПРАВКА В ОСНОВНОЙ ЧАТ =====
         channel = interaction.channel
         embed = discord.Embed(
             title="📞 ВЫЗОВ НА ОБЗВОН",
-            description=f"Пользователь <@{app['user_id']}> вызван на обзвон",
+            description=f"Пользователь {member.mention} вызван на обзвон",
             color=0xffa500
         )
+        embed.add_field(name="📝 Канал", value=interview_channel.mention, inline=False)
+        
+        recruit_mention = recruit_role.mention if recruit_role else "@everyone"
         await channel.send(content=recruit_mention, embed=embed)
         
-        # Обновляем сообщение
-        embed = interaction.message.embeds[0]
-        embed.color = 0xffa500
-        embed.add_field(name="📞 Статус", value=f"Вызван на обзвон модератором {interaction.user.mention}", inline=False)
-        await interaction.message.edit(embed=embed, view=self)
-        await interaction.response.send_message("📞 Вызов на обзвон отправлен", ephemeral=True)
+        # ===== НЕ ОБНОВЛЯЕМ СООБЩЕНИЕ - КНОПКИ ОСТАЮТСЯ =====
+        await interaction.response.send_message(
+            f"📞 Вызов на обзвон создан в канале {interview_channel.mention}",
+            ephemeral=True
+        )
 
 
 class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА"):
@@ -181,6 +239,9 @@ class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА
         self.application_id = application_id
     
     async def on_submit(self, interaction: discord.Interaction):
+        from applications.manager import app_manager
+        from core.config import CONFIG
+        
         # Делаем кнопки в исходном сообщении неактивными
         message = interaction.message
         if message and message.embeds:
