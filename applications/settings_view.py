@@ -106,7 +106,8 @@ class SetApplicationsChannelModal(discord.ui.Modal, title="📝 КАНАЛ ЗА�
                 await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
                 return
             
-            app_manager.save_setting('applications_channel', self.channel_id.value)
+            # ✅ Передаём ID пользователя
+            app_manager.save_setting('applications_channel', self.channel_id.value, str(interaction.user.id))
             
             await interaction.response.send_message(
                 f"✅ Канал заявок настроен: {channel.mention}",
@@ -134,7 +135,8 @@ class SetLogChannelModal(discord.ui.Modal, title="📋 КАНАЛ ЛОГОВ"):
                 await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
                 return
             
-            app_manager.save_setting('applications_log_channel', self.channel_id.value)
+            # ✅ Передаём ID пользователя
+            app_manager.save_setting('applications_log_channel', self.channel_id.value, str(interaction.user.id))
             
             await interaction.response.send_message(
                 f"✅ Канал логов настроен: {channel.mention}",
@@ -162,7 +164,8 @@ class SetRecruitRoleModal(discord.ui.Modal, title="👥 РОЛЬ РЕКРУТА"
                 await interaction.response.send_message("❌ Роль не найдена", ephemeral=True)
                 return
             
-            app_manager.save_setting('applications_recruit_role', self.role_id.value)
+            # ✅ Передаём ID пользователя
+            app_manager.save_setting('applications_recruit_role', self.role_id.value, str(interaction.user.id))
             
             await interaction.response.send_message(
                 f"✅ Роль рекрута настроена: {role.mention}",
@@ -190,7 +193,8 @@ class SetMemberRoleModal(discord.ui.Modal, title="👑 РОЛЬ УЧАСТНИК
                 await interaction.response.send_message("❌ Роль не найдена", ephemeral=True)
                 return
             
-            app_manager.save_setting('applications_member_role', self.role_id.value)
+            # ✅ Передаём ID пользователя
+            app_manager.save_setting('applications_member_role', self.role_id.value, str(interaction.user.id))
             
             await interaction.response.send_message(
                 f"✅ Роль участника настроена: {role.mention}",

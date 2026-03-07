@@ -725,7 +725,9 @@ class Database:
                 VALUES (?, ?)
             ''', (key, value))
             conn.commit()
-            self.log_action(updated_by, f"SET_APP_SETTING", f"{key}={value}")
+            # Проверяем, что updated_by не None перед логированием
+            if updated_by:
+                self.log_action(updated_by, f"SET_APP_SETTING", f"{key}={value}")
 
     def create_application(self, user_id: str, user_name: str, nickname: str, 
                         static: str, previous_families: str, prime_time: str, 
