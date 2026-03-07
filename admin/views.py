@@ -359,8 +359,19 @@ class GlobalSettingsView(BaseMenuView):
         events_settings_channel_btn.callback = events_settings_channel_cb
         self.add_item(events_settings_channel_btn)
         
+        apps_settings_channel_btn = discord.ui.Button(
+            label="📝 Канал настроек заявок",
+            style=discord.ButtonStyle.secondary,
+            emoji="📝",
+            row=4  # выбери подходящий ряд
+        )
+        async def apps_settings_channel_cb(i):
+            await i.response.send_modal(SetApplicationsSettingsChannelModal(self.guild))
+        apps_settings_channel_btn.callback = apps_settings_channel_cb
+        self.add_item(apps_settings_channel_btn)
+
         # РЯД 4: НАЗАД
-        self.add_back_button(row=4)
+        self.add_back_button(row=5)
     
     async def get_current_embed(self):
         server_name = await get_server_name(self.guild, CONFIG.get('server_id'))

@@ -177,6 +177,45 @@ class Database:
                 )
             ''')
 
+            # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ ЗАЯВОК =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS applications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    user_name TEXT NOT NULL,
+                    nickname TEXT NOT NULL,
+                    static TEXT NOT NULL,
+                    previous_families TEXT,
+                    prime_time TEXT NOT NULL,
+                    hours_per_day TEXT NOT NULL,
+                    status TEXT DEFAULT 'pending',  -- pending, accepted, rejected, interviewing
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    reviewed_by TEXT,
+                    reviewed_at TIMESTAMP,
+                    reject_reason TEXT,
+                    UNIQUE(user_id)
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS application_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            ''')
+
+            # Добавляем настройки по умолчанию
+            cursor.execute('INSERT OR IGNORE INTO application_settings (key, value) VALUES (?, ?)', 
+                        ('applications_channel', 'null'))
+            cursor.execute('INSERT OR IGNORE INTO application_settings (key, value) VALUES (?, ?)', 
+                        ('applications_log_channel', 'null'))
+            cursor.execute('INSERT OR IGNORE INTO application_settings (key, value) VALUES (?, ?)', 
+                        ('applications_recruit_role', 'null'))
+            cursor.execute('INSERT OR IGNORE INTO application_settings (key, value) VALUES (?, ?)', 
+                        ('applications_member_role', 'null'))
+            cursor.execute('INSERT OR IGNORE INTO application_settings (key, value) VALUES (?, ?)', 
+                        ('applications_settings_channel', 'null'))
+
             conn.commit()
     
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
@@ -667,5 +706,126 @@ class Database:
                 VALUES (?, ?)
             ''', (1 if success else 0, error))
             conn.commit()
+
+    # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ЗАЯВОК =====
+    def get_application_setting(self, key: str) -> str:
+        """Получить настройку системы заявок"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT value FROM application_settings WHERE key = ?', (key,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+
+    def set_application_setting(self, key: str, value: str, updated_by: str = None):
+        """Установить настройку системы заявок"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO application_settings (key, value)
+                VALUES (?, ?)
+            ''', (key, value))
+            conn.commit()
+            self.log_action(updated_by, f"SET_APP_SETTING", f"{key}={value}")
+
+    def create_application(self, user_id: str, user_name: str, nickname: str, 
+                        static: str, previous_families: str, prime_time: str, 
+                        hours_per_day: str) -> tuple:
+        """Создать новую заявку"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Проверяем, нет ли уже активной заявки
+            cursor.execute('''
+                SELECT id FROM applications 
+                WHERE user_id = ? AND status IN ('pending', 'interviewing')
+            ''', (user_id,))
+            
+            if cursor.fetchone():
+                return None, "❌ У вас уже есть активная заявка"
+            
+            cursor.execute('''
+                INSERT INTO applications 
+                (user_id, user_name, nickname, static, previous_families, prime_time, hours_per_day)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (user_id, user_name, nickname, static, previous_families, prime_time, hours_per_day))
+            
+            conn.commit()
+            return cursor.lastrowid, None
+
+    def get_pending_applications(self):
+        """Получить все ожидающие заявки"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, user_id, user_name, nickname, static, previous_families, 
+                    prime_time, hours_per_day, created_at
+                FROM applications 
+                WHERE status = 'pending'
+                ORDER BY created_at
+            ''')
+            
+            columns = [description[0] for description in cursor.description]
+            rows = cursor.fetchall()
+            
+            return [dict(zip(columns, row)) for row in rows]
+
+    def get_application(self, app_id: int):
+        """Получить заявку по ID"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM applications WHERE id = ?', (app_id,))
+            
+            columns = [description[0] for description in cursor.description]
+            row = cursor.fetchone()
+            
+            return dict(zip(columns, row)) if row else None
+
+    def accept_application(self, app_id: int, reviewer_id: str):
+        """Принять заявку"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE applications 
+                SET status = 'accepted', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND status = 'pending'
+            ''', (reviewer_id, app_id))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def reject_application(self, app_id: int, reviewer_id: str, reason: str):
+        """Отклонить заявку"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE applications 
+                SET status = 'rejected', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, 
+                    reject_reason = ?
+                WHERE id = ? AND status = 'pending'
+            ''', (reviewer_id, reason, app_id))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def set_interviewing(self, app_id: int, reviewer_id: str):
+        """Назначить обзвон"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE applications 
+                SET status = 'interviewing', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND status = 'pending'
+            ''', (reviewer_id, app_id))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def load_application_settings(self):
+        """Загрузить все настройки системы заявок в CONFIG"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT key, value FROM application_settings')
+            settings = dict(cursor.fetchall())
+        
+        for key, value in settings.items():
+            if value and value.lower() != 'null':
+                CONFIG[key] = value
 
 db = Database()

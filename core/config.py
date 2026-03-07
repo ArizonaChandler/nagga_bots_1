@@ -28,6 +28,11 @@ CONFIG = {
     'capt_settings_channel': None,  # Канал для настроек CAPT
     'ad_settings_channel': None,  # Канал для настроек авто-рекламы
     'events_settings_channel': None,  # Канал для настроек мероприятий
+    'applications_channel': None,
+    'applications_log_channel': None,
+    'applications_recruit_role': None,
+    'applications_member_role': None,
+    'applications_settings_channel': None,
 }
 
 def load_config():
@@ -55,6 +60,9 @@ def load_config():
                     'events_settings_channel']:
                 CONFIG[key] = value if value and value.lower() != 'null' else None
     
+    # Загружаем настройки системы заявок
+    db.load_application_settings()
+
     colors = db.get_dual_colors()
     CONFIG['message_1'] = f"Unit\n{colors[0]}"
     CONFIG['message_2'] = f"Unit\n{colors[1]}"

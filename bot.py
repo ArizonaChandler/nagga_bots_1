@@ -150,6 +150,53 @@ async def on_ready():
         print(f"❌ Ошибка инициализации мероприятий: {e}")
         traceback.print_exc()
 
+    # Инициализация системы заявок
+    try:
+        from applications.models import app_manager
+        from applications.views import ApplicationPublicView
+        from applications.admin_views import ApplicationsModerationPanel
+        
+        # Инициализация канала с публичной кнопкой
+        apps_channel_id = app_manager.applications_channel
+        if apps_channel_id:
+            apps_channel = bot.get_channel(int(apps_channel_id))
+            if apps_channel:
+                # Очищаем старые сообщения
+                async for msg in apps_channel.history(limit=10):
+                    if msg.author == bot.user:
+                        await msg.delete()
+                
+                # Отправляем кнопку подачи заявок
+                embed = discord.Embed(
+                    title="📝 ПОДАЧА ЗАЯВОК В СЕМЬЮ",
+                    description="Нажмите кнопку ниже, чтобы подать заявку",
+                    color=0x00ff00
+                )
+                await apps_channel.send(embed=embed, view=ApplicationPublicView())
+                print(f"✅ Кнопка заявок отправлена в #{apps_channel.name}")
+        
+        # Инициализация канала настроек
+        settings_channel_id = CONFIG.get('applications_settings_channel')
+        if settings_channel_id:
+            settings_channel = bot.get_channel(int(settings_channel_id))
+            if settings_channel:
+                from applications.settings_view import ApplicationsSettingsView
+                async for msg in settings_channel.history(limit=10):
+                    if msg.author == bot.user:
+                        await msg.delete()
+                
+                embed = discord.Embed(
+                    title="📝 **ПАНЕЛЬ УПРАВЛЕНИЯ ЗАЯВКАМИ**",
+                    description="Настройка системы заявок в семью",
+                    color=0x00ff00
+                )
+                await settings_channel.send(embed=embed, view=ApplicationsSettingsView())
+                print(f"✅ Панель настроек заявок отправлена в #{settings_channel.name}")
+                
+    except Exception as e:
+        print(f"❌ Ошибка инициализации системы заявок: {e}")
+        traceback.print_exc()
+
     print("="*60 + "\n")
 
 @bot.event
