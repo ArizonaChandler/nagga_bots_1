@@ -75,14 +75,14 @@ class ApplicationManager:
         return db.get_application_by_message(message_id)
 
     def delete_interview_channel(self, channel_id: int):
-    """Удалить канал обзвона"""
-    try:
-        # Этот метод будет вызываться из views.py, но само удаление
-        # происходит через discord, поэтому здесь просто заглушка
-        # для совместимости, если понадобится логика в будущем
-        return True
-    except Exception as e:
-        print(f"❌ Ошибка при удалении канала: {e}")
-        return False
+        """Удалить канал обзвона"""
+        try:
+            # Этот метод будет вызываться из views.py, но само удаление
+            # происходит через discord, поэтому здесь просто заглушка
+            # для совместимости, если понадобится логика в будущем
+            return True
+        except Exception as e:
+            print(f"❌ Ошибка при удалении канала: {e}")
+            return False
 
 app_manager = ApplicationManager()
