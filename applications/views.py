@@ -1,9 +1,32 @@
-"""Кнопки для модерации заявок"""
+"""Кнопки для пользователей и модерации заявок"""
 import discord
 from datetime import datetime
 from core.config import CONFIG
 from applications.manager import app_manager
 from applications.base import PermanentView
+from applications.modals import ApplicationModal
+
+
+# ===== КЛАСС 1: ПУБЛИЧНАЯ КНОПКА ДЛЯ ПОДАЧИ ЗАЯВОК =====
+
+class ApplicationPublicView(PermanentView):
+    """Публичная кнопка для подачи заявок (для пользователей)"""
+    
+    def __init__(self):
+        super().__init__()
+    
+    @discord.ui.button(
+        label="📝 ПОДАТЬ ЗАЯВКУ", 
+        style=discord.ButtonStyle.success,
+        emoji="📝",
+        custom_id="application_submit"
+    )
+    async def submit_application(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Открыть модалку заявки"""
+        await interaction.response.send_modal(ApplicationModal())
+
+
+# ===== КЛАСС 2: КНОПКИ ДЛЯ МОДЕРАЦИИ КОНКРЕТНОЙ ЗАЯВКИ =====
 
 class ApplicationModerationView(discord.ui.View):
     """Кнопки для модерации конкретной заявки"""
@@ -231,6 +254,8 @@ class ApplicationModerationView(discord.ui.View):
         
         await log_channel.send(embed=embed)
 
+
+# ===== КЛАСС 3: МОДАЛКА ДЛЯ ПРИЧИНЫ ОТКАЗА =====
 
 class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА"):
     """Модалка для ввода причины отказа"""
