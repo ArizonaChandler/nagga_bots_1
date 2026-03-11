@@ -808,14 +808,31 @@ class Database:
         """Отклонить заявку"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            
+            # Проверим, существует ли заявка и в правильном ли она статусе
+            cursor.execute('SELECT status FROM applications WHERE id = ?', (app_id,))
+            status = cursor.fetchone()
+            print(f"📊 Текущий статус заявки {app_id}: {status}")
+            
+            if not status:
+                print(f"❌ Заявка {app_id} не найдена")
+                return False
+            
+            if status[0] != 'pending':
+                print(f"❌ Заявка {app_id} в статусе {status[0]}, нельзя отклонить")
+                return False
+            
             cursor.execute('''
                 UPDATE applications 
                 SET status = 'rejected', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, 
                     reject_reason = ?
                 WHERE id = ? AND status = 'pending'
             ''', (reviewer_id, reason, app_id))
+            
             conn.commit()
-            return cursor.rowcount > 0
+            success = cursor.rowcount > 0
+            print(f"✅ Результат отклонения: {success}, затронуто строк: {cursor.rowcount}")
+            return success
 
     def set_interviewing(self, app_id: int, reviewer_id: str):
         """Назначить обзвон"""

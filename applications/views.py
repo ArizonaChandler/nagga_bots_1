@@ -274,6 +274,8 @@ class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА
         self.user_id = user_id
     
     async def on_submit(self, interaction: discord.Interaction):
+        print(f"🔍 Начало обработки отказа для заявки {self.application_id}")
+        
         # Проверяем, на месте ли пользователь
         guild = interaction.guild
         member = guild.get_member(int(self.user_id))
@@ -281,20 +283,42 @@ class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА
         message = interaction.message
         
         if not member:
+            print(f"❌ Пользователь {self.user_id} не найден на сервере")
             await interaction.response.send_message("❌ Пользователь уже покинул сервер", ephemeral=True)
             return
         
+        print(f"✅ Пользователь {self.user_id} на сервере")
+        print(f"📝 Причина отказа: {self.reason.value}")
+        
         # Отклоняем заявку в БД
+        print(f"🔄 Вызов app_manager.reject_application({self.application_id}, {interaction.user.id}, ...)")
         success = app_manager.reject_application(self.application_id, str(interaction.user.id), self.reason.value)
         
+        print(f"📊 Результат reject_application: {success}")
+        
         if not success:
-            await interaction.response.send_message("❌ Не удалось отклонить заявку", ephemeral=True)
+            print(f"❌ Не удалось отклонить заявку {self.application_id}")
+            
+            # Проверим, существует ли заявка
+            app_check = app_manager.get_application(self.application_id)
+            if not app_check:
+                print(f"❌ Заявка {self.application_id} не найдена в БД")
+                await interaction.response.send_message("❌ Заявка не найдена в базе данных", ephemeral=True)
+            else:
+                print(f"📊 Статус заявки: {app_check.get('status')}")
+                await interaction.response.send_message(
+                    f"❌ Не удалось отклонить заявку (статус: {app_check.get('status')})", 
+                    ephemeral=True
+                )
             return
+        
+        print(f"✅ Заявка {self.application_id} успешно отклонена в БД")
         
         # Получаем данные заявки
         app = app_manager.get_application(self.application_id)
         
         if app:
+            print(f"📊 Данные заявки получены")
             # Отправляем ЛС пользователю
             try:
                 user = await interaction.client.fetch_user(int(app['user_id']))
@@ -305,8 +329,9 @@ class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА
                         color=0xff0000
                     )
                     await user.send(embed=embed)
-            except:
-                pass
+                    print(f"✅ ЛС отправлено пользователю {app['user_id']}")
+            except Exception as e:
+                print(f"❌ Ошибка при отправке ЛС: {e}")
             
             # Логируем в канал логов
             log_channel_id = CONFIG.get('applications_log_channel')
@@ -322,6 +347,9 @@ class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА
                     embed.add_field(name="👤 Модератор", value=interaction.user.mention)
                     embed.add_field(name="📝 Причина", value=self.reason.value)
                     await log_channel.send(embed=embed)
+                    print(f"✅ Логи отправлены в канал {log_channel_id}")
+        else:
+            print(f"❌ Не удалось получить данные заявки {self.application_id} после отклонения")
         
         # Обновляем сообщение
         embed = message.embeds[0]
@@ -335,3 +363,4 @@ class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА
         
         await message.edit(embed=embed, view=None)
         await interaction.response.send_message("❌ Заявка отклонена", ephemeral=True)
+        print("✅ Сообщение обновлено, кнопки деактивированы")
