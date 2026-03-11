@@ -43,76 +43,108 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
     )
     
     async def on_submit(self, interaction: discord.Interaction):
+        print(f"🔍 Начало обработки заявки от {interaction.user.id}")
         
-        # Создаем заявку
-        app_id, error = app_manager.create_application(
-            user_id=str(interaction.user.id),
-            user_name=interaction.user.display_name,
-            nickname=self.nickname.value,
-            static=self.static.value,
-            previous_families=self.previous_families.value or "Не указано",
-            prime_time=self.prime_time.value,
-            hours_per_day=self.hours_per_day.value
-        )
-        
-        if error:
-            await interaction.response.send_message(error, ephemeral=True)
-            return
-        
-        # Отправляем подтверждение пользователю
-        embed = discord.Embed(
-            title="✅ ЗАЯВКА ОТПРАВЛЕНА",
-            description="Ваша заявка принята и передана на рассмотрение. Ожидайте решения.",
-            color=0x00ff00
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        
-        # ===== ОТПРАВЛЯЕМ В КАНАЛ "ЗАЯВКИ В СЕМЬЮ" =====
-        settings = app_manager.get_settings()
-        applications_channel_id = settings.get('applications_channel')  # Канал для анкет
-
-        if not applications_channel_id:
-            await interaction.followup.send(
-                "❌ Канал для анкет не настроен! Обратитесь к администратору.",
-                ephemeral=True
+        try:
+            # Создаем заявку
+            print("📝 Создание заявки в БД...")
+            app_id, error = app_manager.create_application(
+                user_id=str(interaction.user.id),
+                user_name=interaction.user.display_name,
+                nickname=self.nickname.value,
+                static=self.static.value,
+                previous_families=self.previous_families.value or "Не указано",
+                prime_time=self.prime_time.value,
+                hours_per_day=self.hours_per_day.value
             )
-            return
-
-        applications_channel = interaction.client.get_channel(int(applications_channel_id))
-        
-        if not applications_channel:
-            await interaction.followup.send(
-                f"❌ Канал для заявок не найден!",
-                ephemeral=True
+            
+            if error:
+                print(f"❌ Ошибка создания заявки: {error}")
+                await interaction.response.send_message(error, ephemeral=True)
+                return
+            
+            print(f"✅ Заявка создана с ID: {app_id}")
+            
+            # Отправляем подтверждение пользователю
+            embed = discord.Embed(
+                title="✅ ЗАЯВКА ОТПРАВЛЕНА",
+                description="Ваша заявка принята и передана на рассмотрение. Ожидайте решения.",
+                color=0x00ff00
             )
-            return
-        
-        # Создаем embed с заявкой
-        embed = discord.Embed(
-            title="📝 НОВАЯ ЗАЯВКА",
-            color=0xffa500,
-            timestamp=datetime.now()
-        )
-        embed.add_field(name="👤 Отправитель", value=interaction.user.mention, inline=True)
-        embed.add_field(name="🎮 Игровой ник", value=self.nickname.value, inline=True)
-        embed.add_field(name="🎯 Статик", value=self.static.value, inline=True)
-        embed.add_field(name="🏠 Предыдущие семьи", value=self.previous_families.value or "Нет", inline=False)
-        embed.add_field(name="⏰ Прайм-тайм", value=self.prime_time.value, inline=True)
-        embed.add_field(name="📊 Часов в день", value=self.hours_per_day.value, inline=True)
-        embed.set_footer(text=f"Заявка ID: {app_id}")
-        
-        # Добавляем тег роли рекрута
-        recruit_role_id = settings.get('applications_recruit_role')
-        content = None
-        if recruit_role_id:
-            content = f"<@&{recruit_role_id}>"
-        
-        # Импортируем здесь, чтобы избежать циклического импорта
-        from applications.views import ApplicationModerationView
-        
-        # Отправляем с кнопками модерации
-        await applications_channel.send(
-            content=content,
-            embed=embed,
-            view=ApplicationModerationView(app_id, str(interaction.user.id))
-        )
+            
+            print("📤 Отправка подтверждения пользователю...")
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            print("✅ Подтверждение отправлено")
+            
+            # ===== ОТПРАВЛЯЕМ В КАНАЛ "ЗАЯВКИ В СЕМЬЮ" =====
+            print("🔍 Получение настроек...")
+            settings = app_manager.get_settings()
+            applications_channel_id = settings.get('applications_channel')
+            
+            print(f"📢 applications_channel_id: {applications_channel_id}")
+            
+            if not applications_channel_id:
+                print("❌ Канал для анкет не настроен")
+                await interaction.followup.send(
+                    "❌ Канал для анкет не настроен! Обратитесь к администратору.",
+                    ephemeral=True
+                )
+                return
+
+            applications_channel = interaction.client.get_channel(int(applications_channel_id))
+            
+            if not applications_channel:
+                print(f"❌ Канал {applications_channel_id} не найден")
+                await interaction.followup.send(
+                    f"❌ Канал для заявок не найден!",
+                    ephemeral=True
+                )
+                return
+            
+            print(f"✅ Канал найден: #{applications_channel.name}")
+            
+            # Создаем embed с заявкой
+            embed = discord.Embed(
+                title="📝 НОВАЯ ЗАЯВКА",
+                color=0xffa500,
+                timestamp=datetime.now()
+            )
+            embed.add_field(name="👤 Отправитель", value=interaction.user.mention, inline=True)
+            embed.add_field(name="🎮 Игровой ник", value=self.nickname.value, inline=True)
+            embed.add_field(name="🎯 Статик", value=self.static.value, inline=True)
+            embed.add_field(name="🏠 Предыдущие семьи", value=self.previous_families.value or "Нет", inline=False)
+            embed.add_field(name="⏰ Прайм-тайм", value=self.prime_time.value, inline=True)
+            embed.add_field(name="📊 Часов в день", value=self.hours_per_day.value, inline=True)
+            embed.set_footer(text=f"Заявка ID: {app_id}")
+            mbed=embed,
+                view=ApplicationModerationView(app_id, str(interaction.user.id))
+            )
+            print("✅ Заявка отправлена в канал модерации")
+            
+        except Exception as e:
+            print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Пробуем отправить сообщение об ошибке пользователю
+            try:
+                await interaction.followup.send(
+                    f"❌ Произошла ошибка: {e}",
+                    ephemeral=True
+                )
+            except:
+                pass
+            # Добавляем тег роли рекрута
+            recruit_role_id = settings.get('applications_recruit_role')
+            content = None
+            if recruit_role_id:
+                content = f"<@&{recruit_role_id}>"
+                print(f"👥 Тег роли рекрута: {content}")
+            
+            # Импортируем здесь, чтобы избежать циклического импорта
+            from applications.views import ApplicationModerationView
+            
+            print("📤 Отправка заявки в канал модерации...")
+            await applications_channel.send(
+                content=content,
+                e
