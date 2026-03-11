@@ -121,8 +121,17 @@ class ApplicationModerationView(discord.ui.View):
             await interaction.response.send_message("❌ Заявка не найдена", ephemeral=True)
             return
         
-        # Выдаем роль участника
+        # ===== УДАЛЕНИЕ КАНАЛА ОБЗВОНА =====
         guild = interaction.guild
+        interview_channel = await self.find_interview_channel(guild, app['user_id'])
+        if interview_channel:
+            try:
+                await interview_channel.delete()
+                print(f"✅ Канал обзвона {interview_channel.name} удалён")
+            except Exception as e:
+                print(f"❌ Ошибка при удалении канала обзвона: {e}")
+        
+        # Выдаем роль участника
         member_role_id = CONFIG.get('applications_member_role')
         if member_role_id and guild:
             member = guild.get_member(int(app['user_id']))
@@ -152,9 +161,11 @@ class ApplicationModerationView(discord.ui.View):
         embed.color = 0x00ff00
         embed.add_field(name="✅ Статус", value=f"Принята модератором {interaction.user.mention}", inline=False)
         await interaction.message.edit(embed=embed, view=self)
-        await interaction.response.send_message("✅ Заявка принята", ephemeral=True)
+        
         # Очищаем запись о сообщении
         await self.cleanup_message_record()
+        
+        await interaction.response.send_message("✅ Заявка принята", ephemeral=True)
     
     async def process_interview(self, interaction: discord.Interaction):
         """Обработка вызова на обзвон"""
@@ -259,6 +270,20 @@ class ApplicationModerationView(discord.ui.View):
             embed.add_field(name="📝 Детали", value=details, inline=False)
         
         await log_channel.send(embed=embed)
+    
+    async def find_interview_channel(self, guild, user_id: str) -> discord.TextChannel:
+        """Найти канал обзвона для пользователя"""
+        category_name = "📞 ОБЗВОНЫ"
+        category = discord.utils.get(guild.categories, name=category_name)
+        
+        if not category:
+            return None
+        
+        for channel in category.text_channels:
+            if str(user_id) in channel.topic or channel.name.endswith(user_id[-5:]):
+                return channel
+        
+        return None
 
 
 # ===== КЛАСС 3: МОДАЛКА ДЛЯ ПРИЧИНЫ ОТКАЗА =====
@@ -289,42 +314,32 @@ class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА
         message = interaction.message
         
         if not member:
-            print(f"❌ Пользователь {self.user_id} не найден на сервере")
             await interaction.response.send_message("❌ Пользователь уже покинул сервер", ephemeral=True)
             return
         
-        print(f"✅ Пользователь {self.user_id} на сервере")
-        print(f"📝 Причина отказа: {self.reason.value}")
-        
         # Отклоняем заявку в БД
-        print(f"🔄 Вызов app_manager.reject_application({self.application_id}, {interaction.user.id}, ...)")
         success = app_manager.reject_application(self.application_id, str(interaction.user.id), self.reason.value)
         
-        print(f"📊 Результат reject_application: {success}")
-        
         if not success:
-            print(f"❌ Не удалось отклонить заявку {self.application_id}")
-            
-            # Проверим, существует ли заявка
-            app_check = app_manager.get_application(self.application_id)
-            if not app_check:
-                print(f"❌ Заявка {self.application_id} не найдена в БД")
-                await interaction.response.send_message("❌ Заявка не найдена в базе данных", ephemeral=True)
-            else:
-                print(f"📊 Статус заявки: {app_check.get('status')}")
-                await interaction.response.send_message(
-                    f"❌ Не удалось отклонить заявку (статус: {app_check.get('status')})", 
-                    ephemeral=True
-                )
+            await interaction.response.send_message("❌ Не удалось отклонить заявку", ephemeral=True)
             return
-        
-        print(f"✅ Заявка {self.application_id} успешно отклонена в БД")
         
         # Получаем данные заявки
         app = app_manager.get_application(self.application_id)
         
         if app:
-            print(f"📊 Данные заявки получены")
+            # ===== НОВЫЙ КОД: УДАЛЕНИЕ КАНАЛА ОБЗВОНА =====
+            # Находим view, чтобы использовать его метод find_interview_channel
+            view = ApplicationModerationView(self.application_id, self.user_id)
+            interview_channel = await view.find_interview_channel(guild, app['user_id'])
+            if interview_channel:
+                try:
+                    await interview_channel.delete()
+                    print(f"✅ Канал обзвона {interview_channel.name} удалён")
+                except Exception as e:
+                    print(f"❌ Ошибка при удалении канала обзвона: {e}")
+            # ===== КОНЕЦ НОВОГО КОДА =====
+            
             # Отправляем ЛС пользователю
             try:
                 user = await interaction.client.fetch_user(int(app['user_id']))
@@ -335,9 +350,8 @@ class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА
                         color=0xff0000
                     )
                     await user.send(embed=embed)
-                    print(f"✅ ЛС отправлено пользователю {app['user_id']}")
-            except Exception as e:
-                print(f"❌ Ошибка при отправке ЛС: {e}")
+            except:
+                pass
             
             # Логируем в канал логов
             log_channel_id = CONFIG.get('applications_log_channel')
@@ -353,9 +367,6 @@ class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА
                     embed.add_field(name="👤 Модератор", value=interaction.user.mention)
                     embed.add_field(name="📝 Причина", value=self.reason.value)
                     await log_channel.send(embed=embed)
-                    print(f"✅ Логи отправлены в канал {log_channel_id}")
-        else:
-            print(f"❌ Не удалось получить данные заявки {self.application_id} после отклонения")
         
         # Обновляем сообщение
         embed = message.embeds[0]
@@ -368,7 +379,8 @@ class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА
             child.disabled = True
         
         await message.edit(embed=embed, view=None)
-        await interaction.response.send_message("❌ Заявка отклонена", ephemeral=True)
+        
         # Очищаем запись о сообщении
         app_manager.delete_application_message(self.application_id)
-        print("✅ Сообщение обновлено, кнопки деактивированы")
+        
+        await interaction.response.send_message("❌ Заявка отклонена", ephemeral=True)
