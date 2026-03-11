@@ -48,27 +48,30 @@ class ApplicationManager:
         return db.set_interviewing(app_id, reviewer_id)
 
     def reset_user_applications(self, user_id: str, reset_by: str = None):
-        """Сбросить все заявки пользователя (для возможности подать новую)"""
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Удаляем все заявки пользователя
-            cursor.execute('''
-                DELETE FROM applications 
-                WHERE user_id = ?
-            ''', (user_id,))
-            
-            deleted_count = cursor.rowcount
-            conn.commit()
-            
-            if deleted_count > 0 and reset_by:
-                db.log_action(reset_by, "RESET_USER_APPLICATIONS", f"User {user_id}, deleted {deleted_count} applications")
-            
-            return deleted_count > 0, f"✅ Удалено {deleted_count} заявок пользователя"
+        """Сбросить все заявки пользователя"""
+        return db.reset_user_applications(user_id, reset_by)
 
     def check_member_in_guild(self, user_id: str, guild) -> bool:
         """Проверить, находится ли пользователь на сервере"""
         member = guild.get_member(int(user_id))
         return member is not None
+    
+    # ===== МЕТОДЫ ДЛЯ РАБОТЫ С СООБЩЕНИЯМИ =====
+    
+    def save_application_message(self, application_id: int, channel_id: str, message_id: str, user_id: str):
+        """Сохранить ID сообщения с заявкой"""
+        return db.save_application_message(application_id, channel_id, message_id, user_id)
+    
+    def get_all_application_messages(self):
+        """Получить все сохранённые сообщения с заявками"""
+        return db.get_all_application_messages()
+    
+    def delete_application_message(self, application_id: int):
+        """Удалить запись о сообщении"""
+        return db.delete_application_message(application_id)
+    
+    def get_application_by_message(self, message_id: str):
+        """Получить заявку по ID сообщения"""
+        return db.get_application_by_message(message_id)
 
 app_manager = ApplicationManager()

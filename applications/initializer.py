@@ -31,6 +31,9 @@ class ApplicationsInitializer:
         # 4. Канал настроек (панель управления)
         await self._init_settings_channel()
         
+        # 5. Восстанавливаем кнопки у активных заявок
+        await self._restore_application_buttons()
+        
         logger.info("✅ Инициализация системы заявок завершена")
     
     async def _init_submit_channel(self, settings):
@@ -124,6 +127,49 @@ class ApplicationsInitializer:
             )
             await channel.send(embed=embed, view=ApplicationsCombinedPanel())
             logger.info(f"✅ Создана панель управления в #{channel.name}")
+
+    async def _restore_application_buttons(self):
+        """Восстановить кнопки у всех активных заявок"""
+        from applications.views import ApplicationModerationView
+        
+        print("🔄 Восстановление кнопок заявок...")
+        
+        messages = app_manager.get_all_application_messages()
+        
+        if not messages:
+            print("📭 Нет активных заявок для восстановления")
+            return
+        
+        restored = 0
+        for msg_data in messages:
+            try:
+                channel = self.bot.get_channel(int(msg_data['channel_id']))
+                if not channel:
+                    print(f"❌ Канал {msg_data['channel_id']} не найден")
+                    continue
+                
+                try:
+                    message = await channel.fetch_message(int(msg_data['message_id']))
+                except discord.NotFound:
+                    print(f"❌ Сообщение {msg_data['message_id']} не найдено")
+                    # Удаляем запись о несуществующем сообщении
+                    app_manager.delete_application_message(msg_data['application_id'])
+                    continue
+                
+                # Восстанавливаем view
+                view = ApplicationModerationView(
+                    msg_data['application_id'], 
+                    msg_data['applicant_id']
+                )
+                
+                await message.edit(view=view)
+                restored += 1
+                print(f"✅ Восстановлена заявка {msg_data['application_id']} от {msg_data.get('nickname', 'Unknown')} в #{channel.name}")
+                
+            except Exception as e:
+                print(f"❌ Ошибка восстановления заявки {msg_data['application_id']}: {e}")
+        
+        print(f"✅ Восстановлено {restored} заявок")
 
 # Глобальный экземпляр
 initializer = None

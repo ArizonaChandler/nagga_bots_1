@@ -43,7 +43,7 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
     )
     
     async def on_submit(self, interaction: discord.Interaction):
-        # Логирование начала
+        
         print(f"🔍 Начало обработки заявки от {interaction.user.id}")
         
         try:
@@ -127,12 +127,20 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
             from applications.views import ApplicationModerationView
             
             print("📤 Отправка заявки в канал модерации...")
-            await applications_channel.send(
+            sent_message = await applications_channel.send(
                 content=content,
                 embed=embed,
                 view=ApplicationModerationView(app_id, str(interaction.user.id))
             )
-            print(f"✅ Заявка отправлена в канал #{applications_channel.name}")
+            
+            # Сохраняем ID сообщения для восстановления после перезапуска
+            app_manager.save_application_message(
+                application_id=app_id,
+                channel_id=str(applications_channel.id),
+                message_id=str(sent_message.id),
+                user_id=str(interaction.user.id)
+            )
+            print(f"✅ Заявка отправлена и сохранена (message_id: {sent_message.id})")
             
         except Exception as e:
             print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")

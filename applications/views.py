@@ -64,6 +64,10 @@ class ApplicationModerationView(discord.ui.View):
             
             return False
         return True
+
+    async def cleanup_message_record(self):
+        """Удалить запись о сообщении после обработки заявки"""
+        app_manager.delete_application_message(self.application_id)
     
     @discord.ui.button(label="✅ ПРИНЯТЬ", style=discord.ButtonStyle.success, row=0)
     async def accept_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -149,6 +153,8 @@ class ApplicationModerationView(discord.ui.View):
         embed.add_field(name="✅ Статус", value=f"Принята модератором {interaction.user.mention}", inline=False)
         await interaction.message.edit(embed=embed, view=self)
         await interaction.response.send_message("✅ Заявка принята", ephemeral=True)
+        # Очищаем запись о сообщении
+        await self.cleanup_message_record()
     
     async def process_interview(self, interaction: discord.Interaction):
         """Обработка вызова на обзвон"""
@@ -363,4 +369,6 @@ class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА
         
         await message.edit(embed=embed, view=None)
         await interaction.response.send_message("❌ Заявка отклонена", ephemeral=True)
+        # Очищаем запись о сообщении
+        app_manager.delete_application_message(self.application_id)
         print("✅ Сообщение обновлено, кнопки деактивированы")

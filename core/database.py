@@ -217,6 +217,19 @@ class Database:
             cursor.execute('INSERT OR IGNORE INTO application_settings (key, value) VALUES (?, ?)', 
                         ('submit_channel', 'null'))
 
+            # ===== ТАБЛИЦА ДЛЯ ХРАНЕНИЯ СООБЩЕНИЙ С ЗАЯВКАМИ =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS application_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    application_id INTEGER NOT NULL,
+                    channel_id TEXT NOT NULL,
+                    message_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    FOREIGN KEY (application_id) REFERENCES applications (id) ON DELETE CASCADE,
+                    UNIQUE(application_id)
+                )
+            ''')
+
             conn.commit()
     
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
@@ -857,5 +870,58 @@ class Database:
         for key, value in settings.items():
             if value and value.lower() != 'null':
                 CONFIG[key] = value
+
+        # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ЗАЯВОК (сообщения) =====
+    
+    def save_application_message(self, application_id: int, channel_id: str, message_id: str, user_id: str):
+        """Сохранить ID сообщения с заявкой"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO application_messages (application_id, channel_id, message_id, user_id)
+                VALUES (?, ?, ?, ?)
+            ''', (application_id, channel_id, message_id, user_id))
+            conn.commit()
+            self.log_action(user_id, "SAVE_APP_MESSAGE", f"App {application_id}, Msg {message_id}")
+    
+    def get_all_application_messages(self):
+        """Получить все сохранённые сообщения с заявками"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT am.application_id, am.channel_id, am.message_id, am.user_id,
+                       a.status, a.user_id as applicant_id, a.nickname
+                FROM application_messages am
+                JOIN applications a ON am.application_id = a.id
+                WHERE a.status IN ('pending', 'interviewing')
+            ''')
+            
+            columns = [description[0] for description in cursor.description]
+            rows = cursor.fetchall()
+            
+            return [dict(zip(columns, row)) for row in rows]
+    
+    def delete_application_message(self, application_id: int):
+        """Удалить запись о сообщении после обработки заявки"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM application_messages WHERE application_id = ?', (application_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def get_application_by_message(self, message_id: str):
+        """Получить заявку по ID сообщения"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT a.* FROM applications a
+                JOIN application_messages am ON a.id = am.application_id
+                WHERE am.message_id = ?
+            ''', (message_id,))
+            
+            columns = [description[0] for description in cursor.description]
+            row = cursor.fetchone()
+            
+            return dict(zip(columns, row)) if row else None
 
 db = Database()
