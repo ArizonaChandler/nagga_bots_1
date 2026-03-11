@@ -822,24 +822,27 @@ class Database:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
-            # Проверим, существует ли заявка и в правильном ли она статусе
+            # Проверим, существует ли заявка
             cursor.execute('SELECT status FROM applications WHERE id = ?', (app_id,))
-            status = cursor.fetchone()
-            print(f"📊 Текущий статус заявки {app_id}: {status}")
+            result = cursor.fetchone()
+            print(f"📊 Текущий статус заявки {app_id}: {result}")
             
-            if not status:
+            if not result:
                 print(f"❌ Заявка {app_id} не найдена")
                 return False
             
-            if status[0] != 'pending':
-                print(f"❌ Заявка {app_id} в статусе {status[0]}, нельзя отклонить")
+            current_status = result[0]
+            
+            # Разрешаем отклонять заявки в любом статусе, кроме 'accepted'
+            if current_status == 'accepted':
+                print(f"❌ Заявка {app_id} уже принята, нельзя отклонить")
                 return False
             
             cursor.execute('''
                 UPDATE applications 
                 SET status = 'rejected', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, 
                     reject_reason = ?
-                WHERE id = ? AND status = 'pending'
+                WHERE id = ?
             ''', (reviewer_id, reason, app_id))
             
             conn.commit()
