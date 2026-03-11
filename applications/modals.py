@@ -116,4 +116,3 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
             embed=embed,
             view=ApplicationModerationView(app_id, str(interaction.user.id))
         )
-
