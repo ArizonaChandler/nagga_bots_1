@@ -15,22 +15,33 @@ class ApplicationsCombinedPanel(PermanentView):
     
     # ===== РЯД 0: НАСТРОЙКИ =====
     @discord.ui.button(
-        label="📝 Канал заявок", 
+        label="📝 Канал подачи заявок", 
         style=discord.ButtonStyle.primary,
         emoji="📝",
         row=0,
-        custom_id="apps_settings_channel"
+        custom_id="apps_submit_channel"
     )
-    async def set_applications_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Настроить канал для заявок"""
-        await interaction.response.send_modal(SetApplicationsChannelModal())
-    
+    async def set_submit_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Настроить канал для кнопки подачи заявок"""
+        await interaction.response.send_modal(SetSubmitChannelModal())
+
     @discord.ui.button(
-        label="📋 Канал логов", 
+        label="📋 Канал анкет", 
         style=discord.ButtonStyle.primary,
         emoji="📋",
         row=0,
-        custom_id="apps_settings_log"
+        custom_id="apps_applications_channel"
+    )
+    async def set_applications_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Настроить канал, куда приходят анкеты с кнопками"""
+        await interaction.response.send_modal(SetApplicationsChannelModal())
+
+    @discord.ui.button(
+        label="📜 Канал логов", 
+        style=discord.ButtonStyle.primary,
+        emoji="📜",
+        row=0,
+        custom_id="apps_log_channel"
     )
     async def set_log_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Настроить канал для логов"""
@@ -284,3 +295,56 @@ class ResetUserModal(discord.ui.Modal, title="🔄 СБРОС ПОЛЬЗОВАТ
         )
         
         await interaction.followup.send(message, ephemeral=True)
+
+class SetSubmitChannelModal(discord.ui.Modal, title="📝 КАНАЛ ПОДАЧИ ЗАЯВОК"):
+    """Канал, где будет кнопка 'ПОДАТЬ ЗАЯВКУ'"""
+    
+    channel_id = discord.ui.TextInput(
+        label="ID канала для кнопки подачи",
+        placeholder="123456789012345678",
+        max_length=20,
+        required=True
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            channel = interaction.guild.get_channel(int(self.channel_id.value))
+            if not channel:
+                await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
+                return
+            
+            app_manager.save_setting('submit_channel', self.channel_id.value, str(interaction.user.id))
+            
+            await interaction.response.send_message(
+                f"✅ Канал для кнопки подачи заявок настроен: {channel.mention}",
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
+
+class SetApplicationsChannelModal(discord.ui.Modal, title="📋 КАНАЛ АНКЕТ"):
+    """Канал, куда приходят анкеты с кнопками модерации"""
+    
+    channel_id = discord.ui.TextInput(
+        label="ID канала для анкет",
+        placeholder="123456789012345678",
+        max_length=20,
+        required=True
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            channel = interaction.guild.get_channel(int(self.channel_id.value))
+            if not channel:
+                await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
+                return
+            
+            app_manager.save_setting('applications_channel', self.channel_id.value, str(interaction.user.id))
+            
+            await interaction.response.send_message(
+                f"✅ Канал для анкет настроен: {channel.mention}",
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)

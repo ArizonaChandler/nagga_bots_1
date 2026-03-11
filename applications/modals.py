@@ -1,6 +1,7 @@
 """Модалки для системы заявок"""
 import discord
 from applications.manager import app_manager
+from applications.views import ApplicationModerationView
 from datetime import datetime
 
 class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"):
@@ -67,28 +68,27 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
         
-        # ===== ИСПРАВЛЕНИЕ: Получаем канал для заявок из настроек =====
+        # ===== ОТПРАВЛЯЕМ В КАНАЛ "ЗАЯВКИ В СЕМЬЮ" =====
         settings = app_manager.get_settings()
-        applications_channel_id = settings.get('applications_channel')
-        
+        applications_channel_id = settings.get('applications_channel')  # Канал для анкет
+
         if not applications_channel_id:
-            # Если канал не настроен, сообщаем об ошибке
             await interaction.followup.send(
-                "❌ Канал для заявок не настроен! Обратитесь к администратору.",
+                "❌ Канал для анкет не настроен! Обратитесь к администратору.",
                 ephemeral=True
             )
             return
-        
+
         applications_channel = interaction.client.get_channel(int(applications_channel_id))
         
         if not applications_channel:
             await interaction.followup.send(
-                f"❌ Канал для заявок (ID: {applications_channel_id}) не найден!",
+                f"❌ Канал для заявок не найден!",
                 ephemeral=True
             )
             return
         
-        # Отправляем заявку в настроенный канал
+        # Создаем embed с заявкой
         embed = discord.Embed(
             title="📝 НОВАЯ ЗАЯВКА",
             color=0xffa500,
@@ -102,5 +102,15 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
         embed.add_field(name="📊 Часов в день", value=self.hours_per_day.value, inline=True)
         embed.set_footer(text=f"Заявка ID: {app_id}")
         
-        from applications.views import ApplicationModerationView
-        await applications_channel.send(embed=embed, view=ApplicationModerationView(app_id))
+        # Добавляем тег роли рекрута
+        recruit_role_id = settings.get('applications_recruit_role')
+        content = None
+        if recruit_role_id:
+            content = f"<@&{recruit_role_id}>"
+        
+        # Отправляем с кнопками модерации
+        await applications_channel.send(
+            content=content,
+            embed=embed,
+            view=ApplicationModerationView(app_id, str(interaction.user.id))
+        )

@@ -8,6 +8,7 @@ class ApplicationManager:
     def get_settings(self):
         """Получить все настройки из CONFIG"""
         return {
+            'submit_channel': CONFIG.get('submit_channel'),
             'applications_channel': CONFIG.get('applications_channel'),
             'applications_log_channel': CONFIG.get('applications_log_channel'),
             'applications_recruit_role': CONFIG.get('applications_recruit_role'),
@@ -64,5 +65,10 @@ class ApplicationManager:
                 db.log_action(reset_by, "RESET_USER_APPLICATIONS", f"User {user_id}, deleted {deleted_count} applications")
             
             return deleted_count > 0, f"✅ Удалено {deleted_count} заявок пользователя"
+
+    def check_member_in_guild(self, user_id: str, guild) -> bool:
+        """Проверить, находится ли пользователь на сервере"""
+        member = guild.get_member(int(user_id))
+        return member is not None
 
 app_manager = ApplicationManager()
