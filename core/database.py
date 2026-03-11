@@ -924,4 +924,43 @@ class Database:
             
             return dict(zip(columns, row)) if row else None
 
+    def reset_user_applications(self, user_id: str, reset_by: str = None):
+        """Сбросить все заявки пользователя (для возможности подать новую)"""
+        print(f"🔍 database.py: Сброс пользователя {user_id} от {reset_by}")
+        
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Сначала проверим, есть ли заявки у пользователя
+            cursor.execute('SELECT COUNT(*) FROM applications WHERE user_id = ?', (user_id,))
+            count = cursor.fetchone()[0]
+            print(f"📊 Найдено заявок: {count}")
+            
+            if count == 0:
+                return False, f"❌ У пользователя {user_id} нет заявок"
+            
+            # Удаляем записи о сообщениях (если есть)
+            cursor.execute('''
+                DELETE FROM application_messages 
+                WHERE application_id IN (SELECT id FROM applications WHERE user_id = ?)
+            ''', (user_id,))
+            deleted_messages = cursor.rowcount
+            print(f"✅ Удалено записей о сообщениях: {deleted_messages}")
+            
+            # Удаляем все заявки пользователя
+            cursor.execute('''
+                DELETE FROM applications 
+                WHERE user_id = ?
+            ''', (user_id,))
+            
+            deleted_count = cursor.rowcount
+            print(f"✅ Удалено заявок: {deleted_count}")
+            
+            conn.commit()
+            
+            if deleted_count > 0 and reset_by:
+                self.log_action(reset_by, "RESET_USER_APPLICATIONS", f"User {user_id}, deleted {deleted_count} applications")
+            
+            return True, f"✅ Удалено {deleted_count} заявок пользователя <@{user_id}>"
+
 db = Database()

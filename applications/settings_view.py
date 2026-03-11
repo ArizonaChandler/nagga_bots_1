@@ -279,22 +279,38 @@ class ResetUserModal(discord.ui.Modal, title="🔄 СБРОС ПОЛЬЗОВАТ
     )
     
     async def on_submit(self, interaction: discord.Interaction):
+        print(f"🔍 Начало сброса пользователя {self.user_id.value}")
+        
         if self.confirm.value != "СБРОС":
+            print(f"❌ Неверное подтверждение: {self.confirm.value}")
             await interaction.response.send_message("❌ Неверное подтверждение", ephemeral=True)
             return
         
         if not self.user_id.value.isdigit():
+            print(f"❌ ID не является числом: {self.user_id.value}")
             await interaction.response.send_message("❌ ID должен содержать только цифры", ephemeral=True)
             return
         
+        # Отвечаем сразу, чтобы не было ошибки взаимодействия
         await interaction.response.defer(ephemeral=True)
+        print("✅ Взаимодействие отложено")
         
-        success, message = app_manager.reset_user_applications(
-            self.user_id.value, 
-            str(interaction.user.id)
-        )
-        
-        await interaction.followup.send(message, ephemeral=True)
+        try:
+            print(f"🔄 Вызов app_manager.reset_user_applications({self.user_id.value})")
+            success, message = app_manager.reset_user_applications(
+                self.user_id.value, 
+                str(interaction.user.id)
+            )
+            
+            print(f"📊 Результат: success={success}, message={message}")
+            
+            await interaction.followup.send(message, ephemeral=True)
+            
+        except Exception as e:
+            print(f"❌ Ошибка: {e}")
+            import traceback
+            traceback.print_exc()
+            await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
 
 class SetSubmitChannelModal(discord.ui.Modal, title="📝 КАНАЛ ПОДАЧИ ЗАЯВОК"):
     """Канал, где будет кнопка 'ПОДАТЬ ЗАЯВКУ'"""
