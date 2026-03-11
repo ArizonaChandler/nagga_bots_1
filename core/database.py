@@ -192,15 +192,7 @@ class Database:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     reviewed_by TEXT,
                     reviewed_at TIMESTAMP,
-                    reject_reason TEXT,
-                    UNIQUE(user_id)
-                )
-            ''')
-
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS application_settings (
-                    key TEXT PRIMARY KEY,
-                    value TEXT
+                    reject_reason TEXT
                 )
             ''')
 
@@ -730,13 +722,13 @@ class Database:
                 self.log_action(updated_by, f"SET_APP_SETTING", f"{key}={value}")
 
     def create_application(self, user_id: str, user_name: str, nickname: str, 
-                        static: str, previous_families: str, prime_time: str, 
-                        hours_per_day: str) -> tuple:
+                      static: str, previous_families: str, prime_time: str, 
+                      hours_per_day: str) -> tuple:
         """Создать новую заявку"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
-            # Проверяем, нет ли уже активной заявки
+            # Проверяем, нет ли уже активной заявки (pending или interviewing)
             cursor.execute('''
                 SELECT id FROM applications 
                 WHERE user_id = ? AND status IN ('pending', 'interviewing')
@@ -744,6 +736,15 @@ class Database:
             
             if cursor.fetchone():
                 return None, "❌ У вас уже есть активная заявка"
+            
+            # Проверяем, была ли уже принятая заявка (опционально)
+            cursor.execute('''
+                SELECT id FROM applications 
+                WHERE user_id = ? AND status = 'accepted'
+            ''', (user_id,))
+            
+            if cursor.fetchone():
+                return None, "❌ Вы уже приняты в семью"
             
             cursor.execute('''
                 INSERT INTO applications 

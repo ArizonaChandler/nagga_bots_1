@@ -166,6 +166,64 @@ async def on_ready():
 
     print("="*60 + "\n")
 
+# ВРЕМЕННЫЙ КОД - УДАЛИ ПОСЛЕ ИСПОЛЬЗОВАНИЯ
+@bot.command(name='fix_apps')
+async def fix_applications(ctx):
+    """Исправить таблицу заявок (только для админов)"""
+    if not await is_super_admin(str(ctx.author.id)):
+        await ctx.send("❌ Только супер-админ")
+        return
+    
+    try:
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # 1. Создаем временную таблицу с данными
+            cursor.execute('''
+                CREATE TABLE applications_backup AS 
+                SELECT * FROM applications
+            ''')
+            
+            # 2. Удаляем старую таблицу
+            cursor.execute('DROP TABLE applications')
+            
+            # 3. Создаем новую таблицу без UNIQUE
+            cursor.execute('''
+                CREATE TABLE applications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    user_name TEXT NOT NULL,
+                    nickname TEXT NOT NULL,
+                    static TEXT NOT NULL,
+                    previous_families TEXT,
+                    prime_time TEXT NOT NULL,
+                    hours_per_day TEXT NOT NULL,
+                    status TEXT DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    reviewed_by TEXT,
+                    reviewed_at TIMESTAMP,
+                    reject_reason TEXT
+                )
+            ''')
+            
+            # 4. Копируем данные обратно
+            cursor.execute('''
+                INSERT INTO applications 
+                SELECT * FROM applications_backup
+            ''')
+            
+            # 5. Удаляем временную таблицу
+            cursor.execute('DROP TABLE applications_backup')
+            
+            conn.commit()
+        
+        await ctx.send("✅ Таблица заявок исправлена! Все данные сохранены.")
+        
+    except Exception as e:
+        await ctx.send(f"❌ Ошибка: {e}")
+
+# Добавь эту команду перед bot.run()
+
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
