@@ -43,6 +43,7 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
     )
     
     async def on_submit(self, interaction: discord.Interaction):
+        # Логирование начала
         print(f"🔍 Начало обработки заявки от {interaction.user.id}")
         
         try:
@@ -71,16 +72,14 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
                 description="Ваша заявка принята и передана на рассмотрение. Ожидайте решения.",
                 color=0x00ff00
             )
-            
-            print("📤 Отправка подтверждения пользователю...")
             await interaction.response.send_message(embed=embed, ephemeral=True)
-            print("✅ Подтверждение отправлено")
+            print("✅ Подтверждение отправлено пользователю")
             
             # ===== ОТПРАВЛЯЕМ В КАНАЛ "ЗАЯВКИ В СЕМЬЮ" =====
             print("🔍 Получение настроек...")
             settings = app_manager.get_settings()
             applications_channel_id = settings.get('applications_channel')
-            
+
             print(f"📢 applications_channel_id: {applications_channel_id}")
             
             if not applications_channel_id:
@@ -116,24 +115,7 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
             embed.add_field(name="⏰ Прайм-тайм", value=self.prime_time.value, inline=True)
             embed.add_field(name="📊 Часов в день", value=self.hours_per_day.value, inline=True)
             embed.set_footer(text=f"Заявка ID: {app_id}")
-            mbed=embed,
-                view=ApplicationModerationView(app_id, str(interaction.user.id))
-            )
-            print("✅ Заявка отправлена в канал модерации")
             
-        except Exception as e:
-            print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
-            import traceback
-            traceback.print_exc()
-            
-            # Пробуем отправить сообщение об ошибке пользователю
-            try:
-                await interaction.followup.send(
-                    f"❌ Произошла ошибка: {e}",
-                    ephemeral=True
-                )
-            except:
-                pass
             # Добавляем тег роли рекрута
             recruit_role_id = settings.get('applications_recruit_role')
             content = None
@@ -147,4 +129,20 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
             print("📤 Отправка заявки в канал модерации...")
             await applications_channel.send(
                 content=content,
-                e
+                embed=embed,
+                view=ApplicationModerationView(app_id, str(interaction.user.id))
+            )
+            print(f"✅ Заявка отправлена в канал #{applications_channel.name}")
+            
+        except Exception as e:
+            print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            try:
+                await interaction.followup.send(
+                    f"❌ Произошла ошибка: {e}",
+                    ephemeral=True
+                )
+            except:
+                pass
