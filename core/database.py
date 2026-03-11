@@ -150,7 +150,7 @@ class Database:
                 )
             ''')
             
-            # НОВЫЕ ТАБЛИЦЫ ДЛЯ СИСТЕМЫ РЕГИСТРАЦИИ НА CAPT
+            # Таблицы для системы регистрации на CAPT
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS capt_registrations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -196,7 +196,14 @@ class Database:
                 )
             ''')
 
-            # Добавляем настройки по умолчанию
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS application_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            ''')
+
+            # Добавляем настройки по умолчанию для системы заявок
             cursor.execute('INSERT OR IGNORE INTO application_settings (key, value) VALUES (?, ?)', 
                         ('applications_channel', 'null'))
             cursor.execute('INSERT OR IGNORE INTO application_settings (key, value) VALUES (?, ?)', 
@@ -207,6 +214,8 @@ class Database:
                         ('applications_member_role', 'null'))
             cursor.execute('INSERT OR IGNORE INTO application_settings (key, value) VALUES (?, ?)', 
                         ('applications_settings_channel', 'null'))
+            cursor.execute('INSERT OR IGNORE INTO application_settings (key, value) VALUES (?, ?)', 
+                        ('submit_channel', 'null'))
 
             conn.commit()
     
