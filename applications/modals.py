@@ -1,7 +1,6 @@
 """Модалки для системы заявок"""
 import discord
 from applications.manager import app_manager
-from applications.views import ApplicationModerationView
 from datetime import datetime
 
 class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"):
@@ -107,6 +106,9 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
         content = None
         if recruit_role_id:
             content = f"<@&{recruit_role_id}>"
+        
+        # Импортируем здесь, чтобы избежать циклического импорта
+        from applications.views import ApplicationModerationView
         
         # Отправляем с кнопками модерации
         await applications_channel.send(
