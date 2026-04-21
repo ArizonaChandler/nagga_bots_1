@@ -360,7 +360,9 @@ class GlobalSettingsView(BaseMenuView):
             row=4
         )
         async def family_name_cb(i):
-            await i.response.send_modal(SetFamilyNameModal(self.guild))
+            # Прямой импорт ВНУТРИ функции, чтобы избежать циклических импортов
+            from admin.modals import SetFamilyNameModal
+            await i.response.send_modal(SetFamilyNameModal(i.guild))
         family_name_btn.callback = family_name_cb
         self.add_item(family_name_btn)
 

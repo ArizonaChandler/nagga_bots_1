@@ -1255,27 +1255,8 @@ class SetApplicationsSettingsChannelModal(discord.ui.Modal, title="📝 КАНА
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
-
-class SetFamilyNameModal(discord.ui.Modal, title="🏷️ НАЗВАНИЕ СЕМЬИ"):
-    name = discord.ui.TextInput(
-        label="Название семьи",
-        placeholder="Например: Phoenix",
-        max_length=50,
-        required=True
-    )
+class SetFamilyNameModal(discord.ui.Modal, title="Тест"):
+    name = discord.ui.TextInput(label="Название")
     
     async def on_submit(self, interaction: discord.Interaction):
-        from core.config import CONFIG, save_config
-        from core.database import db
-        try:
-            CONFIG['family_name'] = self.name.value
-            db.set_setting('family_name', self.name.value, str(interaction.user.id))
-            save_config(str(interaction.user.id))
-            
-            await interaction.response.send_message(
-                f"✅ Название семьи установлено: **{self.name.value}**\n"
-                f"🔄 Перезапустите бота для применения во всех модулях.",
-                ephemeral=True
-            )
-        except Exception as e:
-            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+        await interaction.response.send_message(f"✅ {self.name.value}", ephemeral=True)
