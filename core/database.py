@@ -379,15 +379,6 @@ class Database:
             cursor.execute('SELECT key, value FROM settings')
             return dict(cursor.fetchall())
     
-    def save_dual_colors(self, color1: str, color2: str, updated_by: str = None):
-        self.set_setting('mcl_color_1', color1, updated_by)
-        self.set_setting('mcl_color_2', color2, updated_by)
-    
-    def get_dual_colors(self):
-        color1 = self.get_setting('mcl_color_1') or 'Pink'
-        color2 = self.get_setting('mcl_color_2') or 'Blue'
-        return color1, color2
-    
     def log_action(self, user_id: str, action: str, details: str = None):
         with self.get_connection() as conn:
             cursor = conn.cursor()

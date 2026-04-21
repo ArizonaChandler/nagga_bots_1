@@ -12,14 +12,13 @@ from admin.modals import (
     SetCaptSettingsChannelModal, SetAdSettingsChannelModal, SetEventsSettingsChannelModal
 )
 from capt_registration.settings_view import CaptSettingsView
-from mcl.views import MclSettingsView
 
 __all__ = [
     # Views
     'MainView', 'SettingsView', 'GlobalSettingsView',
     'AccessView', 'AdminView', 'EventSettingsView',
     'EventsListView', 'EventDetailView', 'CaptRegistrationSettingsView',
-    'CaptSettingsView', 'MclSettingsView',
+    'CaptSettingsView',
     
     # Modals
     'SetRoleModal', 'SetCaptChannelModal', 'SetServerModal',

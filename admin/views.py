@@ -54,24 +54,6 @@ class MainView(BaseMenuView):
             await i.response.edit_message(embed=embed, view=view)
         events_btn.callback = events_cb
         self.add_item(events_btn)
-        
-        # Кнопки для пользователей с доступом
-        if db.user_exists(user_id):
-            mcl_btn = discord.ui.Button(
-                label="🎨 DUAL MCL",
-                style=discord.ButtonStyle.primary,
-                emoji="🎨",
-                row=1
-            )
-            async def mcl_cb(i):
-                if not await has_access(str(i.user.id)):
-                    return
-                if not CONFIG['channel_id']:
-                    await i.response.send_message("❌ Канал MCL не настроен", ephemeral=True)
-                    return
-                await dual_mcl_core.send_dual(i)
-            mcl_btn.callback = mcl_cb
-            self.add_item(mcl_btn)
     
     def get_current_embed(self):
         embed = discord.Embed(
@@ -86,27 +68,6 @@ class SettingsView(BaseMenuView):
     """Главное меню настроек (!settings)"""
     def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
         super().__init__(user_id, guild, previous_view, previous_embed)
-        
-        # 🎨 MCL
-        mcl_btn = discord.ui.Button(
-            label="🎨 MCL", 
-            style=discord.ButtonStyle.secondary, 
-            emoji="🎨", 
-            row=0
-        )
-        async def mcl_cb(i):
-            view = MclSettingsView(self.user_id, self.guild, self, self.get_current_embed())
-            colors = db.get_dual_colors()
-            embed = discord.Embed(
-                title="🎨 **НАСТРОЙКИ DUAL MCL**",
-                description=f"**Текущие настройки:**\n"
-                           f"💬 Канал: {format_mention(self.guild, CONFIG.get('channel_id'), 'channel')}\n"
-                           f"🎨 Цвета: `{colors[0]}/{colors[1]}`",
-                color=0x00ff00
-            )
-            await i.response.edit_message(embed=embed, view=view)
-        mcl_btn.callback = mcl_cb
-        self.add_item(mcl_btn)
         
         # 🌍 Глобальные
         global_btn = discord.ui.Button(
@@ -352,31 +313,31 @@ class GlobalSettingsView(BaseMenuView):
         apps_settings_channel_btn.callback = apps_settings_channel_cb
         self.add_item(apps_settings_channel_btn)
 
-        # РЯД 4: НАСТРОЙКИ НАЗВАНИЯ СЕМЬИ (или добавь в свободный ряд)
+        # РЯД 3: НАСТРОЙКИ НАЗВАНИЯ СЕМЬИ (или добавь в свободный ряд)
         family_name_btn = discord.ui.Button(
             label="🏷️ Название семьи",
             style=discord.ButtonStyle.secondary,
             emoji="🏷️",
-            row=4
+            row=3
         )
         async def family_name_cb(i):
             await i.response.send_modal(SetFamilyNameModal())
         family_name_btn.callback = family_name_cb
         self.add_item(family_name_btn)
 
-        # РЯД 4: НАСТРОЙКИ КАНАЛОВ AFK
+        # РЯД 3: НАСТРОЙКИ КАНАЛОВ AFK
         afk_settings_channel_btn = discord.ui.Button(
             label="🛌 Канал настроек AFK",
             style=discord.ButtonStyle.secondary,
             emoji="🛌",
-            row=4
+            row=3
         )
         async def afk_settings_channel_cb(i):
             await i.response.send_modal(SetAFKSettingsChannelModal(self.guild))
         afk_settings_channel_btn.callback = afk_settings_channel_cb
         self.add_item(afk_settings_channel_btn)
 
-        # РЯД 5: НАЗАД
+        # РЯД 4: НАЗАД
         self.add_back_button(row=4)
     
     async def get_current_embed(self):

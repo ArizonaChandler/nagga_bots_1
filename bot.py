@@ -19,7 +19,6 @@ from commands.log import setup as setup_log
 from commands.stats import setup as setup_stats
 
 # ВНИМАНИЕ: Импорт capt.core УДАЛЕН! CAPT перенесена в capt_registration
-from mcl.core import dual_mcl_core
 from files.core import file_manager
 
 # Импорт планировщика мероприятий
@@ -111,9 +110,6 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Ошибка синхронизации: {e}")
     
-    colors = db.get_dual_colors()
-    dual_mcl_core.token_colors = {1: colors[0], 2: colors[1]}
-    
     # Инициализация постоянных кнопок CAPT регистрации
     try:
         from capt_registration.manager import capt_reg_manager
@@ -200,4 +196,3 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print("\n👋 Бот остановлен")
 
-        
