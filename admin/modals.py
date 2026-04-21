@@ -1296,32 +1296,59 @@ class SetAFKSettingsChannelModal(discord.ui.Modal, title="🛌 КАНАЛ НАС
         from afk.settings_view import AFKSettingsView
         
         try:
-            guild = interaction.guild
+            # Получаем сервер из CONFIG
+            server_id = CONFIG.get('server_id')
+            if not server_id:
+                await interaction.response.send_message(
+                    "❌ Сначала установите ID сервера в Глобальных настройках",
+                    ephemeral=True
+                )
+                return
+            
+            guild = interaction.client.get_guild(int(server_id))
+            if not guild:
+                await interaction.response.send_message(
+                    f"❌ Сервер с ID {server_id} не найден",
+                    ephemeral=True
+                )
+                return
+            
             channel = guild.get_channel(int(self.channel_id.value))
             if not channel:
-                await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
+                await interaction.response.send_message(
+                    f"❌ Канал {self.channel_id.value} не найден",
+                    ephemeral=True
+                )
                 return
             
             CONFIG['afk_settings_channel'] = self.channel_id.value
             db.set_setting('afk_settings_channel', self.channel_id.value, str(interaction.user.id))
             save_config(str(interaction.user.id))
             
-            # Очищаем старые сообщения
-            async for msg in channel.history(limit=10):
-                if msg.author == interaction.client.user:
-                    await msg.delete()
+            # Ищем существующее сообщение с настройками AFK
+            message_exists = False
+            async for msg in channel.history(limit=50):
+                if msg.author == interaction.client.user and msg.embeds:
+                    if msg.embeds and "НАСТРОЙКИ AFK" in msg.embeds[0].title:
+                        await msg.edit(view=AFKSettingsView())
+                        message_exists = True
+                        await interaction.response.send_message(
+                            f"✅ Панель настроек AFK обновлена в {channel.mention}",
+                            ephemeral=True
+                        )
+                        break
             
-            # Отправляем панель настроек
-            embed = discord.Embed(
-                title="⚙️ **НАСТРОЙКИ AFK**",
-                description="Настройка системы ухода в AFK",
-                color=0x00ff00
-            )
-            await channel.send(embed=embed, view=AFKSettingsView())
+            if not message_exists:
+                embed = discord.Embed(
+                    title="⚙️ **НАСТРОЙКИ AFK**",
+                    description="Настройка системы ухода в AFK",
+                    color=0x00ff00
+                )
+                await channel.send(embed=embed, view=AFKSettingsView())
+                await interaction.response.send_message(
+                    f"✅ Канал настроек AFK создан: {channel.mention}",
+                    ephemeral=True
+                )
             
-            await interaction.response.send_message(
-                f"✅ Канал настроек AFK создан: {channel.mention}",
-                ephemeral=True
-            )
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)

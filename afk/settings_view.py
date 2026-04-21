@@ -77,6 +77,7 @@ class SetAFKChannelModal(discord.ui.Modal, title="📢 КАНАЛ AFK"):
     async def on_submit(self, interaction: discord.Interaction):
         from core.config import CONFIG, save_config
         from core.database import db
+        from afk.manager import afk_manager
         
         try:
             # Получаем сервер из CONFIG
