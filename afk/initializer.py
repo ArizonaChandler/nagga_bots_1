@@ -42,16 +42,18 @@ class AFKInitializer:
         
         from afk.views import AFKPublicView, update_afk_embed
         
-        # Ищем существующее сообщение
+        # Ищем существующее сообщение с кнопками AFK
         message_exists = False
         async for msg in channel.history(limit=50):
             if msg.author == self.bot.user and msg.embeds:
                 if msg.embeds and "СИСТЕМА AFK" in msg.embeds[0].title:
+                    # Обновляем view (кнопки)
                     await msg.edit(view=AFKPublicView(self.bot, channel_id))
                     message_exists = True
                     logger.info(f"✅ Обновлена панель AFK в #{channel.name}")
                     break
         
+        # Если сообщения нет - создаём новое
         if not message_exists:
             embed = discord.Embed(
                 title="🛌 **СИСТЕМА AFK**",
@@ -62,7 +64,7 @@ class AFKInitializer:
             await channel.send(embed=embed, view=AFKPublicView(self.bot, channel_id))
             logger.info(f"✅ Создана панель AFK в #{channel.name}")
         
-        # Обновляем embed со списком пользователей
+        # Обновляем embed со списком пользователей (если есть)
         await update_afk_embed(self.bot, channel_id)
     
     async def _init_settings_channel(self):

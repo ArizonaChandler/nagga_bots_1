@@ -7,12 +7,25 @@ from afk.manager import afk_manager
 
 
 async def update_afk_embed(bot, channel_id: str):
-    """Обновить embed со списком AFK пользователей (отдельная функция)"""
+    """Обновить embed со списком AFK пользователей"""
     channel = bot.get_channel(int(channel_id))
     if not channel:
+        logger.error(f"❌ Канал {channel_id} не найден для обновления embed")
         return
     
     users = afk_manager.get_all_afk_users()
+    
+    # Ищем существующее сообщение с кнопками AFK
+    target_message = None
+    async for msg in channel.history(limit=50):
+        if msg.author == bot.user and msg.embeds:
+            if msg.embeds and "СИСТЕМА AFK" in msg.embeds[0].title:
+                target_message = msg
+                break
+    
+    if not target_message:
+        logger.warning(f"⚠️ Не найдено сообщение AFK в канале {channel.name}")
+        return
     
     if not users:
         embed = discord.Embed(
@@ -24,6 +37,7 @@ async def update_afk_embed(bot, channel_id: str):
     else:
         description = ""
         for user in users:
+            from datetime import datetime
             until = datetime.fromisoformat(user['until_time'])
             until_str = until.strftime("%d.%m.%Y %H:%M")
             description += f"👤 <@{user['user_id']}>\n"
@@ -38,12 +52,7 @@ async def update_afk_embed(bot, channel_id: str):
         )
         embed.set_footer(text="Нажмите кнопку, чтобы уйти в AFK")
     
-    # Ищем и обновляем сообщение
-    async for msg in channel.history(limit=20):
-        if msg.author == bot.user and msg.embeds:
-            if msg.embeds and "СИСТЕМА AFK" in msg.embeds[0].title:
-                await msg.edit(embed=embed)
-                return
+    await target_message.edit(embed=embed)
 
 
 class AFKPublicView(PermanentView):
