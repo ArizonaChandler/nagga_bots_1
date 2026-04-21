@@ -131,6 +131,9 @@ class SetAFKMaxHoursModal(discord.ui.Modal, title="⏰ МАКСИМАЛЬНОЕ 
     )
     
     async def on_submit(self, interaction: discord.Interaction):
+        from core.config import CONFIG, save_config
+        from core.database import db
+        
         try:
             hours_num = int(self.hours.value)
             if hours_num <= 0:
@@ -140,12 +143,16 @@ class SetAFKMaxHoursModal(discord.ui.Modal, title="⏰ МАКСИМАЛЬНОЕ 
                 await interaction.response.send_message("❌ Максимум 168 часов (7 дней)", ephemeral=True)
                 return
             
-            afk_manager.save_setting('afk_max_hours', str(hours_num), str(interaction.user.id))
+            # Сохраняем настройку
+            CONFIG['afk_max_hours'] = str(hours_num)
+            db.set_setting('afk_max_hours', str(hours_num), str(interaction.user.id))
+            save_config(str(interaction.user.id))
             
             await interaction.response.send_message(
                 f"✅ Максимальное время AFK установлено: **{hours_num} часов**",
                 ephemeral=True
             )
+            
         except ValueError:
             await interaction.response.send_message("❌ Введите число", ephemeral=True)
         except Exception as e:
