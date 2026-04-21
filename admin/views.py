@@ -5,7 +5,6 @@ from core.database import db
 from core.config import CONFIG
 from core.utils import format_mention, get_server_name, is_super_admin, has_access
 from core.menus import BaseMenuView
-from mcl.modals import SetMclChannelModal, SetDualColorModal
 from admin.modals import *
 from files.core import file_manager
 from files.views import FilesView
