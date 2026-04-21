@@ -1,6 +1,8 @@
 """Модалки для системы AFK"""
 import discord
 from afk.manager import afk_manager
+from core.config import CONFIG
+
 
 class AFKModal(discord.ui.Modal, title="🛌 УХОД В AFK"):
     """Модалка для ухода в AFK"""
@@ -14,25 +16,23 @@ class AFKModal(discord.ui.Modal, title="🛌 УХОД В AFK"):
     )
     
     hours = discord.ui.TextInput(
-        label="⏰ На сколько часов (макс. {max_hours})",
+        label="⏰ На сколько часов",
         placeholder="Введите число",
         max_length=3,
         required=True
     )
     
-    def __init__(self, bot, channel_id: str):
+    def __init__(self, bot, channel_id: str, max_hours: int):
         super().__init__()
         self.bot = bot
         self.channel_id = channel_id
+        # Обновляем placeholder с максимальным значением
+        self.hours.placeholder = f"Введите число (макс. {max_hours})"
     
     async def on_submit(self, interaction: discord.Interaction):
-        from core.config import CONFIG
         from afk.views import update_afk_embed
         
         max_hours = CONFIG.get('afk_max_hours', 24)
-        
-        # Обновляем placeholder (просто для красоты, не влияет на работу)
-        self.hours.placeholder = f"Максимум {max_hours} часов"
         
         # Проверяем формат часов
         try:

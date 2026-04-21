@@ -11,9 +11,16 @@ class AFKManager:
     
     def get_settings(self):
         """Получить все настройки из CONFIG"""
+        max_hours = CONFIG.get('afk_max_hours', 24)
+        if isinstance(max_hours, str):
+            try:
+                max_hours = int(max_hours)
+            except:
+                max_hours = 24
+        
         return {
             'afk_channel': CONFIG.get('afk_channel'),
-            'afk_max_hours': CONFIG.get('afk_max_hours', 24),
+            'afk_max_hours': max_hours,
             'afk_settings_channel': CONFIG.get('afk_settings_channel'),
         }
     

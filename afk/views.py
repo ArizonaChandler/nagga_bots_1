@@ -58,10 +58,11 @@ async def update_afk_embed(bot, channel_id: str):
 class AFKPublicView(PermanentView):
     """Публичные кнопки для AFK"""
     
-    def __init__(self, bot, channel_id: str):
+    def __init__(self, bot, channel_id: str, max_hours: int):
         super().__init__()
         self.bot = bot
         self.channel_id = channel_id
+        self.max_hours = max_hours
     
     @discord.ui.button(
         label="🛌 УЙТИ В AFK", 
@@ -71,7 +72,7 @@ class AFKPublicView(PermanentView):
     )
     async def go_afk(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Открыть модалку ухода в AFK"""
-        await interaction.response.send_modal(AFKModal(self.bot, self.channel_id))
+        await interaction.response.send_modal(AFKModal(self.bot, self.channel_id, self.max_hours))
     
     @discord.ui.button(
         label="✅ ВЕРНУЛСЯ", 
@@ -85,4 +86,6 @@ class AFKPublicView(PermanentView):
         await interaction.response.send_message(msg, ephemeral=True)
         
         # Обновляем embed
-        await update_afk_embed(self.bot, self.channel_id)
+        if success:
+            from afk.views import update_afk_embed
+            await update_afk_embed(self.bot, self.channel_id)

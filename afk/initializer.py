@@ -42,13 +42,15 @@ class AFKInitializer:
         
         from afk.views import AFKPublicView, update_afk_embed
         
+        max_hours = int(settings.get('afk_max_hours', 24))
+        
         # Ищем существующее сообщение с кнопками AFK
         message_exists = False
         async for msg in channel.history(limit=50):
             if msg.author == self.bot.user and msg.embeds:
                 if msg.embeds and "СИСТЕМА AFK" in msg.embeds[0].title:
                     # Обновляем view (кнопки)
-                    await msg.edit(view=AFKPublicView(self.bot, channel_id))
+                    await msg.edit(view=AFKPublicView(self.bot, channel_id, max_hours))
                     message_exists = True
                     logger.info(f"✅ Обновлена панель AFK в #{channel.name}")
                     break
@@ -61,7 +63,7 @@ class AFKInitializer:
                 color=0xffa500
             )
             embed.set_footer(text="Нажмите кнопку, чтобы уйти в AFK")
-            await channel.send(embed=embed, view=AFKPublicView(self.bot, channel_id))
+            await channel.send(embed=embed, view=AFKPublicView(self.bot, channel_id, max_hours))
             logger.info(f"✅ Создана панель AFK в #{channel.name}")
         
         # Обновляем embed со списком пользователей (если есть)
