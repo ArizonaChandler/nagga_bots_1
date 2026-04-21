@@ -244,24 +244,17 @@ class SetAdChannelModal(discord.ui.Modal, title="📢 УСТАНОВИТЬ КА�
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            # Проверяем, что канал существует
-            channel = interaction.guild.get_channel(int(self.channel_id.value))
-            if not channel:
-                await interaction.response.send_message(
-                    f"❌ Канал {self.channel_id.value} не найден",
-                    ephemeral=True
-                )
-                return
+            # НЕ ПРОВЕРЯЕМ существование канала через бота!
+            # Просто сохраняем ID
             
             with open(AD_CHANNEL_FILE, 'w', encoding='utf-8') as f:
                 f.write(self.channel_id.value)
             
             await interaction.response.send_message(
-                f"✅ Канал для рекламы установлен: {channel.mention}",
+                f"✅ Канал для рекламы установлен: `{self.channel_id.value}`\n"
+                f"⚠️ Убедитесь, что у пользовательского токена есть доступ к этому каналу.",
                 ephemeral=True
             )
             
-        except ValueError:
-            await interaction.response.send_message("❌ Неверный формат ID", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
