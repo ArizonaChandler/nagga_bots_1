@@ -75,18 +75,46 @@ class SetAFKChannelModal(discord.ui.Modal, title="📢 КАНАЛ AFK"):
     )
     
     async def on_submit(self, interaction: discord.Interaction):
+        from core.config import CONFIG, save_config
+        from core.database import db
+        
         try:
-            channel = interaction.guild.get_channel(int(self.channel_id.value))
-            if not channel:
-                await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
+            # Получаем сервер из CONFIG
+            server_id = CONFIG.get('server_id')
+            if not server_id:
+                await interaction.response.send_message(
+                    "❌ Сначала установите ID сервера в Глобальных настройках",
+                    ephemeral=True
+                )
                 return
             
-            afk_manager.save_setting('afk_channel', self.channel_id.value, str(interaction.user.id))
+            guild = interaction.client.get_guild(int(server_id))
+            if not guild:
+                await interaction.response.send_message(
+                    f"❌ Сервер с ID {server_id} не найден",
+                    ephemeral=True
+                )
+                return
+            
+            # Получаем канал
+            channel = guild.get_channel(int(self.channel_id.value))
+            if not channel:
+                await interaction.response.send_message(
+                    f"❌ Канал {self.channel_id.value} не найден на сервере {guild.name}",
+                    ephemeral=True
+                )
+                return
+            
+            # Сохраняем в CONFIG и БД
+            CONFIG['afk_channel'] = self.channel_id.value
+            db.set_setting('afk_channel', self.channel_id.value, str(interaction.user.id))
+            save_config(str(interaction.user.id))
             
             await interaction.response.send_message(
                 f"✅ Канал AFK настроен: {channel.mention}",
                 ephemeral=True
             )
+            
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
