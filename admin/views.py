@@ -377,7 +377,7 @@ class GlobalSettingsView(BaseMenuView):
         self.add_item(afk_settings_channel_btn)
 
         # РЯД 5: НАЗАД
-        self.add_back_button(row=5)
+        self.add_back_button(row=4)
     
     async def get_current_embed(self):
         server_name = await get_server_name(self.guild, CONFIG.get('server_id'))
