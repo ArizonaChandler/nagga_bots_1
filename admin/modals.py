@@ -450,7 +450,7 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
                 inline=False
             )
             
-            embed.set_footer(text="Unit Management System by Nagga")
+            embed.set_footer(text="Management System")
             
             # Отправляем в каждый канал
             content = ' '.join(role_mentions) if role_mentions else None
