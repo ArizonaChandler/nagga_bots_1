@@ -34,6 +34,9 @@ from applications.manager import app_manager
 from applications.views import ApplicationPublicView
 from applications.admin_views import ApplicationsModerationPanel
 
+# Импорт системы AFK
+from afk import setup_afk
+
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -163,6 +166,14 @@ async def on_ready():
         await setup_applications(bot)
     except Exception as e:
         print(f"❌ Ошибка инициализации системы заявок: {e}")
+        traceback.print_exc()
+
+    # Инициализация системы AFK
+    try:
+        print("🔄 Инициализация системы AFK...")
+        await setup_afk(bot)
+    except Exception as e:
+        print(f"❌ Ошибка инициализации AFK: {e}")
         traceback.print_exc()
 
     print("="*60 + "\n")

@@ -230,6 +230,34 @@ class Database:
                 )
             ''')
 
+            # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ AFK =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS afk_users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL UNIQUE,
+                    user_name TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    hours INTEGER NOT NULL,
+                    until_time TIMESTAMP NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS afk_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            ''')
+
+            # Добавляем настройки по умолчанию
+            cursor.execute('INSERT OR IGNORE INTO afk_settings (key, value) VALUES (?, ?)', 
+                        ('afk_channel', 'null'))
+            cursor.execute('INSERT OR IGNORE INTO afk_settings (key, value) VALUES (?, ?)', 
+                        ('afk_max_hours', '24'))
+            cursor.execute('INSERT OR IGNORE INTO afk_settings (key, value) VALUES (?, ?)', 
+                        ('afk_settings_channel', 'null'))
+
             conn.commit()
     
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
@@ -997,5 +1025,118 @@ class Database:
                 self.log_action(reset_by, "RESET_USER_APPLICATIONS", f"User {user_id}, deleted {deleted_count} applications")
             
             return True, f"✅ Удалено {deleted_count} заявок пользователя <@{user_id}>"
+
+    # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ AFK =====
+    
+    def get_afk_setting(self, key: str) -> str:
+        """Получить настройку AFK"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT value FROM afk_settings WHERE key = ?', (key,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+    
+    def set_afk_setting(self, key: str, value: str, updated_by: str = None):
+        """Установить настройку AFK"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO afk_settings (key, value)
+                VALUES (?, ?)
+            ''', (key, value))
+            conn.commit()
+            if updated_by:
+                self.log_action(updated_by, f"SET_AFK_SETTING", f"{key}={value}")
+    
+    def add_afk_user(self, user_id: str, user_name: str, reason: str, hours: int) -> tuple:
+        """Добавить пользователя в AFK"""
+        from datetime import datetime, timedelta
+        import pytz
+        
+        msk_tz = pytz.timezone('Europe/Moscow')
+        until_time = datetime.now(msk_tz) + timedelta(hours=hours)
+        
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Проверяем, не в AFK ли уже
+            cursor.execute('SELECT id FROM afk_users WHERE user_id = ?', (user_id,))
+            if cursor.fetchone():
+                return False, "❌ Вы уже в AFK"
+            
+            cursor.execute('''
+                INSERT INTO afk_users (user_id, user_name, reason, hours, until_time)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, user_name, reason, hours, until_time.isoformat()))
+            
+            conn.commit()
+            self.log_action(user_id, "AFK_GO", f"Reason: {reason}, Hours: {hours}")
+            
+            return True, f"✅ Вы ушли в AFK до {until_time.strftime('%d.%m.%Y %H:%M')} МСК"
+    
+    def remove_afk_user(self, user_id: str) -> tuple:
+        """Удалить пользователя из AFK"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM afk_users WHERE user_id = ?', (user_id,))
+            removed = cursor.rowcount > 0
+            conn.commit()
+            
+            if removed:
+                self.log_action(user_id, "AFK_BACK", "User returned from AFK")
+                return True, "✅ Добро пожаловать обратно!"
+            return False, "❌ Вы не были в AFK"
+    
+    def get_all_afk_users(self):
+        """Получить всех AFK пользователей"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT user_id, user_name, reason, until_time
+                FROM afk_users
+                ORDER BY until_time
+            ''')
+            
+            columns = [description[0] for description in cursor.description]
+            rows = cursor.fetchall()
+            
+            return [dict(zip(columns, row)) for row in rows]
+    
+    def get_afk_user(self, user_id: str):
+        """Получить AFK пользователя по ID"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT user_id, user_name, reason, until_time
+                FROM afk_users WHERE user_id = ?
+            ''', (user_id,))
+            
+            columns = [description[0] for description in cursor.description]
+            row = cursor.fetchone()
+            
+            return dict(zip(columns, row)) if row else None
+    
+    def check_expired_afk_users(self):
+        """Проверить и вернуть просроченных AFK пользователей"""
+        from datetime import datetime
+        import pytz
+        
+        msk_tz = pytz.timezone('Europe/Moscow')
+        now = datetime.now(msk_tz)
+        
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT user_id, user_name FROM afk_users
+                WHERE until_time < ?
+            ''', (now.isoformat(),))
+            
+            expired = cursor.fetchall()
+            
+            # Удаляем просроченных
+            cursor.execute('DELETE FROM afk_users WHERE until_time < ?', (now.isoformat(),))
+            conn.commit()
+            
+            return expired
 
 db = Database()

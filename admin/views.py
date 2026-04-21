@@ -364,8 +364,20 @@ class GlobalSettingsView(BaseMenuView):
         family_name_btn.callback = family_name_cb
         self.add_item(family_name_btn)
 
-        # РЯД 4: НАЗАД
-        self.add_back_button(row=4)
+        # РЯД 4: НАСТРОЙКИ КАНАЛОВ AFK
+        afk_settings_channel_btn = discord.ui.Button(
+            label="🛌 Канал настроек AFK",
+            style=discord.ButtonStyle.secondary,
+            emoji="🛌",
+            row=4
+        )
+        async def afk_settings_channel_cb(i):
+            await i.response.send_modal(SetAFKSettingsChannelModal(self.guild))
+        afk_settings_channel_btn.callback = afk_settings_channel_cb
+        self.add_item(afk_settings_channel_btn)
+
+        # РЯД 5: НАЗАД
+        self.add_back_button(row=5)
     
     async def get_current_embed(self):
         server_name = await get_server_name(self.guild, CONFIG.get('server_id'))
