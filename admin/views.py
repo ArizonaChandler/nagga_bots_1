@@ -352,6 +352,18 @@ class GlobalSettingsView(BaseMenuView):
         apps_settings_channel_btn.callback = apps_settings_channel_cb
         self.add_item(apps_settings_channel_btn)
 
+        # РЯД 4: НАСТРОЙКИ НАЗВАНИЯ СЕМЬИ (или добавь в свободный ряд)
+        family_name_btn = discord.ui.Button(
+            label="🏷️ Название семьи",
+            style=discord.ButtonStyle.secondary,
+            emoji="🏷️",
+            row=4
+        )
+        async def family_name_cb(i):
+            await i.response.send_modal(SetFamilyNameModal(self.guild))
+        family_name_btn.callback = family_name_cb
+        self.add_item(family_name_btn)
+
         # РЯД 4: НАЗАД
         self.add_back_button(row=4)
     
