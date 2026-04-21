@@ -3,7 +3,6 @@ import discord
 from datetime import datetime
 from core.database import db
 from core.utils import is_admin
-from mcl.core import dual_mcl_core
 from capt_registration.capt_core import capt_core
 from core.config import CONFIG
 
@@ -20,12 +19,6 @@ def setup(bot):
             color=0x00ff00,
             timestamp=datetime.now()
         )
-        
-        mcl_stats = dual_mcl_core.stats
-        mcl_text = f"✅ Успешно: `{mcl_stats[1]['success'] + mcl_stats[2]['success']}`\n"
-        mcl_text += f"📨 Попыток: `{mcl_stats[1]['total_attempts'] + mcl_stats[2]['total_attempts']}`\n"
-        mcl_text += f"🎨 Токен 1: `{dual_mcl_core.token_colors[1]}` ({mcl_stats[1]['success']})\n"
-        mcl_text += f"🎨 Токен 2: `{dual_mcl_core.token_colors[2]}` ({mcl_stats[2]['success']})"
         
         embed.add_field(name="🎨 DUAL MCL", value=mcl_text, inline=True)
         
