@@ -1267,18 +1267,15 @@ class SetFamilyNameModal(discord.ui.Modal, title="🏷️ НАЗВАНИЕ СЕ�
     async def on_submit(self, interaction: discord.Interaction):
         from core.config import CONFIG, save_config
         from core.database import db
-        CONFIG['family_name'] = self.name.value
-        db.set_setting('family_name', self.name.value, str(interaction.user.id))
-        save_config(str(interaction.user.id))
-        
-        # Обновляем сообщения MCL
-        family = self.name.value
-        colors = db.get_dual_colors()
-        CONFIG['message_1'] = f"{family}\n{colors[0]}"
-        CONFIG['message_2'] = f"{family}\n{colors[1]}"
-        
-        await interaction.response.send_message(
-            f"✅ Название семьи установлено: **{self.name.value}**\n"
-            f"🔄 Перезапустите бота для применения во всех модулях.",
-            ephemeral=True
-        )
+        try:
+            CONFIG['family_name'] = self.name.value
+            db.set_setting('family_name', self.name.value, str(interaction.user.id))
+            save_config(str(interaction.user.id))
+            
+            await interaction.response.send_message(
+                f"✅ Название семьи установлено: **{self.name.value}**\n"
+                f"🔄 Перезапустите бота для применения во всех модулях.",
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
