@@ -1192,7 +1192,7 @@ class SetApplicationsSettingsChannelModal(discord.ui.Modal, title="📝 КАНА
     async def on_submit(self, interaction: discord.Interaction):
         from core.config import CONFIG, save_config
         from core.database import db
-        from applications.settings_view import ApplicationsSettingsView
+        from applications.settings_view import ApplicationsCombinedPanel  # ← ИСПРАВЛЕНО
         
         try:
             # Получаем сервер из CONFIG
@@ -1226,16 +1226,15 @@ class SetApplicationsSettingsChannelModal(discord.ui.Modal, title="📝 КАНА
             db.set_setting('applications_settings_channel', self.channel_id.value, str(interaction.user.id))
             save_config(str(interaction.user.id))
             
-            # Ищем существующее сообщение с настройками заявок
+            # Ищем существующее сообщение с панелью управления
             app_settings_exists = False
             async for msg in channel.history(limit=50):
                 if msg.author == interaction.client.user and msg.embeds:
-                    if msg.embeds and "ПАНЕЛЬ УПРАВЛЕНИЯ ЗАЯВКАМИ" in msg.embeds[0].title:
-                        # Обновляем существующее сообщение
-                        await msg.edit(view=ApplicationsSettingsView())
+                    if msg.embeds and "УПРАВЛЕНИЕ И МОДЕРАЦИЯ ЗАЯВОК" in msg.embeds[0].title:  # ← ИСПРАВЛЕНО
+                        await msg.edit(view=ApplicationsCombinedPanel())  # ← ИСПРАВЛЕНО
                         app_settings_exists = True
                         await interaction.response.send_message(
-                            f"✅ Панель настроек заявок обновлена в {channel.mention}",
+                            f"✅ Панель управления заявками обновлена в {channel.mention}",
                             ephemeral=True
                         )
                         break
@@ -1243,11 +1242,11 @@ class SetApplicationsSettingsChannelModal(discord.ui.Modal, title="📝 КАНА
             # Если сообщение не найдено - создаём новое
             if not app_settings_exists:
                 embed = discord.Embed(
-                    title="📝 **ПАНЕЛЬ УПРАВЛЕНИЯ ЗАЯВКАМИ**",
-                    description="Настройка системы заявок в семью",
+                    title="📋 **УПРАВЛЕНИЕ И МОДЕРАЦИЯ ЗАЯВОК**",  # ← ИСПРАВЛЕНО
+                    description="Настройка системы и управление заявками",  # ← ИСПРАВЛЕНО
                     color=0x00ff00
                 )
-                await channel.send(embed=embed, view=ApplicationsSettingsView())
+                await channel.send(embed=embed, view=ApplicationsCombinedPanel())  # ← ИСПРАВЛЕНО
                 await interaction.response.send_message(
                     f"✅ Канал настроек заявок создан: {channel.mention}",
                     ephemeral=True
@@ -1255,6 +1254,7 @@ class SetApplicationsSettingsChannelModal(discord.ui.Modal, title="📝 КАНА
             
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
 
 class SetFamilyNameModal(discord.ui.Modal, title="🏷️ НАЗВАНИЕ СЕМЬИ"):
     name = discord.ui.TextInput(
