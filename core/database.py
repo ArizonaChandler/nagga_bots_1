@@ -806,16 +806,36 @@ class Database:
             return dict(zip(columns, row)) if row else None
 
     def accept_application(self, app_id: int, reviewer_id: str):
-        """Принять заявку"""
+        """Принять заявку (из любого активного статуса)"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            
+            # Проверяем, существует ли заявка
+            cursor.execute('SELECT status FROM applications WHERE id = ?', (app_id,))
+            result = cursor.fetchone()
+            
+            if not result:
+                print(f"❌ Заявка {app_id} не найдена")
+                return False
+            
+            current_status = result[0]
+            print(f"📊 Текущий статус заявки {app_id}: {current_status}")
+            
+            # Разрешаем принимать заявки в статусах 'pending' и 'interviewing'
+            if current_status not in ['pending', 'interviewing']:
+                print(f"❌ Заявка {app_id} в статусе {current_status}, нельзя принять")
+                return False
+            
             cursor.execute('''
                 UPDATE applications 
                 SET status = 'accepted', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND status = 'pending'
+                WHERE id = ? AND status IN ('pending', 'interviewing')
             ''', (reviewer_id, app_id))
+            
             conn.commit()
-            return cursor.rowcount > 0
+            success = cursor.rowcount > 0
+            print(f"✅ Результат принятия: {success}")
+            return success
 
     def reject_application(self, app_id: int, reviewer_id: str, reason: str):
         """Отклонить заявку"""
@@ -854,13 +874,25 @@ class Database:
         """Назначить обзвон"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            
+            # Проверяем, что заявка в статусе 'pending'
+            cursor.execute('SELECT status FROM applications WHERE id = ?', (app_id,))
+            result = cursor.fetchone()
+            
+            if not result or result[0] != 'pending':
+                print(f"❌ Нельзя назначить обзвон: заявка {app_id} в статусе {result[0] if result else 'not found'}")
+                return False
+            
             cursor.execute('''
                 UPDATE applications 
                 SET status = 'interviewing', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP
                 WHERE id = ? AND status = 'pending'
             ''', (reviewer_id, app_id))
+            
             conn.commit()
-            return cursor.rowcount > 0
+            success = cursor.rowcount > 0
+            print(f"✅ Обзвон назначен: {success}")
+            return success
 
     def load_application_settings(self):
         """Загрузить все настройки системы заявок в CONFIG"""

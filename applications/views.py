@@ -126,12 +126,17 @@ class ApplicationModerationView(discord.ui.View):
     
     async def process_accept(self, interaction: discord.Interaction):
         """Обработка принятия заявки"""
+        print(f"🔍 Принятие заявки {self.application_id}")
+        
         # Принимаем заявку в БД
         success = app_manager.accept_application(self.application_id, str(interaction.user.id))
         
         if not success:
+            print(f"❌ Не удалось принять заявку {self.application_id}")
             await interaction.response.send_message("❌ Не удалось принять заявку", ephemeral=True)
             return
+        
+        print(f"✅ Заявка {self.application_id} принята в БД")
         
         # Получаем данные заявки
         app = app_manager.get_application(self.application_id)
