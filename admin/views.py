@@ -75,7 +75,7 @@ class MainView(BaseMenuView):
     
     def get_current_embed(self):
         embed = discord.Embed(
-            title="🤖 **UNIT MANAGEMENT SYSTEM**",
+            title="🤖 **MANAGEMENT SYSTEM**",
             color=0x7289da
         )
         embed.set_footer(text="📁 Полезные файлы доступны всем")

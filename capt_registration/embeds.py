@@ -1,6 +1,7 @@
 """Генерация embed со списками участников"""
 import discord
 from datetime import datetime
+from core.config import CONFIG
 
 def split_list_into_fields(name_prefix: str, items: list, emoji: str, max_length: int = 1000):
     """Разбить длинный список на несколько полей (на всякий случай)"""
@@ -94,6 +95,8 @@ def create_registration_embed(main_list: list, reserve_list: list, capt_info: di
     
     # Простой футер
     total = len(main_list) + len(reserve_list)
-    embed.set_footer(text=f"👥 {total} • Обновляется автоматически")
+    family = CONFIG.get('family_name', 'Семья')
+    embed.set_footer(text=f"👥 {total} • {family}")
+    return embed
     
     return embed

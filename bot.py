@@ -121,9 +121,10 @@ async def on_ready():
         import traceback
         traceback.print_exc()
     
+    family = CONFIG.get('family_name', 'Семья')
     await bot.change_presence(activity=discord.Activity(
         type=discord.ActivityType.watching,
-        name="!info | v1.3"
+        name=f"{family} | !info"
     ))
     
     # Инициализация CAPT регистрации

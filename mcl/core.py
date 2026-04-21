@@ -107,11 +107,11 @@ class DualMCLCore:
         return headers
     
     def prepare_payload(self, token_id: int, is_extra: bool = False):
-        """Подготовка payload для основного или дополнительного цвета"""
+        family = CONFIG.get('family_name', 'Семья')
         if is_extra:
-            msg = f"Unit\n{self.token_extra_colors[token_id]}"
+            msg = f"{family}\n{self.token_extra_colors[token_id]}"
         else:
-            msg = f"Unit\n{self.token_colors[token_id]}"
+            msg = f"{family}\n{self.token_colors[token_id]}"
         
         cache_key = f"{token_id}_{is_extra}"
         if (self.last_messages.get(cache_key) == msg and 
@@ -192,9 +192,9 @@ class DualMCLCore:
             embed = discord.Embed(
                 title="🎨 DUAL MCL - 4 ЦВЕТА",
                 description=f"**Запущено:** {interaction.user.mention}\n"
-                           f"**Статус:** Ожидание отправки цветов...\n"
-                           f"🎨 Токен 1: {self.token_colors[1]} + {self.token_extra_colors[1]}\n"
-                           f"🎨 Токен 2: {self.token_colors[2]} + {self.token_extra_colors[2]}",
+                        f"**Статус:** Ожидание отправки цветов...\n"
+                        f"🎨 Токен 1: {self.token_colors[1]} + {self.token_extra_colors[1]}\n"
+                        f"🎨 Токен 2: {self.token_colors[2]} + {self.token_extra_colors[2]}",
                 color=0xffa500
             )
             cancel_view = CancelView(task_id, user_id)

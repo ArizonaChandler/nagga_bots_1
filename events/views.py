@@ -124,7 +124,7 @@ class EventReminderView(discord.ui.View):
             inline=False
         )
         
-        embed.set_footer(text="Unit Management System by Nagga")
+        embed.set_footer(text=f"{CONFIG.get('family_name', 'Семья')} Management System by Nagga")
         
         # Обновляем ВСЕ экземпляры этого мероприятия
         if self.event_id in EventReminderView._instances:
@@ -222,7 +222,7 @@ class EventReminderView(discord.ui.View):
                 inline=True
             )
             
-            embed.set_footer(text="Unit Management System by Nagga")
+            embed.set_footer(text=f"{CONFIG.get('family_name', 'Семья')} Management System")
             
             # Обновляем все сообщения
             for channel_id, message in self.messages.items():

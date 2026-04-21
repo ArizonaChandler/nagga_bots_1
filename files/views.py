@@ -2,6 +2,7 @@ import discord
 from datetime import datetime
 from files.core import file_manager
 from core.menus import BaseMenuView
+from core.config import CONFIG
 
 class FilesView(BaseMenuView):
     def __init__(self, user_id: str, page: int = 1, previous_view=None, previous_embed=None):
@@ -87,7 +88,7 @@ class FilesView(BaseMenuView):
             description=description,
             color=0x00ff00
         )
-        embed.set_footer(text=f"Страница {self.page}/{self.max_page} • Нажмите кнопку для скачивания")
+        embed.set_footer(text=f"{CONFIG.get('family_name', 'Семья')} • Страница {self.page}/{self.max_page}")
         return embed
     
     async def send_initial(self, interaction):

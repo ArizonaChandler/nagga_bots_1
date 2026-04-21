@@ -4,7 +4,8 @@ from datetime import datetime
 from core.database import db
 from core.utils import is_admin
 from mcl.core import dual_mcl_core
-from capt_registration.capt_core import capt_core  # ИЗМЕНЕНО: было from capt.core import capt_core
+from capt_registration.capt_core import capt_core
+from core.config import CONFIG
 
 def setup(bot):
     @bot.command(name='stats')
@@ -15,7 +16,7 @@ def setup(bot):
             return
         
         embed = discord.Embed(
-            title="📊 **СТАТИСТИКА СИСТЕМЫ**",
+            title=f"📊 **СТАТИСТИКА {CONFIG.get('family_name', 'СЕМЬИ')}**",
             color=0x00ff00,
             timestamp=datetime.now()
         )

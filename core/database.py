@@ -5,7 +5,7 @@ import pytz
 
 class Database:
     def __init__(self):
-        self.db_path = 'unit_bot.db'
+        self.db_path = 'bot_data.db'
         self.init_db()
     
     def get_connection(self):

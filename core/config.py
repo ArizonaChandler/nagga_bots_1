@@ -12,29 +12,27 @@ CONFIG = {
     'channel_id': None,
     'capt_channel_id': None,
     'server_id': None,
-    'capt_role_id': None,           # Уже есть
-    'message_1': 'Unit\nPink',
-    'message_2': 'Unit\nBlue',
+    'capt_role_id': None,
+    'message_1': 'Family\nPink',
+    'message_2': 'Family\nBlue',
     'user_token_1': os.getenv('DISCORD_USER_TOKEN_1'),
     'user_token_2': os.getenv('DISCORD_USER_TOKEN_2'),
     'super_admin_id': SUPER_ADMIN_ID,
-    'alarm_channels': [],           # списки каналов для напоминаний
-    'announce_channels': [],         # списки каналов для оповещений
-    'reminder_roles': [],            # списки ролей для упоминания в напоминаниях
-    'announce_roles': [],            # списки ролей для упоминания в оповещениях
-    'capt_reg_main_channel': None,   # канал для модерации CAPT регистрации
-    'capt_reg_reserve_channel': None, # канал для всех пользователей
-    'capt_alert_channel': None,      # канал для оповещений @everyone
-    'capt_settings_channel': None,  # Канал для настроек CAPT
-    'ad_settings_channel': None,  # Канал для настроек авто-рекламы
-    'events_settings_channel': None,  # Канал для настроек мероприятий
-    'applications_channel': None,
-    'applications_log_channel': None,
-    'applications_recruit_role': None,
-    'applications_member_role': None,
+    'alarm_channels': [],
+    'announce_channels': [],
+    'reminder_roles': [],
+    'announce_roles': [],
+    'capt_reg_main_channel': None,
+    'capt_reg_reserve_channel': None,
+    'capt_alert_channel': None,
+    'capt_settings_channel': None,
+    'ad_settings_channel': None,
+    'events_settings_channel': None,
     'applications_settings_channel': None,
+    'family_name': 'Семья',
 }
 
+# Создаём экземпляр БД
 db = Database()
 
 def load_config():
@@ -42,7 +40,6 @@ def load_config():
     for key, value in settings.items():
         if key in CONFIG:
             if value and value.lower() != 'null':
-                # Для списков - парсим JSON
                 if key in ['alarm_channels', 'announce_channels', 'reminder_roles', 'announce_roles']:
                     try:
                         CONFIG[key] = json.loads(value) if value else []
@@ -56,23 +53,22 @@ def load_config():
                 else:
                     CONFIG[key] = None
         else:
-            # Если ключа нет в CONFIG, но он есть в БД - добавляем
             if key in ['capt_reg_main_channel', 'capt_reg_reserve_channel', 'capt_alert_channel', 
-                    'capt_role_id', 'capt_settings_channel', 'ad_settings_channel', 
-                    'events_settings_channel']:
+                       'capt_role_id', 'capt_settings_channel', 'ad_settings_channel', 
+                       'events_settings_channel', 'applications_settings_channel', 'family_name']:
                 CONFIG[key] = value if value and value.lower() != 'null' else None
     
-    # Загружаем настройки системы заявок
+    # Загружаем настройки заявок
     db.load_application_settings()
-
+    
     colors = db.get_dual_colors()
-    CONFIG['message_1'] = f"Unit\n{colors[0]}"
-    CONFIG['message_2'] = f"Unit\n{colors[1]}"
+    family = CONFIG.get('family_name', 'Семья')
+    CONFIG['message_1'] = f"{family}\n{colors[0]}"
+    CONFIG['message_2'] = f"{family}\n{colors[1]}"
 
 def save_config(updated_by: str = None):
     for key, value in CONFIG.items():
         if key not in ['user_token_1', 'user_token_2', 'super_admin_id']:
-            # Для списков - сохраняем как JSON
             if key in ['alarm_channels', 'announce_channels', 'reminder_roles', 'announce_roles']:
                 db.set_setting(key, json.dumps(value) if value else '[]', updated_by)
             else:
