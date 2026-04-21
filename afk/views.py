@@ -1,9 +1,12 @@
 """Кнопки для системы AFK"""
 import discord
+import logging
 from datetime import datetime
 from afk.base import PermanentView
 from afk.modals import AFKModal
 from afk.manager import afk_manager
+
+logger = logging.getLogger(__name__)
 
 
 async def update_afk_embed(bot, channel_id: str):
@@ -37,7 +40,6 @@ async def update_afk_embed(bot, channel_id: str):
     else:
         description = ""
         for user in users:
-            from datetime import datetime
             until = datetime.fromisoformat(user['until_time'])
             until_str = until.strftime("%d.%m.%Y %H:%M")
             description += f"👤 <@{user['user_id']}>\n"
@@ -87,5 +89,4 @@ class AFKPublicView(PermanentView):
         
         # Обновляем embed
         if success:
-            from afk.views import update_afk_embed
             await update_afk_embed(self.bot, self.channel_id)
