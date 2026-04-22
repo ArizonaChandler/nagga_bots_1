@@ -1,12 +1,14 @@
 """Кнопки для системы AFK"""
 import discord
 import logging
+import pytz
 from datetime import datetime
 from afk.base import PermanentView
 from afk.modals import AFKModal
 from afk.manager import afk_manager
 
 logger = logging.getLogger(__name__)
+MSK_TZ = pytz.timezone('Europe/Moscow')
 
 
 async def update_afk_embed(bot, channel_id: str):
@@ -22,7 +24,6 @@ async def update_afk_embed(bot, channel_id: str):
     target_message = None
     async for msg in channel.history(limit=50):
         if msg.author == bot.user:
-            # Проверяем, есть ли в сообщении кнопки AFK
             if msg.components and len(msg.components) > 0:
                 for component in msg.components:
                     for button in component.children:
@@ -47,7 +48,6 @@ async def update_afk_embed(bot, channel_id: str):
     # Если всё равно не нашли - создаём новое сообщение
     if not target_message:
         logger.warning(f"⚠️ Не найдено сообщение AFK в канале {channel.name}, создаём новое")
-        from afk.initializer import AFKInitializer
         settings = afk_manager.get_settings()
         max_hours = int(settings.get('afk_max_hours', 24))
         
@@ -55,7 +55,7 @@ async def update_afk_embed(bot, channel_id: str):
             title="🛌 **СИСТЕМА AFK**",
             description="✨ **Никого нет в AFK**\n\nНажмите кнопку ниже, чтобы уйти в AFK",
             color=0x2b2d31,
-            timestamp=datetime.now()
+            timestamp=datetime.now(MSK_TZ)
         )
         embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1302858797087854592.png?size=96")
         embed.set_footer(text="• Статус: Активен •", icon_url=bot.user.avatar.url if bot.user.avatar else None)
@@ -68,7 +68,7 @@ async def update_afk_embed(bot, channel_id: str):
             title="🛌 **СИСТЕМА AFK**",
             description="✨ **Никого нет в AFK**\n\nНажмите кнопку ниже, чтобы уйти в AFK",
             color=0x2b2d31,
-            timestamp=datetime.now()
+            timestamp=datetime.now(MSK_TZ)
         )
         embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1302858797087854592.png?size=96")
         embed.set_footer(text="• Статус: Активен •", icon_url=bot.user.avatar.url if bot.user.avatar else None)
@@ -79,7 +79,7 @@ async def update_afk_embed(bot, channel_id: str):
         embed = discord.Embed(
             title="🛌 **СИСТЕМА AFK**",
             color=0x2b2d31,
-            timestamp=datetime.now()
+            timestamp=datetime.now(MSK_TZ)
         )
         
         # Статистика
@@ -91,12 +91,18 @@ async def update_afk_embed(bot, channel_id: str):
         )
         
         # Добавляем каждого пользователя отдельным полем
+        now = datetime.now(MSK_TZ)  # aware datetime
+        
         for user in users_sorted:
+            # until_time из БД уже в правильном формате
             until = datetime.fromisoformat(user['until_time'])
+            # Убеждаемся, что until тоже aware
+            if until.tzinfo is None:
+                until = MSK_TZ.localize(until)
+            
             until_str = until.strftime("%d.%m.%Y в %H:%M")
             
             # Рассчитываем оставшееся время
-            now = datetime.now()
             time_left = until - now
             hours_left = time_left.seconds // 3600
             minutes_left = (time_left.seconds % 3600) // 60
@@ -127,7 +133,7 @@ async def update_afk_embed(bot, channel_id: str):
             )
         
         embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1302858797087854592.png?size=96")
-        embed.set_footer(text=f"• Обновлено: {datetime.now().strftime('%H:%M:%S')} •", icon_url=bot.user.avatar.url if bot.user.avatar else None)
+        embed.set_footer(text=f"• Обновлено: {datetime.now(MSK_TZ).strftime('%H:%M:%S')} •", icon_url=bot.user.avatar.url if bot.user.avatar else None)
     
     await target_message.edit(embed=embed)
 

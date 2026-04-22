@@ -91,22 +91,23 @@ class AFKInitializer:
             return
         
         from afk.views import AFKPublicView, update_afk_embed
+        from datetime import datetime
+        import pytz
         
+        MSK_TZ = pytz.timezone('Europe/Moscow')
         max_hours = int(settings.get('afk_max_hours', 24))
         
-        # Ищем существующее сообщение с кнопками AFK (по наличию кнопок или по автору)
+        # Ищем существующее сообщение с кнопками AFK (по наличию кнопок)
         message_exists = False
         async for msg in channel.history(limit=50):
             if msg.author == self.bot.user:
-                # Проверяем, есть ли в сообщении кнопки AFK
                 if msg.components and len(msg.components) > 0:
                     for component in msg.components:
                         for button in component.children:
                             if button.custom_id in ["afk_go", "afk_back"]:
-                                # Нашли сообщение с кнопками AFK
                                 await msg.edit(view=AFKPublicView(self.bot, channel_id, max_hours))
                                 message_exists = True
-                                logger.info(f"✅ Обновлена панель AFK в #{channel.name} (найдено по кнопкам)")
+                                logger.info(f"✅ Обновлена панель AFK в #{channel.name}")
                                 break
                         if message_exists:
                             break
@@ -119,7 +120,7 @@ class AFKInitializer:
                 title="🛌 **СИСТЕМА AFK**",
                 description="✨ **Никого нет в AFK**\n\nНажмите кнопку ниже, чтобы уйти в AFK",
                 color=0x2b2d31,
-                timestamp=datetime.now()
+                timestamp=datetime.now(MSK_TZ)
             )
             embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1302858797087854592.png?size=96")
             embed.set_footer(text="• Статус: Активен •", icon_url=self.bot.user.avatar.url if self.bot.user.avatar else None)
