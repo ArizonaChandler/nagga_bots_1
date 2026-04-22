@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 async def update_afk_embed(bot, channel_id: str):
-    """Обновить красивый embed со списком AFK пользователей"""
+    """Обновить красивый embed со списком AFK пользователей (с полями)"""
     channel = bot.get_channel(int(channel_id))
     if not channel:
         logger.error(f"❌ Канал {channel_id} не найден для обновления embed")
@@ -43,8 +43,22 @@ async def update_afk_embed(bot, channel_id: str):
         # Сортируем пользователей по времени возврата
         users_sorted = sorted(users, key=lambda x: x['until_time'])
         
-        description = ""
-        for i, user in enumerate(users_sorted, 1):
+        embed = discord.Embed(
+            title="🛌 **СИСТЕМА AFK**",
+            color=0x2b2d31,
+            timestamp=datetime.now()
+        )
+        
+        # Статистика
+        total_users = len(users)
+        embed.add_field(
+            name="📊 **СТАТИСТИКА**",
+            value=f"└ 👥 **В AFK:** {total_users} человек",
+            inline=False
+        )
+        
+        # Добавляем каждого пользователя отдельным полем
+        for user in users_sorted:
             until = datetime.fromisoformat(user['until_time'])
             until_str = until.strftime("%d.%m.%Y в %H:%M")
             
@@ -61,32 +75,23 @@ async def update_afk_embed(bot, channel_id: str):
             else:
                 time_left_str = f"{minutes_left}мин"
             
-            # Разные иконки для разных статусов
-            if time_left.total_seconds() < 3600:  # меньше часа
+            # Иконка в зависимости от оставшегося времени
+            if time_left.total_seconds() < 3600:
                 status_icon = "⚠️"
-            elif time_left.total_seconds() < 7200:  # меньше 2 часов
+            elif time_left.total_seconds() < 7200:
                 status_icon = "⏰"
             else:
                 status_icon = "🛌"
             
-            description += f"{status_icon} **{user['user_name']}**\n"
-            description += f"└ 📝 {user['reason']}\n"
-            description += f"└ ⏱️ Вернётся **{until_str}** (осталось {time_left_str})\n\n"
-        
-        embed = discord.Embed(
-            title="🛌 **СИСТЕМА AFK**",
-            description=description,
-            color=0x2b2d31,
-            timestamp=datetime.now()
-        )
-        
-        # Статистика
-        total_users = len(users)
-        embed.add_field(
-            name="📊 СТАТИСТИКА",
-            value=f"└ 👥 **В AFK:** {total_users} человек",
-            inline=False
-        )
+            field_value = f"└ 📝 **Причина:** {user['reason']}\n"
+            field_value += f"└ ⏱️ **Вернётся:** {until_str}\n"
+            field_value += f"└ ⌛ **Осталось:** {time_left_str}"
+            
+            embed.add_field(
+                name=f"{status_icon} {user['user_name']}",
+                value=field_value,
+                inline=False
+            )
         
         embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1302858797087854592.png?size=96")
         embed.set_footer(text=f"• Обновлено: {datetime.now().strftime('%H:%M:%S')} •", icon_url=bot.user.avatar.url if bot.user.avatar else None)

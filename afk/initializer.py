@@ -98,7 +98,7 @@ class AFKInitializer:
         message_exists = False
         async for msg in channel.history(limit=50):
             if msg.author == self.bot.user and msg.embeds:
-                if msg.embeds and "СИСТЕМА AFK" in msg.embeds[0].title:
+                if msg.embeds and "🛌 СИСТЕМА AFK" in msg.embeds[0].title:
                     await msg.edit(view=AFKPublicView(self.bot, channel_id, max_hours))
                     message_exists = True
                     logger.info(f"✅ Обновлена панель AFK в #{channel.name}")
@@ -138,7 +138,7 @@ class AFKInitializer:
         message_exists = False
         async for msg in channel.history(limit=50):
             if msg.author == self.bot.user and msg.embeds:
-                if msg.embeds and "НАСТРОЙКИ AFK" in msg.embeds[0].title:
+                if msg.embeds and "⚙️ **НАСТРОЙКИ AFK**" in msg.embeds[0].title:
                     await msg.edit(view=AFKSettingsView())
                     message_exists = True
                     logger.info(f"✅ Обновлена панель настроек AFK в #{channel.name}")
