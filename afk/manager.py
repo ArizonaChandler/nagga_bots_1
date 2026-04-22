@@ -22,6 +22,7 @@ class AFKManager:
             'afk_channel': CONFIG.get('afk_channel'),
             'afk_max_hours': max_hours,
             'afk_settings_channel': CONFIG.get('afk_settings_channel'),
+            'afk_log_channel': CONFIG.get('afk_log_channel'),
         }
     
     def save_setting(self, key: str, value: str, updated_by: str = None):
@@ -33,7 +34,7 @@ class AFKManager:
         """Добавить пользователя в AFK"""
         return db.add_afk_user(user_id, user_name, reason, hours)
     
-    def remove_afk_user(self, user_id: str) -> bool:
+    def remove_afk_user(self, user_id: str) -> tuple:
         """Удалить пользователя из AFK"""
         return db.remove_afk_user(user_id)
     

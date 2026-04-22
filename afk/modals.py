@@ -34,6 +34,7 @@ class AFKModal(discord.ui.Modal, title="🛌 УХОД В AFK"):
     
     async def on_submit(self, interaction: discord.Interaction):
         from afk.views import update_afk_embed
+        from afk.views import AFKPublicView
         
         try:
             max_hours = CONFIG.get('afk_max_hours', 24)
@@ -72,6 +73,11 @@ class AFKModal(discord.ui.Modal, title="🛌 УХОД В AFK"):
             # Обновляем embed
             if success:
                 await update_afk_embed(self.bot, self.channel_id)
+                
+                # Логируем
+                view = AFKPublicView(self.bot, self.channel_id, max_hours)
+                details = f"Причина: {self.reason.value} | Часов: {hours_num}"
+                await view.log_action(interaction, "УХОД В AFK", details)
                 
         except Exception as e:
             logger.error(f"❌ Ошибка в AFKModal: {e}", exc_info=True)

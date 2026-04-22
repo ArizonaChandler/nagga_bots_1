@@ -24,6 +24,7 @@ CONFIG = {
     'capt_reg_reserve_channel': None,
     'capt_alert_channel': None,
     'capt_settings_channel': None,
+    'capt_log_channel': None,
     'ad_settings_channel': None,
     'events_settings_channel': None,
     'applications_settings_channel': None,
@@ -31,6 +32,7 @@ CONFIG = {
     'afk_channel': None,
     'afk_max_hours': 24,
     'afk_settings_channel': None,
+    'afk_log_channel': None,
 }
 
 # Создаём экземпляр БД

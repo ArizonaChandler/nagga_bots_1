@@ -1,6 +1,8 @@
 """Инициализация каналов системы AFK"""
+import asyncio
 import discord
 import logging
+from datetime import datetime
 from afk.manager import afk_manager
 from afk.views import AFKPublicView
 from afk.settings_view import AFKSettingsView
@@ -26,7 +28,55 @@ class AFKInitializer:
         # 2. Канал настроек
         await self._init_settings_channel()
         
+        # 3. Запускаем фоновую проверку просроченных AFK
+        await self.start_expiry_checker()
+        
         logger.info("✅ Инициализация системы AFK завершена")
+    
+    async def start_expiry_checker(self):
+        """Запустить фоновую задачу для проверки просроченных AFK"""
+        self.bot.loop.create_task(self._check_expired_afk())
+        logger.info("✅ Запущен автоматический проверщик просроченного AFK")
+    
+    async def _check_expired_afk(self):
+        """Фоновая задача: проверять каждые 60 секунд"""
+        await self.bot.wait_until_ready()
+        
+        while not self.bot.is_closed():
+            try:
+                # Проверяем просроченных пользователей
+                expired = afk_manager.check_expired()
+                
+                if expired:
+                    logger.info(f"⏰ Найдено просроченных AFK: {len(expired)}")
+                    
+                    # Обновляем embed в канале AFK
+                    settings = afk_manager.get_settings()
+                    channel_id = settings.get('afk_channel')
+                    if channel_id:
+                        from afk.views import update_afk_embed
+                        await update_afk_embed(self.bot, channel_id)
+                    
+                    # Отправляем логи в канал логов
+                    log_channel_id = settings.get('afk_log_channel')
+                    if log_channel_id:
+                        log_channel = self.bot.get_channel(int(log_channel_id))
+                        if log_channel:
+                            for user_id, user_name in expired:
+                                embed = discord.Embed(
+                                    title="⏰ AFK ИСТЕКЛО",
+                                    description=f"Пользователь **{user_name}** (<@{user_id}>) автоматически вышел из AFK",
+                                    color=0xffa500,
+                                    timestamp=datetime.now()
+                                )
+                                await log_channel.send(embed=embed)
+                                await asyncio.sleep(0.5)
+                
+                await asyncio.sleep(60)
+                
+            except Exception as e:
+                logger.error(f"❌ Ошибка в проверке AFK: {e}")
+                await asyncio.sleep(60)
     
     async def _init_afk_channel(self, settings):
         """Инициализация канала с кнопками AFK"""
@@ -49,7 +99,6 @@ class AFKInitializer:
         async for msg in channel.history(limit=50):
             if msg.author == self.bot.user and msg.embeds:
                 if msg.embeds and "СИСТЕМА AFK" in msg.embeds[0].title:
-                    # Обновляем view (кнопки)
                     await msg.edit(view=AFKPublicView(self.bot, channel_id, max_hours))
                     message_exists = True
                     logger.info(f"✅ Обновлена панель AFK в #{channel.name}")

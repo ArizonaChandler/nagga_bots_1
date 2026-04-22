@@ -25,6 +25,17 @@ class AFKSettingsView(PermanentView):
         await interaction.response.send_modal(SetAFKChannelModal())
     
     @discord.ui.button(
+        label="📜 Канал логов AFK", 
+        style=discord.ButtonStyle.primary,
+        emoji="📜",
+        row=0,
+        custom_id="afk_settings_log_channel"
+    )
+    async def set_log_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Настроить канал для логов AFK"""
+        await interaction.response.send_modal(SetAFKLogChannelModal())
+    
+    @discord.ui.button(
         label="⏰ Макс. часов AFK", 
         style=discord.ButtonStyle.primary,
         emoji="⏰",
@@ -53,9 +64,11 @@ class AFKSettingsView(PermanentView):
         settings = afk_manager.get_settings()
         
         afk_channel = format_mention(guild, settings.get('afk_channel'), 'channel') if settings.get('afk_channel') else "`Не настроен`"
+        log_channel = format_mention(guild, settings.get('afk_log_channel'), 'channel') if settings.get('afk_log_channel') else "`Не настроен`"
         max_hours = settings.get('afk_max_hours', 24)
         
         embed.add_field(name="📢 Канал AFK", value=afk_channel, inline=False)
+        embed.add_field(name="📜 Канал логов AFK", value=log_channel, inline=False)
         embed.add_field(name="⏰ Максимальное время AFK", value=f"`{max_hours} часов`", inline=False)
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -97,22 +110,71 @@ class SetAFKChannelModal(discord.ui.Modal, title="📢 КАНАЛ AFK"):
                 )
                 return
             
-            # Получаем канал
             channel = guild.get_channel(int(self.channel_id.value))
             if not channel:
                 await interaction.response.send_message(
-                    f"❌ Канал {self.channel_id.value} не найден на сервере {guild.name}",
+                    f"❌ Канал {self.channel_id.value} не найден",
                     ephemeral=True
                 )
                 return
             
-            # Сохраняем в CONFIG и БД
-            CONFIG['afk_channel'] = self.channel_id.value
-            db.set_setting('afk_channel', self.channel_id.value, str(interaction.user.id))
-            save_config(str(interaction.user.id))
+            afk_manager.save_setting('afk_channel', self.channel_id.value, str(interaction.user.id))
             
             await interaction.response.send_message(
                 f"✅ Канал AFK настроен: {channel.mention}",
+                ephemeral=True
+            )
+            
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
+
+class SetAFKLogChannelModal(discord.ui.Modal, title="📜 КАНАЛ ЛОГОВ AFK"):
+    def __init__(self):
+        super().__init__()
+    
+    channel_id = discord.ui.TextInput(
+        label="ID канала для логов AFK",
+        placeholder="123456789012345678",
+        max_length=20,
+        required=True
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        from core.config import CONFIG, save_config
+        from core.database import db
+        from afk.manager import afk_manager
+        
+        try:
+            # Получаем сервер из CONFIG
+            server_id = CONFIG.get('server_id')
+            if not server_id:
+                await interaction.response.send_message(
+                    "❌ Сначала установите ID сервера в Глобальных настройках",
+                    ephemeral=True
+                )
+                return
+            
+            guild = interaction.client.get_guild(int(server_id))
+            if not guild:
+                await interaction.response.send_message(
+                    f"❌ Сервер с ID {server_id} не найден",
+                    ephemeral=True
+                )
+                return
+            
+            channel = guild.get_channel(int(self.channel_id.value))
+            if not channel:
+                await interaction.response.send_message(
+                    f"❌ Канал {self.channel_id.value} не найден",
+                    ephemeral=True
+                )
+                return
+            
+            afk_manager.save_setting('afk_log_channel', self.channel_id.value, str(interaction.user.id))
+            
+            await interaction.response.send_message(
+                f"✅ Канал логов AFK настроен: {channel.mention}",
                 ephemeral=True
             )
             
@@ -144,7 +206,6 @@ class SetAFKMaxHoursModal(discord.ui.Modal, title="⏰ МАКСИМАЛЬНОЕ 
                 await interaction.response.send_message("❌ Максимум 168 часов (7 дней)", ephemeral=True)
                 return
             
-            # Сохраняем настройку
             CONFIG['afk_max_hours'] = str(hours_num)
             db.set_setting('afk_max_hours', str(hours_num), str(interaction.user.id))
             save_config(str(interaction.user.id))

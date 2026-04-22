@@ -66,6 +66,31 @@ class AFKPublicView(PermanentView):
         self.channel_id = channel_id
         self.max_hours = max_hours
     
+    async def log_action(self, interaction: discord.Interaction, action: str, details: str = None):
+        """Логирование действий в канал логов AFK"""
+        settings = afk_manager.get_settings()
+        log_channel_id = settings.get('afk_log_channel')
+        
+        if not log_channel_id:
+            return
+        
+        log_channel = interaction.client.get_channel(int(log_channel_id))
+        if not log_channel:
+            return
+        
+        embed = discord.Embed(
+            title=f"📋 {action}",
+            color=0x00ff00 if action == "ВОЗВРАТ ИЗ AFK" else 0xffa500,
+            timestamp=datetime.now()
+        )
+        embed.add_field(name="👤 Пользователь", value=interaction.user.mention)
+        embed.add_field(name="🆔 ID", value=interaction.user.id)
+        
+        if details:
+            embed.add_field(name="📝 Детали", value=details, inline=False)
+        
+        await log_channel.send(embed=embed)
+    
     @discord.ui.button(
         label="🛌 УЙТИ В AFK", 
         style=discord.ButtonStyle.primary,
@@ -84,8 +109,16 @@ class AFKPublicView(PermanentView):
     )
     async def back_afk(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Вернуться из AFK"""
+        # Получаем информацию о пользователе до удаления (для лога)
+        afk_user = afk_manager.get_afk_user(str(interaction.user.id))
+        
         success, msg = afk_manager.remove_afk_user(str(interaction.user.id))
         await interaction.response.send_message(msg, ephemeral=True)
+        
+        # Логируем
+        if success and afk_user:
+            details = f"Причина ухода: {afk_user['reason']} | Был в AFK с {afk_user['until_time']}"
+            await self.log_action(interaction, "ВОЗВРАТ ИЗ AFK", details)
         
         # Обновляем embed
         if success:
