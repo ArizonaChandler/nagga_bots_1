@@ -94,14 +94,23 @@ class AFKInitializer:
         
         max_hours = int(settings.get('afk_max_hours', 24))
         
-        # Ищем существующее сообщение с кнопками AFK
+        # Ищем существующее сообщение с кнопками AFK (по наличию кнопок или по автору)
         message_exists = False
         async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user and msg.embeds:
-                if msg.embeds and "🛌 СИСТЕМА AFK" in msg.embeds[0].title:
-                    await msg.edit(view=AFKPublicView(self.bot, channel_id, max_hours))
-                    message_exists = True
-                    logger.info(f"✅ Обновлена панель AFK в #{channel.name}")
+            if msg.author == self.bot.user:
+                # Проверяем, есть ли в сообщении кнопки AFK
+                if msg.components and len(msg.components) > 0:
+                    for component in msg.components:
+                        for button in component.children:
+                            if button.custom_id in ["afk_go", "afk_back"]:
+                                # Нашли сообщение с кнопками AFK
+                                await msg.edit(view=AFKPublicView(self.bot, channel_id, max_hours))
+                                message_exists = True
+                                logger.info(f"✅ Обновлена панель AFK в #{channel.name} (найдено по кнопкам)")
+                                break
+                        if message_exists:
+                            break
+                if message_exists:
                     break
         
         # Если сообщения нет - создаём новое

@@ -21,15 +21,48 @@ async def update_afk_embed(bot, channel_id: str):
     # Ищем существующее сообщение с кнопками AFK
     target_message = None
     async for msg in channel.history(limit=50):
-        if msg.author == bot.user and msg.embeds:
-            if msg.embeds and "🛌 СИСТЕМА AFK" in msg.embeds[0].title:
-                target_message = msg
+        if msg.author == bot.user:
+            # Проверяем, есть ли в сообщении кнопки AFK
+            if msg.components and len(msg.components) > 0:
+                for component in msg.components:
+                    for button in component.children:
+                        if button.custom_id in ["afk_go", "afk_back"]:
+                            target_message = msg
+                            logger.info(f"✅ Найдено сообщение AFK в #{channel.name} (ID: {msg.id})")
+                            break
+                    if target_message:
+                        break
+            if target_message:
                 break
     
+    # Если сообщение не найдено, пробуем найти по embed заголовку
     if not target_message:
-        logger.warning(f"⚠️ Не найдено сообщение AFK в канале {channel.name}")
-        return
+        async for msg in channel.history(limit=50):
+            if msg.author == bot.user and msg.embeds:
+                if msg.embeds and "СИСТЕМА AFK" in msg.embeds[0].title:
+                    target_message = msg
+                    logger.info(f"✅ Найдено сообщение AFK по embed в #{channel.name} (ID: {msg.id})")
+                    break
     
+    # Если всё равно не нашли - создаём новое сообщение
+    if not target_message:
+        logger.warning(f"⚠️ Не найдено сообщение AFK в канале {channel.name}, создаём новое")
+        from afk.initializer import AFKInitializer
+        settings = afk_manager.get_settings()
+        max_hours = int(settings.get('afk_max_hours', 24))
+        
+        embed = discord.Embed(
+            title="🛌 **СИСТЕМА AFK**",
+            description="✨ **Никого нет в AFK**\n\nНажмите кнопку ниже, чтобы уйти в AFK",
+            color=0x2b2d31,
+            timestamp=datetime.now()
+        )
+        embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1302858797087854592.png?size=96")
+        embed.set_footer(text="• Статус: Активен •", icon_url=bot.user.avatar.url if bot.user.avatar else None)
+        target_message = await channel.send(embed=embed, view=AFKPublicView(bot, channel_id, max_hours))
+        logger.info(f"✅ Создано новое сообщение AFK в #{channel.name}")
+    
+    # Обновляем embed
     if not users:
         embed = discord.Embed(
             title="🛌 **СИСТЕМА AFK**",
