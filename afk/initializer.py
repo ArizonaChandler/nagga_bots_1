@@ -108,10 +108,12 @@ class AFKInitializer:
         if not message_exists:
             embed = discord.Embed(
                 title="🛌 **СИСТЕМА AFK**",
-                description="✨ Никого нет в AFK",
-                color=0xffa500
+                description="✨ **Никого нет в AFK**\n\nНажмите кнопку ниже, чтобы уйти в AFK",
+                color=0x2b2d31,
+                timestamp=datetime.now()
             )
-            embed.set_footer(text="Нажмите кнопку, чтобы уйти в AFK")
+            embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1302858797087854592.png?size=96")
+            embed.set_footer(text="• Статус: Активен •", icon_url=self.bot.user.avatar.url if self.bot.user.avatar else None)
             await channel.send(embed=embed, view=AFKPublicView(self.bot, channel_id, max_hours))
             logger.info(f"✅ Создана панель AFK в #{channel.name}")
         
