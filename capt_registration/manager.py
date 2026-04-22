@@ -715,5 +715,43 @@ class CaptRegistrationManager:
         except Exception as e:
             logger.error(f"Ошибка при очистке чата модерации: {e}", exc_info=True)
 
+    async def log_action(self, bot, action: str, user_id: str, user_name: str, details: str = None, target_user_id: str = None):
+        """Логирование действий в канал логов CAPT"""
+        from core.config import CONFIG
+        import discord
+        from datetime import datetime
+        
+        log_channel_id = CONFIG.get('capt_log_channel')
+        if not log_channel_id:
+            return
+        
+        channel = bot.get_channel(int(log_channel_id))
+        if not channel:
+            return
+        
+        # Определяем цвет в зависимости от действия
+        if "НАЧАЛО" in action or "ПРИНЯЛ" in action or "ВСЕХ" in action:
+            color = 0x00ff00
+        elif "ОШИБКА" in action or "ОТКЛОНЕН" in action:
+            color = 0xff0000
+        else:
+            color = 0xffa500
+        
+        embed = discord.Embed(
+            title=f"📋 {action}",
+            color=color,
+            timestamp=datetime.now()
+        )
+        embed.add_field(name="👤 Кто нажал", value=f"<@{user_id}>")
+        embed.add_field(name="🆔 ID нажавшего", value=user_id)
+        
+        if target_user_id:
+            embed.add_field(name="👤 Целевой пользователь", value=f"<@{target_user_id}>")
+        
+        if details:
+            embed.add_field(name="📝 Детали", value=details, inline=False)
+        
+        await channel.send(embed=embed)
+
 # Глобальный экземпляр
 capt_reg_manager = CaptRegistrationManager()
