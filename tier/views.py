@@ -1,4 +1,4 @@
-"""Кнопки для системы TIR"""
+"""Кнопки для системы TIER"""
 import discord
 from datetime import datetime
 from tier.base import PermanentView
@@ -16,7 +16,7 @@ async def update_tier_embed(bot, tier_info_channel_id: str):
     target_message = None
     async for msg in channel.history(limit=50):
         if msg.author == bot.user and msg.embeds:
-            if msg.embeds and "🌟 СИСТЕМА TIR" in msg.embeds[0].title:
+            if msg.embeds and "🌟 СИСТЕМА TIER" in msg.embeds[0].title:
                 target_message = msg
                 break
     
@@ -29,7 +29,7 @@ async def update_tier_embed(bot, tier_info_channel_id: str):
     tier1_req = tier_manager.get_tier_requirements("tier1") or "Не установлены"
     
     embed = discord.Embed(
-        title="🌟 **СИСТЕМА TIR**",
+        title="🌟 **СИСТЕМА TIER**",
         description="Повышение уровня в семье",
         color=0xffa500,
         timestamp=datetime.now()

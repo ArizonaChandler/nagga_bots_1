@@ -1,4 +1,4 @@
-"""Система повышения уровня TIR"""
+"""Система повышения уровня TIER"""
 from tier.manager import tier_manager
 from tier.views import TierInfoView, TierModerationView
 from tier.settings_view import TierSettingsView

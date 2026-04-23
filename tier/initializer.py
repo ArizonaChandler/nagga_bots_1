@@ -1,6 +1,7 @@
-"""Инициализация каналов системы TIR"""
+"""Инициализация каналов системы TIER"""
 import discord
 import logging
+from datetime import datetime
 from tier.manager import tier_manager
 from tier.views import TierInfoView, update_tier_embed
 from tier.settings_view import TierSettingsView
@@ -9,14 +10,14 @@ logger = logging.getLogger(__name__)
 
 
 class TierInitializer:
-    """Инициализатор каналов системы TIR"""
+    """Инициализатор каналов системы TIER"""
     
     def __init__(self, bot):
         self.bot = bot
     
     async def initialize_all(self):
-        """Инициализировать все каналы системы TIR"""
-        logger.info("🔄 Инициализация системы TIR...")
+        """Инициализировать все каналы системы TIER"""
+        logger.info("🔄 Инициализация системы TIER...")
         
         settings = tier_manager.get_settings()
         
@@ -29,38 +30,48 @@ class TierInitializer:
         # 3. Канал настроек
         await self._init_settings_channel()
         
-        logger.info("✅ Инициализация системы TIR завершена")
+        logger.info("✅ Инициализация системы TIER завершена")
     
     async def _init_info_channel(self, settings):
         """Инициализация канала с информацией о тирах"""
         channel_id = settings.get('tier_info_channel')
         if not channel_id:
-            logger.warning("⚠️ Канал информации TIR не настроен")
+            logger.warning("⚠️ Канал информации TIER не настроен")
             return
         
         channel = self.bot.get_channel(int(channel_id))
         if not channel:
-            logger.error(f"❌ Канал информации TIR {channel_id} не найден")
+            logger.error(f"❌ Канал информации TIER {channel_id} не найден")
             return
         
-        # Ищем существующее сообщение
+        from tier.views import TierInfoView, update_tier_embed
+        
+        # Ищем существующее сообщение с кнопками TIER
         message_exists = False
         async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user and msg.embeds:
-                if msg.embeds and "🌟 СИСТЕМА TIR" in msg.embeds[0].title:
-                    await msg.edit(view=TierInfoView())
-                    message_exists = True
-                    logger.info(f"✅ Обновлена панель информации TIR в #{channel.name}")
+            if msg.author == self.bot.user:
+                if msg.components and len(msg.components) > 0:
+                    for component in msg.components:
+                        for button in component.children:
+                            if button.custom_id in ["tier_apply_3", "tier_apply_2", "tier_apply_1"]:
+                                await msg.edit(view=TierInfoView())
+                                message_exists = True
+                                logger.info(f"✅ Обновлена панель информации TIER в #{channel.name}")
+                                break
+                        if message_exists:
+                            break
+                if message_exists:
                     break
         
+        # Если сообщения нет - создаём новое
         if not message_exists:
-            # Создаём embed с информацией
+            # Получаем требования
             tier3_req = tier_manager.get_tier_requirements("tier3") or "Не установлены"
             tier2_req = tier_manager.get_tier_requirements("tier2") or "Не установлены"
             tier1_req = tier_manager.get_tier_requirements("tier1") or "Не установлены"
             
             embed = discord.Embed(
-                title="🌟 **СИСТЕМА TIR**",
+                title="🌟 **СИСТЕМА TIER**",
                 description="Повышение уровня в семье",
                 color=0xffa500,
                 timestamp=datetime.now()
@@ -87,35 +98,38 @@ class TierInitializer:
             embed.set_footer(text="Подать заявку можно в канале #заявка-на-tier")
             
             await channel.send(embed=embed, view=TierInfoView())
-            logger.info(f"✅ Создана панель информации TIR в #{channel.name}")
+            logger.info(f"✅ Создана панель информации TIER в #{channel.name}")
         
-        # Обновляем embed
+        # Обновляем embed с актуальными требованиями
         await update_tier_embed(self.bot, channel_id)
     
     async def _init_submit_channel(self, settings):
         """Инициализация канала с кнопкой подачи заявок"""
         channel_id = settings.get('tier_submit_channel')
         if not channel_id:
-            logger.warning("⚠️ Канал подачи заявок TIR не настроен")
+            logger.warning("⚠️ Канал подачи заявок TIER не настроен")
             return
         
         channel = self.bot.get_channel(int(channel_id))
         if not channel:
-            logger.error(f"❌ Канал подачи заявок TIR {channel_id} не найден")
+            logger.error(f"❌ Канал подачи заявок TIER {channel_id} не найден")
             return
+        
+        from tier.views import TierInfoView
         
         # Ищем существующее сообщение
         message_exists = False
         async for msg in channel.history(limit=50):
             if msg.author == self.bot.user and msg.embeds:
-                if msg.embeds and "ПОДАЧА ЗАЯВОК НА TIR" in msg.embeds[0].title:
+                if msg.embeds and "ПОДАЧА ЗАЯВОК НА TIER" in msg.embeds[0].title:
+                    await msg.edit(view=TierInfoView())
                     message_exists = True
-                    logger.info(f"✅ Обновлена панель подачи заявок TIR в #{channel.name}")
+                    logger.info(f"✅ Обновлена панель подачи заявок TIER в #{channel.name}")
                     break
         
         if not message_exists:
             embed = discord.Embed(
-                title="🌟 **ПОДАЧА ЗАЯВОК НА TIR**",
+                title="🌟 **ПОДАЧА ЗАЯВОК НА TIER**",
                 description="Выберите уровень, на который хотите подать заявку:\n\n"
                             "🟤 **Tier 3** — начальный уровень\n"
                             "⚪ **Tier 2** — средний уровень\n"
@@ -124,40 +138,42 @@ class TierInitializer:
                 color=0xffa500
             )
             await channel.send(embed=embed, view=TierInfoView())
-            logger.info(f"✅ Создана панель подачи заявок TIR в #{channel.name}")
+            logger.info(f"✅ Создана панель подачи заявок TIER в #{channel.name}")
     
     async def _init_settings_channel(self):
-        """Инициализация канала настроек TIR"""
+        """Инициализация канала настроек TIER"""
         from core.config import CONFIG
         channel_id = CONFIG.get('tier_settings_channel')
         
         if not channel_id:
-            logger.warning("⚠️ Канал настроек TIR не настроен")
+            logger.warning("⚠️ Канал настроек TIER не настроен")
             return
         
         channel = self.bot.get_channel(int(channel_id))
         if not channel:
-            logger.error(f"❌ Канал настроек TIR {channel_id} не найден")
+            logger.error(f"❌ Канал настроек TIER {channel_id} не найден")
             return
+        
+        from tier.settings_view import TierSettingsView
         
         # Ищем существующее сообщение
         message_exists = False
         async for msg in channel.history(limit=50):
             if msg.author == self.bot.user and msg.embeds:
-                if msg.embeds and "НАСТРОЙКИ TIR" in msg.embeds[0].title:
+                if msg.embeds and "НАСТРОЙКИ TIER" in msg.embeds[0].title:
                     await msg.edit(view=TierSettingsView())
                     message_exists = True
-                    logger.info(f"✅ Обновлена панель настроек TIR в #{channel.name}")
+                    logger.info(f"✅ Обновлена панель настроек TIER в #{channel.name}")
                     break
         
         if not message_exists:
             embed = discord.Embed(
-                title="⚙️ **НАСТРОЙКИ TIR**",
+                title="⚙️ **НАСТРОЙКИ TIER**",
                 description="Настройка системы повышения уровня",
                 color=0x00ff00
             )
             await channel.send(embed=embed, view=TierSettingsView())
-            logger.info(f"✅ Создана панель настроек TIR в #{channel.name}")
+            logger.info(f"✅ Создана панель настроек TIER в #{channel.name}")
 
 
 # Глобальный экземпляр

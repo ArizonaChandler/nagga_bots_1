@@ -1,8 +1,9 @@
-"""Модалки для системы TIR"""
+"""Модалки для системы TIER"""
 import discord
 from tier.manager import tier_manager
+from datetime import datetime
 
-class TierApplicationModal(discord.ui.Modal, title="🌟 ЗАЯВКА НА TIR"):
+class TierApplicationModal(discord.ui.Modal, title="🌟 ЗАЯВКА НА TIER"):
     """Модалка для подачи заявки на повышение"""
     
     nickname = discord.ui.TextInput(
@@ -40,8 +41,6 @@ class TierApplicationModal(discord.ui.Modal, title="🌟 ЗАЯВКА НА TIR")
         self.target_tier = target_tier
     
     async def on_submit(self, interaction: discord.Interaction):
-        from tier.views import update_tier_embed
-        
         # Проверяем текущий тир пользователя
         current_tier = tier_manager.get_user_current_tier(str(interaction.user.id), interaction.guild)
         

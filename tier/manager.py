@@ -1,11 +1,11 @@
-"""Менеджер для работы с системой TIR"""
+"""Менеджер для работы с системой TIER"""
 import re
 import discord
 from core.database import db
 from core.config import CONFIG
 
 class TierManager:
-    """Менеджер TIR (обертка над database.py)"""
+    """Менеджер TIER (обертка над database.py)"""
     
     def get_settings(self):
         """Получить все настройки из CONFIG"""
@@ -13,6 +13,7 @@ class TierManager:
             'tier_submit_channel': CONFIG.get('tier_submit_channel'),
             'tier_applications_channel': CONFIG.get('tier_applications_channel'),
             'tier_log_channel': CONFIG.get('tier_log_channel'),
+            'tier_info_channel': CONFIG.get('tier_info_channel'),
             'tier_settings_channel': CONFIG.get('tier_settings_channel'),
             'tier_checker_role': CONFIG.get('tier_checker_role'),
             'tier1_role': CONFIG.get('tier1_role'),

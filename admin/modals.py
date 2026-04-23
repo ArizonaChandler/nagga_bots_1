@@ -1353,13 +1353,13 @@ class SetAFKSettingsChannelModal(discord.ui.Modal, title="🛌 КАНАЛ НАС
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
-class SetTierSettingsChannelModal(discord.ui.Modal, title="🌟 КАНАЛ НАСТРОЕК TIR"):
+class SetTierSettingsChannelModal(discord.ui.Modal, title="🌟 КАНАЛ НАСТРОЕК TIER"):
     def __init__(self, guild=None):
         super().__init__()
         self.guild = guild
     
     channel_id = discord.ui.TextInput(
-        label="ID канала для настроек TIR",
+        label="ID канала для настроек TIER",
         placeholder="ID канала где будут постоянные кнопки",
         max_length=20,
         required=True
@@ -1388,42 +1388,40 @@ class SetTierSettingsChannelModal(discord.ui.Modal, title="🌟 КАНАЛ НА�
                 )
                 return
             
-            # Получаем канал
             channel = guild.get_channel(int(self.channel_id.value))
             if not channel:
                 await interaction.response.send_message(
-                    f"❌ Канал {self.channel_id.value} не найден на сервере {guild.name}",
+                    f"❌ Канал {self.channel_id.value} не найден",
                     ephemeral=True
                 )
                 return
             
-            # Сохраняем в CONFIG и БД
             CONFIG['tier_settings_channel'] = self.channel_id.value
             db.set_setting('tier_settings_channel', self.channel_id.value, str(interaction.user.id))
             save_config(str(interaction.user.id))
             
-            # Ищем существующее сообщение с панелью настроек TIR
+            # Ищем существующее сообщение
             message_exists = False
             async for msg in channel.history(limit=50):
                 if msg.author == interaction.client.user and msg.embeds:
-                    if msg.embeds and "НАСТРОЙКИ TIR" in msg.embeds[0].title:
+                    if msg.embeds and "НАСТРОЙКИ TIER" in msg.embeds[0].title:
                         await msg.edit(view=TierSettingsView())
                         message_exists = True
                         await interaction.response.send_message(
-                            f"✅ Панель настроек TIR обновлена в {channel.mention}",
+                            f"✅ Панель настроек TIER обновлена в {channel.mention}",
                             ephemeral=True
                         )
                         break
             
             if not message_exists:
                 embed = discord.Embed(
-                    title="⚙️ **НАСТРОЙКИ TIR**",
+                    title="⚙️ **НАСТРОЙКИ TIER**",
                     description="Настройка системы повышения уровня",
                     color=0x00ff00
                 )
                 await channel.send(embed=embed, view=TierSettingsView())
                 await interaction.response.send_message(
-                    f"✅ Канал настроек TIR создан: {channel.mention}",
+                    f"✅ Канал настроек TIER создан: {channel.mention}",
                     ephemeral=True
                 )
             

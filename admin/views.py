@@ -337,7 +337,7 @@ class GlobalSettingsView(BaseMenuView):
 
         # РЯД 4: НАСТРОЙКИ КАНАЛОВ TIR
         tier_settings_channel_btn = discord.ui.Button(
-            label="🌟 Канал настроек TIR",
+            label="🌟 Канал настроек TIER",
             style=discord.ButtonStyle.secondary,
             emoji="🌟",
             row=4
