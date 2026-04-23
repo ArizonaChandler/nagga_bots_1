@@ -8,7 +8,7 @@ from core.config import CONFIG
 
 
 async def update_tier_embed(bot, tier_info_channel_id: str):
-    """Обновить embed с информацией о требованиях к тирам (без кнопок и наград)"""
+    """Обновить embed с информацией о требованиях к тирам"""
     channel = bot.get_channel(int(tier_info_channel_id))
     if not channel:
         return
@@ -31,6 +31,10 @@ async def update_tier_embed(bot, tier_info_channel_id: str):
         description="Повышение уровня в семье\n\n"
                     f"**Как получить тир:**\n"
                     f"└ Подайте заявку в канале <#{CONFIG.get('tier_submit_channel', 'заявка-на-tier')}>\n\n"
+                    f"**Что после одобрения:**\n"
+                    f"└ Вы получите соответствующую роль\n"
+                    f"└ Предыдущая роль тира будет снята\n"
+                    f"└ Заявки рассматриваются Tier Checker'ом\n\n"
                     f"**Уровни:**",
         color=0xffa500,
         timestamp=datetime.now()
