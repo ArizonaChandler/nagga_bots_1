@@ -8,7 +8,7 @@ from core.config import CONFIG
 
 
 async def update_tier_embed(bot, tier_info_channel_id: str):
-    """Обновить embed с информацией о требованиях к тирам (без кнопок)"""
+    """Обновить embed с информацией о требованиях к тирам (без кнопок и наград)"""
     channel = bot.get_channel(int(tier_info_channel_id))
     if not channel:
         return
@@ -38,19 +38,19 @@ async def update_tier_embed(bot, tier_info_channel_id: str):
     
     embed.add_field(
         name="🟤 TIER 3",
-        value=f"**Требования:**\n{tier3_req}\n\n**Награда:**\n└ Роль Tier 3",
+        value=f"**Требования:**\n{tier3_req}",
         inline=False
     )
     
     embed.add_field(
         name="⚪ TIER 2",
-        value=f"**Требования:**\n{tier2_req}\n\n**Награда:**\n└ Роль Tier 2\n└ Снятие роли Tier 3",
+        value=f"**Требования:**\n{tier2_req}",
         inline=False
     )
     
     embed.add_field(
         name="🔴 TIER 1",
-        value=f"**Требования:**\n{tier1_req}\n\n**Награда:**\n└ Роль Tier 1\n└ Снятие роли Tier 2",
+        value=f"**Требования:**\n{tier1_req}",
         inline=False
     )
     
