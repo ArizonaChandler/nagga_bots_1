@@ -156,71 +156,66 @@ class ApplicationManager:
                 "emoji": "🎮",
                 "title": "РП/МП",
                 "description": "Скриншоты с участием в РП/МП, отчёты о мероприятиях",
-                "color": 0x00ff00,
-                "embed_color": 0x00ff00
+                "color": 0x00ff00
             },
             {
                 "emoji": "🎯",
                 "title": "CAPT/MCL",
                 "description": "Откаты CAPT или MCL, скриншоты результатов",
-                "color": 0xffa500,
-                "embed_color": 0xffa500
+                "color": 0xffa500
             },
             {
                 "emoji": "⚔️",
                 "title": "АРЕНА",
                 "description": "Скриншоты с арены, результаты боёв",
-                "color": 0xff0000,
-                "embed_color": 0xff0000
+                "color": 0xff0000
             },
             {
                 "emoji": "💬",
                 "title": "Общение с кураторами",
                 "description": "Вопросы, предложения, общение с кураторами и рекрутами",
-                "color": 0x7289da,
-                "embed_color": 0x7289da
+                "color": 0x7289da
             }
         ]
         
         # Создаём 4 сообщения и под каждым ветку
-        threads = []
         for section in sections:
             # Создаём embed для сообщения
             embed = discord.Embed(
                 title=f"{section['emoji']} {section['title']}",
                 description=section['description'],
-                color=section['embed_color']
+                color=section['color']
             )
-            embed.set_footer(text="Нажмите на кнопку ниже, чтобы создать ветку для отчётов")
             
-            # Отправляем сообщение с кнопкой для создания ветки
+            # Отправляем сообщение
             msg = await channel.send(embed=embed)
             
-            # Создаём ветку ПОД этим сообщением
-            thread = await msg.create_thread(
-                name=f"{section['emoji']}-{section['title'].lower().replace(' ', '-')}",
-                auto_archive_duration=10080,  # 7 дней
-                type=discord.ChannelType.public_thread
-            )
-            
-            # Отправляем приветствие в ветку
-            thread_embed = discord.Embed(
-                title=f"{section['emoji']} {section['title']}",
-                description=f"**Добро пожаловать в ветку для отчётов по направлению {section['title']}!**\n\n"
-                            f"📌 **Что сюда прикреплять:**\n"
-                            f"└ {section['description']}\n\n"
-                            f"📝 **Как оформлять отчёты:**\n"
-                            f"└ Прикрепляй скриншоты с датой и временем\n"
-                            f"└ Указывай результат и свои действия\n\n"
-                            f"👥 **Кто проверяет:**\n"
-                            f"└ Кураторы и рекруты будут проверять и оставлять комментарии\n\n"
-                            f"✨ Удачи в развитии!",
-                color=section['embed_color']
-            )
-            await thread.send(embed=thread_embed)
-            
-            threads.append(thread)
-            print(f"✅ Создана ветка: {section['title']}")
+            # Создаём ветку под этим сообщением (без type, используем start_thread)
+            try:
+                thread = await msg.create_thread(
+                    name=f"{section['emoji']}-{section['title'].lower().replace(' ', '-')}",
+                    auto_archive_duration=10080
+                )
+                
+                # Отправляем приветствие в ветку
+                thread_embed = discord.Embed(
+                    title=f"{section['emoji']} {section['title']}",
+                    description=f"**Добро пожаловать в ветку для отчётов по направлению {section['title']}!**\n\n"
+                                f"📌 **Что сюда прикреплять:**\n"
+                                f"└ {section['description']}\n\n"
+                                f"📝 **Как оформлять отчёты:**\n"
+                                f"└ Прикрепляй скриншоты с датой и временем\n"
+                                f"└ Указывай результат и свои действия\n\n"
+                                f"👥 **Кто проверяет:**\n"
+                                f"└ Кураторы и рекруты будут проверять и оставлять комментарии\n\n"
+                                f"✨ Удачи в развитии!",
+                    color=section['color']
+                )
+                await thread.send(embed=thread_embed)
+                print(f"✅ Создана ветка: {section['title']}")
+                
+            except Exception as e:
+                print(f"❌ Ошибка создания ветки {section['title']}: {e}")
         
         return channel, None
 
