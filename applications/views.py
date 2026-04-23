@@ -154,30 +154,13 @@ class ApplicationModerationView(discord.ui.View):
                 channel_name = interview_channel.name
                 await interview_channel.delete()
                 print(f"✅ Канал обзвона {channel_name} удалён после принятия")
-                
-                # Логируем удаление в канал логов
-                log_channel_id = CONFIG.get('applications_log_channel')
-                if log_channel_id:
-                    log_channel = interaction.client.get_channel(int(log_channel_id))
-                    if log_channel:
-                        embed = discord.Embed(
-                            title="🗑️ КАНАЛ ОБЗВОНА УДАЛЁН",
-                            description=f"Канал {channel_name} удалён после принятия заявки",
-                            color=0x00ff00,
-                            timestamp=datetime.now()
-                        )
-                        embed.add_field(name="👤 Модератор", value=interaction.user.mention)
-                        embed.add_field(name="✅ Заявка", value=f"#{self.application_id}")
-                        await log_channel.send(embed=embed)
-                        
             except Exception as e:
                 print(f"❌ Ошибка при удалении канала: {e}")
-        else:
-            print(f"❌ Канал не найден для пользователя {app['user_id']}")
         # ===== КОНЕЦ УДАЛЕНИЯ КАНАЛА =====
         
         # Выдаем роль участника
         member_role_id = CONFIG.get('applications_member_role')
+        member = None
         if member_role_id and guild:
             member = guild.get_member(int(app['user_id']))
             if member:
@@ -186,13 +169,30 @@ class ApplicationModerationView(discord.ui.View):
                     await member.add_roles(role)
                     print(f"✅ Роль участника выдана {member.display_name}")
         
+        # ===== НОВЫЙ КОД: СОЗДАНИЕ ЛИЧНОГО ПРОФИЛЯ =====
+        from applications.manager import app_manager
+        channel, error = await app_manager.create_member_profile(
+            guild,
+            app['user_id'],
+            app['nickname'],
+            app['static']
+        )
+        
+        if error:
+            print(f"❌ Ошибка создания профиля: {error}")
+            await interaction.followup.send(f"⚠️ Заявка принята, но не удалось создать профиль: {error}", ephemeral=True)
+        else:
+            print(f"✅ Создан личный профиль: {channel.name}")
+        # ===== КОНЕЦ НОВОГО КОДА =====
+        
         # Отправляем ЛС пользователю
         try:
             user = await interaction.client.fetch_user(int(app['user_id']))
             if user:
                 embed = discord.Embed(
                     title="✅ ЗАЯВКА ПРИНЯТА",
-                    description=f"Поздравляем! Ваша заявка в семью принята.",
+                    description=f"Поздравляем! Ваша заявка в семью принята.\n"
+                            f"Ваш личный профиль создан: {channel.mention if channel else 'в категории PROFILES'}",
                     color=0x00ff00
                 )
                 await user.send(embed=embed)
@@ -212,8 +212,8 @@ class ApplicationModerationView(discord.ui.View):
         # Очищаем запись о сообщении
         await self.cleanup_message_record()
         
-        await interaction.response.send_message("✅ Заявка принята", ephemeral=True)
-        print(f"✅ Заявка {self.application_id} принята, канал удалён")
+        await interaction.response.send_message("✅ Заявка принята, личный профиль создан", ephemeral=True)
+        print(f"✅ Заявка {self.application_id} принята, канал удалён, профиль создан")
     
     async def process_interview(self, interaction: discord.Interaction):
         """Обработка вызова на обзвон"""

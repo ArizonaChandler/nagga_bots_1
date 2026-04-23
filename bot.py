@@ -180,6 +180,25 @@ async def on_command_error(ctx, error):
         return
     print(f"❌ Ошибка: {error}")
 
+@bot.event
+async def on_member_remove(member):
+    """При выходе пользователя удаляем его личный профиль"""
+    try:
+        # Ищем категории PROFILES
+        for category in member.guild.categories:
+            if category.name.startswith("📁 PROFILES"):
+                for channel in category.text_channels:
+                    # Проверяем, принадлежит ли канал этому пользователю
+                    if channel.topic and str(member.id) in channel.topic:
+                        await channel.delete()
+                        print(f"✅ Удалён профиль пользователя {member.name} (ID: {member.id})")
+                    # Также проверяем по упоминанию в правах доступа
+                    elif channel.overwrites_for(member).read_messages is True:
+                        await channel.delete()
+                        print(f"✅ Удалён профиль пользователя {member.name} (ID: {member.id})")
+    except Exception as e:
+        print(f"❌ Ошибка при удалении профиля {member.name}: {e}")
+
 async def main():
     async with bot:
         # Запускаем планировщик мероприятий

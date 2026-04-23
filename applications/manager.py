@@ -1,4 +1,6 @@
 """Менеджер для работы с системой заявок"""
+import re
+import discord
 from core.database import db
 from core.config import CONFIG
 
@@ -77,12 +79,113 @@ class ApplicationManager:
     def delete_interview_channel(self, channel_id: int):
         """Удалить канал обзвона"""
         try:
-            # Этот метод будет вызываться из views.py, но само удаление
-            # происходит через discord, поэтому здесь просто заглушка
-            # для совместимости, если понадобится логика в будущем
             return True
         except Exception as e:
             print(f"❌ Ошибка при удалении канала: {e}")
             return False
+    
+    # ===== НОВЫЕ МЕТОДЫ ДЛЯ ЛИЧНЫХ ПРОФИЛЕЙ =====
+    
+    async def get_next_category(self, guild, base_name="📁 PROFILES"):
+        """Получить следующую доступную категорию (PROFILES, PROFILES 2 и т.д.)"""
+        for i in range(1, 10):  # максимум 9 категорий
+            name = f"{base_name}" if i == 1 else f"{base_name} {i}"
+            category = discord.utils.get(guild.categories, name=name)
+            if category and len(category.channels) < 50:  # лимит Discord - 50 каналов
+                return category
+            elif not category:
+                # Создаём новую категорию
+                overwrites = {
+                    guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                    guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+                }
+                return await guild.create_category(name, overwrites=overwrites)
+        return None
+    
+    async def create_member_profile(self, guild, member_id: str, nickname: str, static: str):
+        """Создать личный профиль для принятого участника"""
+        member = guild.get_member(int(member_id))
+        if not member:
+            return None, "❌ Пользователь не найден на сервере"
+        
+        # Получаем или создаём категорию
+        category = await self.get_next_category(guild, "📁 PROFILES")
+        if not category:
+            return None, "❌ Не удалось создать/найти категорию для профиля"
+        
+        # Название канала: ник_статик (транслитерируем и убираем пробелы)
+        channel_name = f"{nickname[:20]}_{static[:15]}".lower().replace(" ", "_").replace("ё", "e")
+        channel_name = re.sub(r'[^a-zа-я0-9_]', '', channel_name)
+        
+        # Права доступа
+        recruit_role_id = CONFIG.get('applications_recruit_role')
+        recruit_role = guild.get_role(int(recruit_role_id)) if recruit_role_id else None
+        
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            member: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
+            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
+        }
+        
+        if recruit_role:
+            overwrites[recruit_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        
+        # Создаём текстовый канал
+        channel = await guild.create_text_channel(
+            channel_name,
+            category=category,
+            overwrites=overwrites,
+            topic=f"Личный профиль {nickname} | Статик: {static} | ID: {member_id}"
+        )
+        
+        # Создаём ветки (отдельные текстовые каналы в той же категории)
+        threads = {
+            "rp_mp": "🎮-рп-мп",
+            "capt_mcl": "🎯-capt-mcl",
+            "arena": "⚔️-арена",
+            "communication": "💬-общение-с-кураторами"
+        }
+        
+        thread_names = {
+            "rp_mp": "🎮 РП/МП",
+            "capt_mcl": "🎯 CAPT/MCL",
+            "arena": "⚔️ АРЕНА",
+            "communication": "💬 Общение с кураторами"
+        }
+        
+        created_threads = []
+        for key, name in threads.items():
+            thread_overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                member: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
+                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
+            }
+            if recruit_role:
+                thread_overwrites[recruit_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            
+            thread_channel = await guild.create_text_channel(
+                name,
+                category=category,
+                overwrites=thread_overwrites,
+                topic=f"{thread_names[key]} — {nickname} (ID: {member_id})"
+            )
+            created_threads.append(thread_channel)
+        
+        # Отправляем приветственное сообщение в главный канал
+        embed = discord.Embed(
+            title="🎉 ДОБРО ПОЖАЛОВАТЬ В СЕМЬЮ!",
+            description=f"{member.mention}, **это твой личный чат** в этом Discord-сервере с кураторами.\n\n"
+                        f"Здесь ты будешь предоставлять информацию о своей активности в семье, "
+                        f"задавать вопросы и общаться с кураторами/рекрутами.\n\n"
+                        f"**📌 Ветки канала:**",
+            color=0x00ff00
+        )
+        
+        for name, thread_channel in zip(thread_names.values(), created_threads):
+            embed.add_field(name=name, value=f"└ {thread_channel.mention}", inline=False)
+        
+        await channel.send(embed=embed)
+        
+        return channel, None
 
 app_manager = ApplicationManager()
