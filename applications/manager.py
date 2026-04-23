@@ -103,7 +103,7 @@ class ApplicationManager:
         return None
     
     async def create_member_profile(self, guild, member_id: str, nickname: str, static: str):
-        """Создать личный профиль для принятого участника"""
+        """Создать личный профиль для принятого участника (один канал + ветки)"""
         member = guild.get_member(int(member_id))
         if not member:
             return None, "❌ Пользователь не найден на сервере"
@@ -113,7 +113,7 @@ class ApplicationManager:
         if not category:
             return None, "❌ Не удалось создать/найти категорию для профиля"
         
-        # Название канала: ник_статик (транслитерируем и убираем пробелы)
+        # Название канала: ник_статик
         channel_name = f"{nickname[:20]}_{static[:15]}".lower().replace(" ", "_").replace("ё", "e")
         channel_name = re.sub(r'[^a-zа-я0-9_]', '', channel_name)
         
@@ -124,7 +124,7 @@ class ApplicationManager:
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             member: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
+            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True, manage_threads=True)
         }
         
         if recruit_role:
@@ -138,40 +138,7 @@ class ApplicationManager:
             topic=f"Личный профиль {nickname} | Статик: {static} | ID: {member_id}"
         )
         
-        # Создаём ветки (отдельные текстовые каналы в той же категории)
-        threads = {
-            "rp_mp": "🎮-рп-мп",
-            "capt_mcl": "🎯-capt-mcl",
-            "arena": "⚔️-арена",
-            "communication": "💬-общение-с-кураторами"
-        }
-        
-        thread_names = {
-            "rp_mp": "🎮 РП/МП",
-            "capt_mcl": "🎯 CAPT/MCL",
-            "arena": "⚔️ АРЕНА",
-            "communication": "💬 Общение с кураторами"
-        }
-        
-        created_threads = []
-        for key, name in threads.items():
-            thread_overwrites = {
-                guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                member: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
-                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
-            }
-            if recruit_role:
-                thread_overwrites[recruit_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
-            
-            thread_channel = await guild.create_text_channel(
-                name,
-                category=category,
-                overwrites=thread_overwrites,
-                topic=f"{thread_names[key]} — {nickname} (ID: {member_id})"
-            )
-            created_threads.append(thread_channel)
-        
-        # Отправляем приветственное сообщение в главный канал
+        # Отправляем приветственное сообщение
         embed = discord.Embed(
             title="🎉 ДОБРО ПОЖАЛОВАТЬ В СЕМЬЮ!",
             description=f"{member.mention}, **это твой личный чат** в этом Discord-сервере с кураторами.\n\n"
@@ -180,11 +147,40 @@ class ApplicationManager:
                         f"**📌 Ветки канала:**",
             color=0x00ff00
         )
+        embed.add_field(name="🎮 РП/МП", value="└ Скриншоты с участием в РП/МП", inline=False)
+        embed.add_field(name="🎯 CAPT/MCL", value="└ Откаты CAPT или MCL", inline=False)
+        embed.add_field(name="⚔️ АРЕНА", value="└ Скриншоты с арены", inline=False)
+        embed.add_field(name="💬 Общение с кураторами", value="└ Вопросы и общение с кураторами", inline=False)
         
-        for name, thread_channel in zip(thread_names.values(), created_threads):
-            embed.add_field(name=name, value=f"└ {thread_channel.mention}", inline=False)
+        welcome_msg = await channel.send(embed=embed)
         
-        await channel.send(embed=embed)
+        # Создаём ветки (threads) ПОД приветственным сообщением
+        threads_config = [
+            {"name": "🎮-рп-мп", "description": "Скриншоты с участием в РП/МП"},
+            {"name": "🎯-capt-mcl", "description": "Откаты CAPT или MCL"},
+            {"name": "⚔️-арена", "description": "Скриншоты с арены"},
+            {"name": "💬-общение-с-кураторами", "description": "Вопросы и общение с кураторами"}
+        ]
+        
+        for config in threads_config:
+            try:
+                thread = await welcome_msg.create_thread(
+                    name=config["name"],
+                    auto_archive_duration=10080,  # 7 дней
+                    type=discord.ChannelType.public_thread
+                )
+                
+                # Отправляем описание в ветку
+                desc_embed = discord.Embed(
+                    description=f"**{config['description']}**\n\n"
+                            f"Сюда ты можешь прикреплять скриншоты и информацию по этому направлению.\n"
+                            f"Кураторы и рекруты будут проверять и комментировать.",
+                    color=0x2b2d31
+                )
+                await thread.send(embed=desc_embed)
+                print(f"✅ Создана ветка: {config['name']}")
+            except Exception as e:
+                print(f"❌ Ошибка создания ветки {config['name']}: {e}")
         
         return channel, None
 
