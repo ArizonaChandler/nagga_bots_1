@@ -36,6 +36,9 @@ from applications.admin_views import ApplicationsModerationPanel
 # Импорт системы AFK
 from afk import setup_afk
 
+# Импорт системы TIER
+from tier import setup_tier
+
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv

@@ -1371,17 +1371,38 @@ class SetTierSettingsChannelModal(discord.ui.Modal, title="🌟 КАНАЛ НА�
         from tier.settings_view import TierSettingsView
         
         try:
-            guild = interaction.guild
-            channel = guild.get_channel(int(self.channel_id.value))
-            if not channel:
-                await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
+            # Получаем сервер из CONFIG
+            server_id = CONFIG.get('server_id')
+            if not server_id:
+                await interaction.response.send_message(
+                    "❌ Сначала установите ID сервера в Глобальных настройках",
+                    ephemeral=True
+                )
                 return
             
+            guild = interaction.client.get_guild(int(server_id))
+            if not guild:
+                await interaction.response.send_message(
+                    f"❌ Сервер с ID {server_id} не найден",
+                    ephemeral=True
+                )
+                return
+            
+            # Получаем канал
+            channel = guild.get_channel(int(self.channel_id.value))
+            if not channel:
+                await interaction.response.send_message(
+                    f"❌ Канал {self.channel_id.value} не найден на сервере {guild.name}",
+                    ephemeral=True
+                )
+                return
+            
+            # Сохраняем в CONFIG и БД
             CONFIG['tier_settings_channel'] = self.channel_id.value
             db.set_setting('tier_settings_channel', self.channel_id.value, str(interaction.user.id))
             save_config(str(interaction.user.id))
             
-            # Ищем существующее сообщение
+            # Ищем существующее сообщение с панелью настроек TIR
             message_exists = False
             async for msg in channel.history(limit=50):
                 if msg.author == interaction.client.user and msg.embeds:
