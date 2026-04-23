@@ -144,6 +144,9 @@ class ApplicationModerationView(discord.ui.View):
             await interaction.response.send_message("❌ Заявка не найдена", ephemeral=True)
             return
         
+        # Отвечаем сразу, чтобы не было ошибки взаимодействия
+        await interaction.response.defer(ephemeral=True)
+        
         # ===== УДАЛЕНИЕ КАНАЛА ОБЗВОНА =====
         guild = interaction.guild
         print(f"🔍 Ищем канал для пользователя {app['user_id']} после принятия")
@@ -169,21 +172,32 @@ class ApplicationModerationView(discord.ui.View):
                     await member.add_roles(role)
                     print(f"✅ Роль участника выдана {member.display_name}")
         
-        # ===== НОВЫЙ КОД: СОЗДАНИЕ ЛИЧНОГО ПРОФИЛЯ =====
-        from applications.manager import app_manager
-        channel, error = await app_manager.create_member_profile(
-            guild,
-            app['user_id'],
-            app['nickname'],
-            app['static']
-        )
-        
-        if error:
-            print(f"❌ Ошибка создания профиля: {error}")
-            await interaction.followup.send(f"⚠️ Заявка принята, но не удалось создать профиль: {error}", ephemeral=True)
-        else:
-            print(f"✅ Создан личный профиль: {channel.name}")
-        # ===== КОНЕЦ НОВОГО КОДА =====
+        # ===== СОЗДАНИЕ ЛИЧНОГО ПРОФИЛЯ =====
+        channel = None
+        error = None
+        try:
+            channel, error = await app_manager.create_member_profile(
+                guild,
+                app['user_id'],
+                app['nickname'],
+                app['static']
+            )
+            
+            if error:
+                print(f"❌ Ошибка создания профиля: {error}")
+                await interaction.followup.send(
+                    f"✅ Заявка принята, но не удалось создать профиль: {error}",
+                    ephemeral=True
+                )
+            else:
+                print(f"✅ Создан личный профиль: {channel.name}")
+        except Exception as e:
+            print(f"❌ Ошибка при создании профиля: {e}")
+            await interaction.followup.send(
+                f"✅ Заявка принята, но произошла ошибка при создании профиля: {e}",
+                ephemeral=True
+            )
+        # ===== КОНЕЦ СОЗДАНИЯ ПРОФИЛЯ =====
         
         # Отправляем ЛС пользователю
         try:
@@ -212,7 +226,8 @@ class ApplicationModerationView(discord.ui.View):
         # Очищаем запись о сообщении
         await self.cleanup_message_record()
         
-        await interaction.response.send_message("✅ Заявка принята, личный профиль создан", ephemeral=True)
+        # Отправляем финальное сообщение
+        await interaction.followup.send("✅ Заявка принята, личный профиль создан", ephemeral=True)
         print(f"✅ Заявка {self.application_id} принята, канал удалён, профиль создан")
     
     async def process_interview(self, interaction: discord.Interaction):
