@@ -6,8 +6,9 @@ from tier.modals import TierApplicationModal
 from tier.manager import tier_manager
 from core.config import CONFIG
 
+
 async def update_tier_embed(bot, tier_info_channel_id: str):
-    """Обновить embed с информацией о требованиях к тирам"""
+    """Обновить embed с информацией о требованиях к тирам (без кнопок)"""
     channel = bot.get_channel(int(tier_info_channel_id))
     if not channel:
         return
@@ -20,9 +21,6 @@ async def update_tier_embed(bot, tier_info_channel_id: str):
                 target_message = msg
                 break
     
-    if not target_message:
-        return
-    
     # Получаем требования для каждого тира
     tier3_req = tier_manager.get_tier_requirements("tier3") or "Не установлены"
     tier2_req = tier_manager.get_tier_requirements("tier2") or "Не установлены"
@@ -30,7 +28,10 @@ async def update_tier_embed(bot, tier_info_channel_id: str):
     
     embed = discord.Embed(
         title="🌟 **СИСТЕМА TIER**",
-        description="Повышение уровня в семье",
+        description="Повышение уровня в семье\n\n"
+                    f"**Как получить тир:**\n"
+                    f"└ Подайте заявку в канале <#{CONFIG.get('tier_submit_channel', 'заявка-на-tier')}>\n\n"
+                    f"**Уровни:**",
         color=0xffa500,
         timestamp=datetime.now()
     )
@@ -53,46 +54,31 @@ async def update_tier_embed(bot, tier_info_channel_id: str):
         inline=False
     )
     
-    embed.set_footer(text="Подать заявку можно в канале #заявка-на-tier")
+    embed.set_footer(text="Требования могут обновляться администрацией")
     
-    await target_message.edit(embed=embed)
+    if target_message:
+        await target_message.edit(embed=embed)
+    else:
+        await channel.send(embed=embed)
 
 
-class TierInfoView(PermanentView):
-    """Кнопки для информации о тирах"""
+# ===== ТОЛЬКО ДЛЯ КАНАЛА ПОДАЧИ ЗАЯВОК =====
+
+class TierSubmitView(PermanentView):
+    """Кнопка подачи заявки (только одна)"""
     
     def __init__(self):
         super().__init__()
     
     @discord.ui.button(
-        label="🌟 ПОДАТЬ НА TIER 3", 
-        style=discord.ButtonStyle.primary,
+        label="🌟 ПОДАТЬ ЗАЯВКУ НА TIER", 
+        style=discord.ButtonStyle.success,
         emoji="🌟",
-        custom_id="tier_apply_3"
+        custom_id="tier_apply"
     )
-    async def apply_tier3(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Подать заявку на Tier 3"""
-        await interaction.response.send_modal(TierApplicationModal("tier3"))
-    
-    @discord.ui.button(
-        label="⚪ ПОДАТЬ НА TIER 2", 
-        style=discord.ButtonStyle.secondary,
-        emoji="⚪",
-        custom_id="tier_apply_2"
-    )
-    async def apply_tier2(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Подать заявку на Tier 2"""
-        await interaction.response.send_modal(TierApplicationModal("tier2"))
-    
-    @discord.ui.button(
-        label="🔴 ПОДАТЬ НА TIER 1", 
-        style=discord.ButtonStyle.danger,
-        emoji="🔴",
-        custom_id="tier_apply_1"
-    )
-    async def apply_tier1(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Подать заявку на Tier 1"""
-        await interaction.response.send_modal(TierApplicationModal("tier1"))
+    async def apply_tier(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Подать заявку на повышение"""
+        await interaction.response.send_modal(TierApplicationModal())
 
 
 class TierModerationView(discord.ui.View):
@@ -106,11 +92,9 @@ class TierModerationView(discord.ui.View):
     @discord.ui.button(label="✅ ОДОБРИТЬ", style=discord.ButtonStyle.success, row=0)
     async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Одобрить заявку"""
-        # Делаем кнопки неактивными
         for child in self.children:
             child.disabled = True
         await interaction.message.edit(view=self)
-        
         await self.process_approve(interaction)
     
     @discord.ui.button(label="❌ ОТКЛОНИТЬ", style=discord.ButtonStyle.danger, row=0)
@@ -122,13 +106,11 @@ class TierModerationView(discord.ui.View):
         """Обработка одобрения заявки"""
         await interaction.response.defer(ephemeral=True)
         
-        # Получаем заявку
         app = tier_manager.get_application(self.application_id)
         if not app:
             await interaction.followup.send("❌ Заявка не найдена", ephemeral=True)
             return
         
-        # Одобряем заявку
         success = tier_manager.approve_application(
             self.application_id, 
             str(interaction.user.id),
@@ -144,7 +126,7 @@ class TierModerationView(discord.ui.View):
         member = guild.get_member(int(app['user_id']))
         
         if member:
-            # Убираем предыдущие роли тиров
+            # Убираем предыдущие роли
             tier1_role_id = CONFIG.get('tier1_role')
             tier2_role_id = CONFIG.get('tier2_role')
             tier3_role_id = CONFIG.get('tier3_role')
@@ -173,7 +155,7 @@ class TierModerationView(discord.ui.View):
                 else:
                     await interaction.followup.send(f"✅ Заявка одобрена, но роль не найдена", ephemeral=True)
         
-        # Логируем в канал логов
+        # Логируем
         log_channel_id = CONFIG.get('tier_log_channel')
         if log_channel_id:
             log_channel = interaction.client.get_channel(int(log_channel_id))
@@ -224,7 +206,6 @@ class TierRejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКА
             await interaction.followup.send("❌ Не удалось отклонить заявку", ephemeral=True)
             return
         
-        # Получаем заявку
         app = tier_manager.get_application(self.application_id)
         
         if app:
@@ -263,7 +244,6 @@ class TierRejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКА
         embed.add_field(name="❌ Статус", value=f"Отклонена модератором {interaction.user.mention}", inline=False)
         embed.add_field(name="📝 Причина", value=self.reason.value, inline=False)
         
-        # Деактивируем кнопки
         for child in message.components[0].children:
             child.disabled = True
         
