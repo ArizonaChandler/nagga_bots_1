@@ -103,7 +103,7 @@ class ApplicationManager:
         return None
     
     async def create_member_profile(self, guild, member_id: str, nickname: str, static: str):
-        """Создать личный профиль для принятого участника (один канал + ветки)"""
+        """Создать личный профиль для принятого участника (4 сообщения с ветками)"""
         member = guild.get_member(int(member_id))
         if not member:
             return None, "❌ Пользователь не найден на сервере"
@@ -139,48 +139,88 @@ class ApplicationManager:
         )
         
         # Отправляем приветственное сообщение
-        embed = discord.Embed(
+        welcome_embed = discord.Embed(
             title="🎉 ДОБРО ПОЖАЛОВАТЬ В СЕМЬЮ!",
             description=f"{member.mention}, **это твой личный чат** в этом Discord-сервере с кураторами.\n\n"
                         f"Здесь ты будешь предоставлять информацию о своей активности в семье, "
                         f"задавать вопросы и общаться с кураторами/рекрутами.\n\n"
-                        f"**📌 Ветки канала:**",
+                        f"**Ниже созданы ветки для каждого направления:**\n"
+                        f"└ Нажми на сообщение с нужной темой, чтобы открыть ветку",
             color=0x00ff00
         )
-        embed.add_field(name="🎮 РП/МП", value="└ Скриншоты с участием в РП/МП", inline=False)
-        embed.add_field(name="🎯 CAPT/MCL", value="└ Откаты CAPT или MCL", inline=False)
-        embed.add_field(name="⚔️ АРЕНА", value="└ Скриншоты с арены", inline=False)
-        embed.add_field(name="💬 Общение с кураторами", value="└ Вопросы и общение с кураторами", inline=False)
+        await channel.send(embed=welcome_embed)
         
-        welcome_msg = await channel.send(embed=embed)
-        
-        # Создаём ветки (threads) ПОД приветственным сообщением
-        threads_config = [
-            {"name": "🎮-рп-мп", "description": "Скриншоты с участием в РП/МП"},
-            {"name": "🎯-capt-mcl", "description": "Откаты CAPT или MCL"},
-            {"name": "⚔️-арена", "description": "Скриншоты с арены"},
-            {"name": "💬-общение-с-кураторами", "description": "Вопросы и общение с кураторами"}
+        # Конфигурация сообщений и веток
+        sections = [
+            {
+                "emoji": "🎮",
+                "title": "РП/МП",
+                "description": "Скриншоты с участием в РП/МП, отчёты о мероприятиях",
+                "color": 0x00ff00,
+                "embed_color": 0x00ff00
+            },
+            {
+                "emoji": "🎯",
+                "title": "CAPT/MCL",
+                "description": "Откаты CAPT или MCL, скриншоты результатов",
+                "color": 0xffa500,
+                "embed_color": 0xffa500
+            },
+            {
+                "emoji": "⚔️",
+                "title": "АРЕНА",
+                "description": "Скриншоты с арены, результаты боёв",
+                "color": 0xff0000,
+                "embed_color": 0xff0000
+            },
+            {
+                "emoji": "💬",
+                "title": "Общение с кураторами",
+                "description": "Вопросы, предложения, общение с кураторами и рекрутами",
+                "color": 0x7289da,
+                "embed_color": 0x7289da
+            }
         ]
         
-        for config in threads_config:
-            try:
-                thread = await welcome_msg.create_thread(
-                    name=config["name"],
-                    auto_archive_duration=10080,  # 7 дней
-                    type=discord.ChannelType.public_thread
-                )
-                
-                # Отправляем описание в ветку
-                desc_embed = discord.Embed(
-                    description=f"**{config['description']}**\n\n"
-                            f"Сюда ты можешь прикреплять скриншоты и информацию по этому направлению.\n"
-                            f"Кураторы и рекруты будут проверять и комментировать.",
-                    color=0x2b2d31
-                )
-                await thread.send(embed=desc_embed)
-                print(f"✅ Создана ветка: {config['name']}")
-            except Exception as e:
-                print(f"❌ Ошибка создания ветки {config['name']}: {e}")
+        # Создаём 4 сообщения и под каждым ветку
+        threads = []
+        for section in sections:
+            # Создаём embed для сообщения
+            embed = discord.Embed(
+                title=f"{section['emoji']} {section['title']}",
+                description=section['description'],
+                color=section['embed_color']
+            )
+            embed.set_footer(text="Нажмите на кнопку ниже, чтобы создать ветку для отчётов")
+            
+            # Отправляем сообщение с кнопкой для создания ветки
+            msg = await channel.send(embed=embed)
+            
+            # Создаём ветку ПОД этим сообщением
+            thread = await msg.create_thread(
+                name=f"{section['emoji']}-{section['title'].lower().replace(' ', '-')}",
+                auto_archive_duration=10080,  # 7 дней
+                type=discord.ChannelType.public_thread
+            )
+            
+            # Отправляем приветствие в ветку
+            thread_embed = discord.Embed(
+                title=f"{section['emoji']} {section['title']}",
+                description=f"**Добро пожаловать в ветку для отчётов по направлению {section['title']}!**\n\n"
+                            f"📌 **Что сюда прикреплять:**\n"
+                            f"└ {section['description']}\n\n"
+                            f"📝 **Как оформлять отчёты:**\n"
+                            f"└ Прикрепляй скриншоты с датой и временем\n"
+                            f"└ Указывай результат и свои действия\n\n"
+                            f"👥 **Кто проверяет:**\n"
+                            f"└ Кураторы и рекруты будут проверять и оставлять комментарии\n\n"
+                            f"✨ Удачи в развитии!",
+                color=section['embed_color']
+            )
+            await thread.send(embed=thread_embed)
+            
+            threads.append(thread)
+            print(f"✅ Создана ветка: {section['title']}")
         
         return channel, None
 
