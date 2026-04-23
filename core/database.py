@@ -259,6 +259,65 @@ class Database:
                         ('afk_settings_channel', 'null'))
 
             conn.commit()
+
+            # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ TIR =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS tier_applications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    user_name TEXT NOT NULL,
+                    nickname TEXT NOT NULL,
+                    arena_link TEXT NOT NULL,
+                    screenshots TEXT NOT NULL,
+                    additional TEXT,
+                    target_tier TEXT NOT NULL,
+                    status TEXT DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    reviewed_by TEXT,
+                    reviewed_at TIMESTAMP,
+                    reject_reason TEXT
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS tier_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS tier_requirements (
+                    tier TEXT PRIMARY KEY,
+                    requirements TEXT
+                )
+            ''')
+
+            # Добавляем настройки по умолчанию
+            cursor.execute('INSERT OR IGNORE INTO tier_settings (key, value) VALUES (?, ?)', 
+                        ('tier_submit_channel', 'null'))
+            cursor.execute('INSERT OR IGNORE INTO tier_settings (key, value) VALUES (?, ?)', 
+                        ('tier_applications_channel', 'null'))
+            cursor.execute('INSERT OR IGNORE INTO tier_settings (key, value) VALUES (?, ?)', 
+                        ('tier_log_channel', 'null'))
+            cursor.execute('INSERT OR IGNORE INTO tier_settings (key, value) VALUES (?, ?)', 
+                        ('tier_info_channel', 'null'))
+            cursor.execute('INSERT OR IGNORE INTO tier_settings (key, value) VALUES (?, ?)', 
+                        ('tier_checker_role', 'null'))
+            cursor.execute('INSERT OR IGNORE INTO tier_settings (key, value) VALUES (?, ?)', 
+                        ('tier3_role', 'null'))
+            cursor.execute('INSERT OR IGNORE INTO tier_settings (key, value) VALUES (?, ?)', 
+                        ('tier2_role', 'null'))
+            cursor.execute('INSERT OR IGNORE INTO tier_settings (key, value) VALUES (?, ?)', 
+                        ('tier1_role', 'null'))
+
+            # Настройки по умолчанию
+            cursor.execute('INSERT OR IGNORE INTO tier_requirements (tier, requirements) VALUES (?, ?)', 
+                        ('tier3', '1. Активность в семье\n2. Участие в мероприятиях\n3. Положительная репутация'))
+            cursor.execute('INSERT OR IGNORE INTO tier_requirements (tier, requirements) VALUES (?, ?)', 
+                        ('tier2', '1. Выполнение требований Tier 3\n2. Регулярные отчёты\n3. Помощь новичкам'))
+            cursor.execute('INSERT OR IGNORE INTO tier_requirements (tier, requirements) VALUES (?, ?)', 
+                        ('tier1', '1. Выполнение требований Tier 2\n2. Лидерские качества\n3. Вклад в развитие семьи'))
     
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
     def add_user(self, discord_id: str, added_by: str):
@@ -1129,5 +1188,145 @@ class Database:
             conn.commit()
             
             return expired
+
+        # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ TIR =====
+    
+    def get_tier_setting(self, key: str) -> str:
+        """Получить настройку TIR"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT value FROM tier_settings WHERE key = ?', (key,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+    
+    def set_tier_setting(self, key: str, value: str, updated_by: str = None):
+        """Установить настройку TIR"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO tier_settings (key, value)
+                VALUES (?, ?)
+            ''', (key, value))
+            conn.commit()
+            if updated_by:
+                self.log_action(updated_by, f"SET_TIER_SETTING", f"{key}={value}")
+    
+    def set_tier_requirements(self, tier: str, requirements: str, updated_by: str = None):
+        """Сохранить требования для тира"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO tier_requirements (tier, requirements)
+                VALUES (?, ?)
+            ''', (tier, requirements))
+            conn.commit()
+            if updated_by:
+                self.log_action(updated_by, f"SET_TIER_REQUIREMENTS", f"{tier}={requirements[:50]}...")
+    
+    def get_tier_requirements(self, tier: str) -> str:
+        """Получить требования для тира"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT requirements FROM tier_requirements WHERE tier = ?', (tier,))
+            result = cursor.fetchone()
+            return result[0] if result else "Не установлены"
+    
+    def create_tier_application(self, user_id: str, user_name: str, nickname: str,
+                                arena_link: str, screenshots: str, additional: str,
+                                target_tier: str) -> tuple:
+        """Создать заявку на повышение"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Проверяем, нет ли уже активной заявки
+            cursor.execute('''
+                SELECT id FROM tier_applications 
+                WHERE user_id = ? AND status = 'pending'
+            ''', (user_id,))
+            
+            if cursor.fetchone():
+                return None, "❌ У вас уже есть активная заявка"
+            
+            cursor.execute('''
+                INSERT INTO tier_applications 
+                (user_id, user_name, nickname, arena_link, screenshots, additional, target_tier)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (user_id, user_name, nickname, arena_link, screenshots, additional, target_tier))
+            
+            conn.commit()
+            return cursor.lastrowid, None
+    
+    def get_pending_tier_applications(self, target_tier: str = None):
+        """Получить ожидающие заявки"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if target_tier:
+                cursor.execute('''
+                    SELECT id, user_id, user_name, nickname, arena_link, screenshots,
+                           additional, target_tier, created_at
+                    FROM tier_applications 
+                    WHERE status = 'pending' AND target_tier = ?
+                    ORDER BY created_at
+                ''', (target_tier,))
+            else:
+                cursor.execute('''
+                    SELECT id, user_id, user_name, nickname, arena_link, screenshots,
+                           additional, target_tier, created_at
+                    FROM tier_applications 
+                    WHERE status = 'pending'
+                    ORDER BY created_at
+                ''')
+            
+            columns = [description[0] for description in cursor.description]
+            rows = cursor.fetchall()
+            
+            return [dict(zip(columns, row)) for row in rows]
+    
+    def get_tier_application(self, app_id: int):
+        """Получить заявку по ID"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM tier_applications WHERE id = ?', (app_id,))
+            
+            columns = [description[0] for description in cursor.description]
+            row = cursor.fetchone()
+            
+            return dict(zip(columns, row)) if row else None
+    
+    def approve_tier_application(self, app_id: int, reviewer_id: str, target_tier: str) -> bool:
+        """Одобрить заявку"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE tier_applications 
+                SET status = 'approved', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND status = 'pending'
+            ''', (reviewer_id, app_id))
+            conn.commit()
+            success = cursor.rowcount > 0
+            
+            if success:
+                self.log_action(reviewer_id, "TIER_APPROVED", f"App {app_id}, Tier {target_tier}")
+            
+            return success
+    
+    def reject_tier_application(self, app_id: int, reviewer_id: str, reason: str) -> bool:
+        """Отклонить заявку"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE tier_applications 
+                SET status = 'rejected', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, 
+                    reject_reason = ?
+                WHERE id = ? AND status = 'pending'
+            ''', (reviewer_id, reason, app_id))
+            conn.commit()
+            success = cursor.rowcount > 0
+            
+            if success:
+                self.log_action(reviewer_id, "TIER_REJECTED", f"App {app_id}, Reason: {reason[:50]}")
+            
+            return success
 
 db = Database()

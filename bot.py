@@ -172,6 +172,14 @@ async def on_ready():
         print(f"❌ Ошибка инициализации AFK: {e}")
         traceback.print_exc()
 
+    # Инициализация системы TIR
+    try:
+        print("🔄 Инициализация системы TIR...")
+        await setup_tier(bot)
+    except Exception as e:
+        print(f"❌ Ошибка инициализации TIR: {e}")
+        traceback.print_exc()
+
     print("="*60 + "\n")
 
 @bot.event

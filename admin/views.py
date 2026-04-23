@@ -335,6 +335,18 @@ class GlobalSettingsView(BaseMenuView):
         afk_settings_channel_btn.callback = afk_settings_channel_cb
         self.add_item(afk_settings_channel_btn)
 
+        # РЯД 4: НАСТРОЙКИ КАНАЛОВ TIR
+        tier_settings_channel_btn = discord.ui.Button(
+            label="🌟 Канал настроек TIR",
+            style=discord.ButtonStyle.secondary,
+            emoji="🌟",
+            row=4
+        )
+        async def tier_settings_channel_cb(i):
+            await i.response.send_modal(SetTierSettingsChannelModal(self.guild))
+        tier_settings_channel_btn.callback = tier_settings_channel_cb
+        self.add_item(tier_settings_channel_btn)
+
         # РЯД 4: НАЗАД
         self.add_back_button(row=4)
     

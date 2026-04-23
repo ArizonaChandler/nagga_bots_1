@@ -33,6 +33,15 @@ CONFIG = {
     'afk_max_hours': 24,
     'afk_settings_channel': None,
     'afk_log_channel': None,
+    'tier_submit_channel': None,
+    'tier_applications_channel': None,
+    'tier_log_channel': None,
+    'tier_info_channel': None,
+    'tier_settings_channel': None,
+    'tier_checker_role': None,
+    'tier3_role': None,
+    'tier2_role': None,
+    'tier1_role': None,
 }
 
 # Создаём экземпляр БД
