@@ -39,9 +39,9 @@ CONFIG = {
     'tier_info_channel': None,
     'tier_settings_channel': None,
     'tier_checker_role': None,
-    'tier3_role': None,
-    'tier2_role': None,
     'tier1_role': None,
+    'tier2_role': None,
+    'tier3_role': None,
 }
 
 # Создаём экземпляр БД
@@ -72,6 +72,9 @@ def load_config():
     
     # Загружаем настройки заявок
     db.load_application_settings()
+
+    # Загружаем настройки TIER (НОВОЕ)
+    db.load_tier_settings()
 
 def save_config(updated_by: str = None):
     for key, value in CONFIG.items():

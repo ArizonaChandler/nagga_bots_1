@@ -1329,4 +1329,16 @@ class Database:
             
             return success
 
+    def load_tier_settings(self):
+        """Загрузить все настройки системы TIER в CONFIG"""
+        from core.config import CONFIG
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT key, value FROM tier_settings')
+            settings = dict(cursor.fetchall())
+        
+        for key, value in settings.items():
+            if value and value.lower() != 'null':
+                CONFIG[key] = value
+
 db = Database()
