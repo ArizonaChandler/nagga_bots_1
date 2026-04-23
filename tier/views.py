@@ -128,7 +128,9 @@ class TierModerationView(discord.ui.View):
         # Выдаём роль
         guild = interaction.guild
         member = guild.get_member(int(app['user_id']))
+        user_id = app['user_id']
         
+        new_role = None
         if member:
             # Убираем предыдущие роли
             tier1_role_id = CONFIG.get('tier1_role')
@@ -158,6 +160,24 @@ class TierModerationView(discord.ui.View):
                     await interaction.followup.send(f"✅ Заявка одобрена! Выдана роль {new_role.mention}", ephemeral=True)
                 else:
                     await interaction.followup.send(f"✅ Заявка одобрена, но роль не найдена", ephemeral=True)
+        
+        # ===== НОВЫЙ КОД: ОТПРАВКА ЛС ПОЛЬЗОВАТЕЛЮ =====
+        try:
+            user = await interaction.client.fetch_user(int(user_id))
+            if user:
+                tier_name = self.target_tier.upper()
+                embed = discord.Embed(
+                    title="🌟 ПОЗДРАВЛЯЕМ!",
+                    description=f"Ваша заявка на **{tier_name}** одобрена!\n\n"
+                                f"Вам выдана роль {new_role.mention if new_role else tier_name}.\n\n"
+                                f"Поздравляем с повышением!",
+                    color=0x00ff00
+                )
+                await user.send(embed=embed)
+                print(f"✅ ЛС отправлено пользователю {user_id}")
+        except Exception as e:
+            print(f"❌ Ошибка при отправке ЛС: {e}")
+        # ===== КОНЕЦ НОВОГО КОДА =====
         
         # Логируем
         log_channel_id = CONFIG.get('tier_log_channel')
