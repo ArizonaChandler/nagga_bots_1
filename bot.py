@@ -36,7 +36,7 @@ from applications.admin_views import ApplicationsModerationPanel
 # Импорт системы AFK
 from afk import setup_afk
 
-# Импорт системы TIER
+# Импорт системы TIER 
 from tier import setup_tier
 
 import discord
