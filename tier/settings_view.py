@@ -187,17 +187,20 @@ class SetTierSubmitChannelModal(discord.ui.Modal, title="📝 КАНАЛ ПОД�
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            channel = interaction.guild.get_channel(int(self.channel_id.value))
-            if not channel:
-                await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
-                return
-            
-            tier_manager.save_setting('tier_submit_channel', self.channel_id.value, str(interaction.user.id))
+            tier_manager.save_tier_requirements(self.tier, self.requirements.value, str(interaction.user.id))
             
             await interaction.response.send_message(
-                f"✅ Канал подачи заявок TIER настроен: {channel.mention}",
+                f"✅ Требования для TIER обновлены!",
                 ephemeral=True
             )
+            
+            # Обновляем embed с информацией
+            from tier.views import update_tier_embed
+            settings = tier_manager.get_settings()
+            info_channel_id = settings.get('tier_info_channel')
+            if info_channel_id:
+                await update_tier_embed(interaction.client, info_channel_id)
+            
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 

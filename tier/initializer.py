@@ -44,14 +44,58 @@ class TierInitializer:
             logger.error(f"❌ Канал информации TIER {channel_id} не найден")
             return
         
-        # Очищаем старые сообщения бота в этом канале
+        # Ищем существующее сообщение бота в канале
+        target_message = None
         async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user:
-                await msg.delete()
+            if msg.author == self.bot.user and msg.embeds:
+                target_message = msg
+                break
         
-        # Отправляем только embed (без кнопок)
-        await update_tier_embed(self.bot, channel_id)
-        logger.info(f"✅ Создан embed информации TIER в #{channel.name}")
+        # Получаем требования
+        tier3_req = tier_manager.get_tier_requirements("tier3") or "Не установлены"
+        tier2_req = tier_manager.get_tier_requirements("tier2") or "Не установлены"
+        tier1_req = tier_manager.get_tier_requirements("tier1") or "Не установлены"
+        
+        embed = discord.Embed(
+            title="🌟 **СИСТЕМА TIER**",
+            description="Повышение уровня в семье\n\n"
+                        f"**Как получить тир:**\n"
+                        f"└ Подайте заявку в канале <#{settings.get('tier_submit_channel', 'заявка-на-tier')}>\n\n"
+                        f"**Что после одобрения:**\n"
+                        f"└ Вы получите соответствующую роль\n"
+                        f"└ Предыдущая роль тира будет снята\n"
+                        f"└ Заявки рассматриваются Tier Checker'ом\n\n"
+                        f"**Уровни:**",
+            color=0xffa500,
+            timestamp=datetime.now()
+        )
+        
+        embed.add_field(
+            name="🟤 TIER 3",
+            value=f"**Требования:**\n{tier3_req}",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="⚪ TIER 2",
+            value=f"**Требования:**\n{tier2_req}",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🔴 TIER 1",
+            value=f"**Требования:**\n{tier1_req}",
+            inline=False
+        )
+        
+        embed.set_footer(text="Требования могут обновляться администрацией")
+        
+        if target_message:
+            await target_message.edit(embed=embed)
+            logger.info(f"✅ Обновлён embed информации TIER в #{channel.name}")
+        else:
+            await channel.send(embed=embed)
+            logger.info(f"✅ Создан embed информации TIER в #{channel.name}")
     
     async def _init_submit_channel(self, settings):
         """Инициализация канала с кнопкой подачи заявок (одна кнопка)"""

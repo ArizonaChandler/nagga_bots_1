@@ -13,13 +13,13 @@ async def update_tier_embed(bot, tier_info_channel_id: str):
     if not channel:
         return
     
-    # Ищем существующее сообщение
+    # Ищем существующее сообщение по автору (бот) и наличию embed
     target_message = None
     async for msg in channel.history(limit=50):
         if msg.author == bot.user and msg.embeds:
-            if msg.embeds and "🌟 СИСТЕМА TIER" in msg.embeds[0].title:
-                target_message = msg
-                break
+            # Находим первое сообщение бота с embed (неважно какой заголовок)
+            target_message = msg
+            break
     
     # Получаем требования для каждого тира
     tier3_req = tier_manager.get_tier_requirements("tier3") or "Не установлены"
