@@ -13,15 +13,14 @@ async def update_tier_embed(bot, tier_info_channel_id: str):
     if not channel:
         return
     
-    # Ищем существующее сообщение по автору (бот) и наличию embed
+    # Ищем существующее сообщение
     target_message = None
     async for msg in channel.history(limit=50):
         if msg.author == bot.user and msg.embeds:
-            # Находим первое сообщение бота с embed (неважно какой заголовок)
             target_message = msg
             break
     
-    # Получаем требования для каждого тира
+    # Получаем требования
     tier3_req = tier_manager.get_tier_requirements("tier3") or "Не установлены"
     tier2_req = tier_manager.get_tier_requirements("tier2") or "Не установлены"
     tier1_req = tier_manager.get_tier_requirements("tier1") or "Не установлены"
@@ -66,8 +65,6 @@ async def update_tier_embed(bot, tier_info_channel_id: str):
         await channel.send(embed=embed)
 
 
-# ===== ТОЛЬКО ДЛЯ КАНАЛА ПОДАЧИ ЗАЯВОК =====
-
 class TierSubmitView(PermanentView):
     """Кнопка подачи заявки (только одна)"""
     
@@ -86,28 +83,38 @@ class TierSubmitView(PermanentView):
 
 
 class TierModerationView(discord.ui.View):
-    """Кнопки для модерации заявки на тир"""
+    """Кнопки для модерации заявки на тир (с выбором тира)"""
     
-    def __init__(self, application_id: int, target_tier: str):
+    def __init__(self, application_id: int):
         super().__init__(timeout=None)
         self.application_id = application_id
-        self.target_tier = target_tier
     
-    @discord.ui.button(label="✅ ОДОБРИТЬ", style=discord.ButtonStyle.success, row=0)
-    async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Одобрить заявку"""
-        for child in self.children:
-            child.disabled = True
-        await interaction.message.edit(view=self)
-        await self.process_approve(interaction)
+    @discord.ui.button(label="🟤 ВЫДАТЬ TIER 3", style=discord.ButtonStyle.secondary, row=0, emoji="🟤")
+    async def approve_tier3(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Выдать Tier 3"""
+        await self.process_approve(interaction, "tier3")
     
-    @discord.ui.button(label="❌ ОТКЛОНИТЬ", style=discord.ButtonStyle.danger, row=0)
+    @discord.ui.button(label="⚪ ВЫДАТЬ TIER 2", style=discord.ButtonStyle.secondary, row=0, emoji="⚪")
+    async def approve_tier2(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Выдать Tier 2"""
+        await self.process_approve(interaction, "tier2")
+    
+    @discord.ui.button(label="🔴 ВЫДАТЬ TIER 1", style=discord.ButtonStyle.secondary, row=0, emoji="🔴")
+    async def approve_tier1(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Выдать Tier 1"""
+        await self.process_approve(interaction, "tier1")
+    
+    @discord.ui.button(label="❌ ОТКЛОНИТЬ", style=discord.ButtonStyle.danger, row=1, emoji="❌")
     async def reject_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Отклонить заявку"""
         await interaction.response.send_modal(TierRejectReasonModal(self.application_id))
     
-    async def process_approve(self, interaction: discord.Interaction):
-        """Обработка одобрения заявки"""
+    async def process_approve(self, interaction: discord.Interaction, target_tier: str):
+        """Обработка одобрения заявки с выдачей конкретного тира"""
+        for child in self.children:
+            child.disabled = True
+        await interaction.message.edit(view=self)
+        
         await interaction.response.defer(ephemeral=True)
         
         app = tier_manager.get_application(self.application_id)
@@ -115,15 +122,24 @@ class TierModerationView(discord.ui.View):
             await interaction.followup.send("❌ Заявка не найдена", ephemeral=True)
             return
         
+        # Обновляем заявку в БД
         success = tier_manager.approve_application(
             self.application_id, 
             str(interaction.user.id),
-            self.target_tier
+            target_tier
         )
         
         if not success:
             await interaction.followup.send("❌ Не удалось одобрить заявку", ephemeral=True)
             return
+        
+        # Получаем названия ролей для отображения
+        tier_names = {
+            "tier3": {"emoji": "🟤", "name": "Tier 3"},
+            "tier2": {"emoji": "⚪", "name": "Tier 2"},
+            "tier1": {"emoji": "🔴", "name": "Tier 1"}
+        }
+        tier_info = tier_names.get(target_tier, {"emoji": "🌟", "name": target_tier.upper()})
         
         # Выдаём роль
         guild = interaction.guild
@@ -132,7 +148,7 @@ class TierModerationView(discord.ui.View):
         
         new_role = None
         if member:
-            # Убираем предыдущие роли
+            # Убираем все предыдущие роли тиров
             tier1_role_id = CONFIG.get('tier1_role')
             tier2_role_id = CONFIG.get('tier2_role')
             tier3_role_id = CONFIG.get('tier3_role')
@@ -146,11 +162,11 @@ class TierModerationView(discord.ui.View):
             
             # Выдаём новую роль
             new_role_id = None
-            if self.target_tier == "tier3":
+            if target_tier == "tier3":
                 new_role_id = CONFIG.get('tier3_role')
-            elif self.target_tier == "tier2":
+            elif target_tier == "tier2":
                 new_role_id = CONFIG.get('tier2_role')
-            elif self.target_tier == "tier1":
+            elif target_tier == "tier1":
                 new_role_id = CONFIG.get('tier1_role')
             
             if new_role_id:
@@ -161,15 +177,15 @@ class TierModerationView(discord.ui.View):
                 else:
                     await interaction.followup.send(f"✅ Заявка одобрена, но роль не найдена", ephemeral=True)
         
-        # ===== НОВЫЙ КОД: ОТПРАВКА ЛС ПОЛЬЗОВАТЕЛЮ =====
+        # Отправляем ЛС пользователю
         try:
             user = await interaction.client.fetch_user(int(user_id))
             if user:
-                tier_name = self.target_tier.upper()
+                role_mention = new_role.mention if new_role else tier_info['name']
                 embed = discord.Embed(
-                    title="🌟 ПОЗДРАВЛЯЕМ!",
-                    description=f"Ваша заявка на **{tier_name}** одобрена!\n\n"
-                                f"Вам выдана роль {new_role.mention if new_role else tier_name}.\n\n"
+                    title=f"{tier_info['emoji']} ПОЗДРАВЛЯЕМ!",
+                    description=f"Ваша заявка на **{tier_info['name']}** одобрена!\n\n"
+                                f"Вам выдана роль {role_mention}.\n\n"
                                 f"Поздравляем с повышением!",
                     color=0x00ff00
                 )
@@ -177,7 +193,6 @@ class TierModerationView(discord.ui.View):
                 print(f"✅ ЛС отправлено пользователю {user_id}")
         except Exception as e:
             print(f"❌ Ошибка при отправке ЛС: {e}")
-        # ===== КОНЕЦ НОВОГО КОДА =====
         
         # Логируем
         log_channel_id = CONFIG.get('tier_log_channel')
@@ -186,7 +201,7 @@ class TierModerationView(discord.ui.View):
             if log_channel:
                 embed = discord.Embed(
                     title="✅ ЗАЯВКА ОДОБРЕНА",
-                    description=f"Заявка на **{self.target_tier.upper()}** от <@{app['user_id']}> одобрена",
+                    description=f"Заявка от <@{app['user_id']}> одобрена на **{tier_info['name']}**",
                     color=0x00ff00,
                     timestamp=datetime.now()
                 )
@@ -196,7 +211,7 @@ class TierModerationView(discord.ui.View):
         # Обновляем сообщение
         embed = interaction.message.embeds[0]
         embed.color = 0x00ff00
-        embed.add_field(name="✅ Статус", value=f"Одобрена модератором {interaction.user.mention}", inline=False)
+        embed.add_field(name="✅ Статус", value=f"Одобрена модератором {interaction.user.mention} на {tier_info['name']}", inline=False)
         await interaction.message.edit(embed=embed, view=self)
 
 
@@ -239,7 +254,7 @@ class TierRejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКА
                 if user:
                     embed = discord.Embed(
                         title="❌ ЗАЯВКА ОТКЛОНЕНА",
-                        description=f"Ваша заявка на **{app['target_tier'].upper()}** отклонена.\n\n**Причина:** {self.reason.value}",
+                        description=f"Ваша заявка на повышение уровня отклонена.\n\n**Причина:** {self.reason.value}",
                         color=0xff0000
                     )
                     await user.send(embed=embed)
@@ -253,7 +268,7 @@ class TierRejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКА
             if log_channel:
                 embed = discord.Embed(
                     title="❌ ЗАЯВКА ОТКЛОНЕНА",
-                    description=f"Заявка на **{app['target_tier'].upper()}** от <@{app['user_id']}> отклонена",
+                    description=f"Заявка от <@{app['user_id']}> отклонена",
                     color=0xff0000,
                     timestamp=datetime.now()
                 )

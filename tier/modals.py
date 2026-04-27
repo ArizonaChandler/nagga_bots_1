@@ -5,7 +5,7 @@ from datetime import datetime
 
 
 class TierApplicationModal(discord.ui.Modal, title="🌟 ЗАЯВКА НА TIER"):
-    """Модалка для подачи заявки на повышение (автоопределение уровня)"""
+    """Модалка для подачи заявки на повышение"""
     
     nickname = discord.ui.TextInput(
         label="🎮 Игровой ник",
@@ -38,21 +38,10 @@ class TierApplicationModal(discord.ui.Modal, title="🌟 ЗАЯВКА НА TIER"
     )
     
     async def on_submit(self, interaction: discord.Interaction):
-        # Определяем текущий тир пользователя
+        # Определяем текущий тир пользователя (для информации, но не для ограничения)
         current_tier = tier_manager.get_user_current_tier(str(interaction.user.id), interaction.guild)
         
-        # Определяем, на какой тир подавать
-        if current_tier is None:
-            target_tier = "tier3"
-        elif current_tier == "tier3":
-            target_tier = "tier2"
-        elif current_tier == "tier2":
-            target_tier = "tier1"
-        else:
-            await interaction.response.send_message("❌ У вас уже максимальный уровень (Tier 1)!", ephemeral=True)
-            return
-        
-        # Создаем заявку
+        # Создаём заявку (без указания target_tier, модератор сам выберет)
         app_id, error = tier_manager.create_application(
             user_id=str(interaction.user.id),
             user_name=interaction.user.display_name,
@@ -60,7 +49,7 @@ class TierApplicationModal(discord.ui.Modal, title="🌟 ЗАЯВКА НА TIER"
             arena_link=self.arena_link.value,
             screenshots=self.screenshots.value,
             additional=self.additional.value or "Нет",
-            target_tier=target_tier
+            target_tier="pending"  # временное значение
         )
         
         if error:
@@ -70,7 +59,7 @@ class TierApplicationModal(discord.ui.Modal, title="🌟 ЗАЯВКА НА TIER"
         # Отправляем подтверждение
         embed = discord.Embed(
             title="✅ ЗАЯВКА ОТПРАВЛЕНА",
-            description=f"Ваша заявка на **{target_tier.upper()}** принята и передана на рассмотрение.",
+            description=f"Ваша заявка принята и передана на рассмотрение.",
             color=0x00ff00
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -85,7 +74,7 @@ class TierApplicationModal(discord.ui.Modal, title="🌟 ЗАЯВКА НА TIER"
                 from tier.views import TierModerationView
                 
                 embed = discord.Embed(
-                    title=f"🌟 НОВАЯ ЗАЯВКА НА {target_tier.upper()}",
+                    title="🌟 НОВАЯ ЗАЯВКА НА TIER",
                     color=0xffa500,
                     timestamp=datetime.now()
                 )
@@ -96,4 +85,4 @@ class TierApplicationModal(discord.ui.Modal, title="🌟 ЗАЯВКА НА TIER"
                 embed.add_field(name="📝 Дополнительно", value=self.additional.value or "Нет", inline=False)
                 embed.set_footer(text=f"Заявка ID: {app_id}")
                 
-                await channel.send(embed=embed, view=TierModerationView(app_id, target_tier))
+                await channel.send(embed=embed, view=TierModerationView(app_id))
