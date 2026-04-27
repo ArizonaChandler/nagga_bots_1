@@ -13,9 +13,9 @@ class ApplicationsCombinedPanel(PermanentView):
     def __init__(self):
         super().__init__()
     
-    # ===== РЯД 0: НАСТРОЙКИ =====
+    # ===== РЯД 0: НАСТРОЙКИ КАНАЛОВ (максимум 5 кнопок) =====
     @discord.ui.button(
-        label="📝 Канал подачи заявок", 
+        label="📝 Канал подачи", 
         style=discord.ButtonStyle.primary,
         emoji="📝",
         row=0,
@@ -26,39 +26,6 @@ class ApplicationsCombinedPanel(PermanentView):
         await interaction.response.send_modal(SetSubmitChannelModal())
 
     @discord.ui.button(
-        label="📝 Текст подачи заявок", 
-        style=discord.ButtonStyle.primary,
-        emoji="📝",
-        row=0,
-        custom_id="apps_submit_text"
-    )
-    async def set_submit_text(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Настроить текст над кнопкой подачи заявок"""
-        await interaction.response.send_modal(SetSubmitTextModal())
-
-    @discord.ui.button(
-        label="🖼️ Картинка для эмбеда", 
-        style=discord.ButtonStyle.primary,
-        emoji="🖼️",
-        row=0,
-        custom_id="apps_submit_image"
-    )
-    async def set_submit_image(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Настроить картинку для эмбеда подачи заявок"""
-        await interaction.response.send_modal(SetSubmitImageModal())
-
-    @discord.ui.button(
-        label="👋 Приветствие новым", 
-        style=discord.ButtonStyle.primary,
-        emoji="👋",
-        row=0,
-        custom_id="apps_welcome"
-    )
-    async def set_welcome_message(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Настроить приветственное сообщение для новых участников"""
-        await interaction.response.send_modal(SetWelcomeMessageModal())
-
-    @discord.ui.button(
         label="📋 Канал анкет", 
         style=discord.ButtonStyle.primary,
         emoji="📋",
@@ -66,7 +33,7 @@ class ApplicationsCombinedPanel(PermanentView):
         custom_id="apps_applications_channel"
     )
     async def set_applications_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Настроить канал, куда приходят анкеты с кнопками"""
+        """Настроить канал, куда приходят анкеты"""
         await interaction.response.send_modal(SetApplicationsChannelModal())
 
     @discord.ui.button(
@@ -79,7 +46,7 @@ class ApplicationsCombinedPanel(PermanentView):
     async def set_log_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Настроить канал для логов"""
         await interaction.response.send_modal(SetLogChannelModal())
-    
+
     @discord.ui.button(
         label="👥 Роль рекрута", 
         style=discord.ButtonStyle.primary,
@@ -90,7 +57,7 @@ class ApplicationsCombinedPanel(PermanentView):
     async def set_recruit_role(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Настроить роль рекрута"""
         await interaction.response.send_modal(SetRecruitRoleModal())
-    
+
     @discord.ui.button(
         label="👑 Роль участника", 
         style=discord.ButtonStyle.primary,
@@ -101,13 +68,47 @@ class ApplicationsCombinedPanel(PermanentView):
     async def set_member_role(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Настроить роль участника"""
         await interaction.response.send_modal(SetMemberRoleModal())
-    
-    # ===== РЯД 1: МОДЕРАЦИЯ =====
+
+    # ===== РЯД 1: НАСТРОЙКИ ВНЕШНЕГО ВИДА =====
+    @discord.ui.button(
+        label="📝 Текст над кнопкой", 
+        style=discord.ButtonStyle.secondary,
+        emoji="📝",
+        row=1,
+        custom_id="apps_submit_text"
+    )
+    async def set_submit_text(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Настроить текст над кнопкой подачи заявок"""
+        await interaction.response.send_modal(SetSubmitTextModal())
+
+    @discord.ui.button(
+        label="🖼️ Картинка эмбеда", 
+        style=discord.ButtonStyle.secondary,
+        emoji="🖼️",
+        row=1,
+        custom_id="apps_submit_image"
+    )
+    async def set_submit_image(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Настроить картинку для эмбеда подачи заявок"""
+        await interaction.response.send_modal(SetSubmitImageModal())
+
+    @discord.ui.button(
+        label="👋 Приветствие новым", 
+        style=discord.ButtonStyle.secondary,
+        emoji="👋",
+        row=1,
+        custom_id="apps_welcome"
+    )
+    async def set_welcome_message(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Настроить приветственное сообщение для новых участников"""
+        await interaction.response.send_modal(SetWelcomeMessageModal())
+
+    # ===== РЯД 2: МОДЕРАЦИЯ =====
     @discord.ui.button(
         label="📋 Ожидающие заявки", 
         style=discord.ButtonStyle.success,
         emoji="📋",
-        row=1,
+        row=2,
         custom_id="apps_pending"
     )
     async def show_pending(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -142,19 +143,19 @@ class ApplicationsCombinedPanel(PermanentView):
         label="🔄 Сбросить пользователя", 
         style=discord.ButtonStyle.secondary,
         emoji="🔄",
-        row=1,
+        row=2,
         custom_id="apps_reset_user"
     )
     async def reset_user(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Сбросить все заявки пользователя"""
         await interaction.response.send_modal(ResetUserModal())
     
-    # ===== РЯД 2: ИНФОРМАЦИЯ =====
+    # ===== РЯД 3: ИНФОРМАЦИЯ =====
     @discord.ui.button(
         label="📊 Текущие настройки", 
         style=discord.ButtonStyle.secondary,
         emoji="📊",
-        row=2,
+        row=3,
         custom_id="apps_settings_show"
     )
     async def show_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -167,13 +168,15 @@ class ApplicationsCombinedPanel(PermanentView):
         guild = interaction.guild
         settings = app_manager.get_settings()
         
-        apps_channel = format_mention(guild, settings.get('applications_channel'), 'channel') if settings.get('applications_channel') else "`Не настроен`"
+        submit_channel = format_mention(guild, settings.get('submit_channel'), 'channel') if settings.get('submit_channel') else "`Не настроен`"
+        applications_channel = format_mention(guild, settings.get('applications_channel'), 'channel') if settings.get('applications_channel') else "`Не настроен`"
         log_channel = format_mention(guild, settings.get('applications_log_channel'), 'channel') if settings.get('applications_log_channel') else "`Не настроен`"
         recruit_role = format_mention(guild, settings.get('applications_recruit_role'), 'role') if settings.get('applications_recruit_role') else "`Не настроена`"
         member_role = format_mention(guild, settings.get('applications_member_role'), 'role') if settings.get('applications_member_role') else "`Не настроена`"
         
-        embed.add_field(name="📝 Канал заявок", value=apps_channel, inline=False)
-        embed.add_field(name="📋 Канал логов", value=log_channel, inline=False)
+        embed.add_field(name="📝 Канал подачи заявок", value=submit_channel, inline=False)
+        embed.add_field(name="📋 Канал анкет", value=applications_channel, inline=False)
+        embed.add_field(name="📜 Канал логов", value=log_channel, inline=False)
         embed.add_field(name="👥 Роль рекрута", value=recruit_role, inline=False)
         embed.add_field(name="👑 Роль участника", value=member_role, inline=False)
         
