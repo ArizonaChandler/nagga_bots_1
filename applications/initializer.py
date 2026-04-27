@@ -7,6 +7,46 @@ from applications.settings_view import ApplicationsCombinedPanel
 
 logger = logging.getLogger(__name__)
 
+
+async def update_submit_channel(bot):
+    """Обновить сообщение в канале подачи заявок"""
+    settings = app_manager.get_settings()
+    channel_id = settings.get('submit_channel')
+    
+    if not channel_id:
+        return
+    
+    channel = bot.get_channel(int(channel_id))
+    if not channel:
+        return
+    
+    # Получаем настройки
+    submit_text = settings.get('submit_text') or "Нажмите кнопку ниже, чтобы подать заявку"
+    submit_image = settings.get('submit_image')
+    
+    # Создаём embed
+    embed = discord.Embed(
+        title="📝 ПОДАЧА ЗАЯВОК В СЕМЬЮ",
+        description=submit_text,
+        color=0x00ff00
+    )
+    
+    if submit_image:
+        embed.set_image(url=submit_image)
+    
+    # Ищем существующее сообщение бота
+    target_message = None
+    async for msg in channel.history(limit=50):
+        if msg.author == bot.user and msg.embeds:
+            target_message = msg
+            break
+    
+    if target_message:
+        await target_message.edit(embed=embed, view=ApplicationPublicView())
+    else:
+        await channel.send(embed=embed, view=ApplicationPublicView())
+
+
 class ApplicationsInitializer:
     """Инициализатор каналов системы заявок"""
     
@@ -111,7 +151,7 @@ class ApplicationsInitializer:
             )
             await channel.send(embed=embed, view=ApplicationsCombinedPanel())
             logger.info(f"✅ Создана панель управления в #{channel.name}")
-
+    
     async def _restore_application_buttons(self):
         """Восстановить кнопки у всех активных заявок"""
         from applications.views import ApplicationModerationView
@@ -136,7 +176,6 @@ class ApplicationsInitializer:
                     message = await channel.fetch_message(int(msg_data['message_id']))
                 except discord.NotFound:
                     print(f"❌ Сообщение {msg_data['message_id']} не найдено")
-                    # Удаляем запись о несуществующем сообщении
                     app_manager.delete_application_message(msg_data['application_id'])
                     continue
                 
@@ -155,45 +194,6 @@ class ApplicationsInitializer:
         
         print(f"✅ Восстановлено {restored} заявок")
 
-    async def update_submit_channel(bot):
-        """Обновить сообщение в канале подачи заявок"""
-        settings = app_manager.get_settings()
-        channel_id = settings.get('submit_channel')
-        
-        if not channel_id:
-            return
-        
-        channel = bot.get_channel(int(channel_id))
-        if not channel:
-            return
-        
-        from applications.views import ApplicationPublicView
-        
-        # Получаем настройки
-        submit_text = settings.get('submit_text') or "Нажмите кнопку ниже, чтобы подать заявку"
-        submit_image = settings.get('submit_image')
-        
-        # Создаём embed
-        embed = discord.Embed(
-            title="📝 ПОДАЧА ЗАЯВОК В СЕМЬЮ",
-            description=submit_text,
-            color=0x00ff00
-        )
-        
-        if submit_image:
-            embed.set_image(url=submit_image)
-        
-        # Ищем существующее сообщение бота
-        target_message = None
-        async for msg in channel.history(limit=50):
-            if msg.author == bot.user and msg.embeds:
-                target_message = msg
-                break
-        
-        if target_message:
-            await target_message.edit(embed=embed, view=ApplicationPublicView())
-        else:
-            await channel.send(embed=embed, view=ApplicationPublicView())
 
 # Глобальный экземпляр
 initializer = None
