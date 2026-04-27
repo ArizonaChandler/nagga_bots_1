@@ -34,17 +34,38 @@ async def update_submit_channel(bot):
     if submit_image:
         embed.set_image(url=submit_image)
     
-    # Ищем существующее сообщение бота
+    # Ищем существующее сообщение бота (по автору и наличию кнопки)
     target_message = None
     async for msg in channel.history(limit=50):
-        if msg.author == bot.user and msg.embeds:
-            target_message = msg
-            break
+        if msg.author == bot.user:
+            # Проверяем, есть ли в сообщении наша кнопка
+            if msg.components and len(msg.components) > 0:
+                for component in msg.components:
+                    for button in component.children:
+                        if button.custom_id == "application_submit":
+                            target_message = msg
+                            break
+                    if target_message:
+                        break
+            if target_message:
+                break
+    
+    # Если не нашли по кнопке, ищем по embed
+    if not target_message:
+        async for msg in channel.history(limit=50):
+            if msg.author == bot.user and msg.embeds:
+                if msg.embeds and "ПОДАЧА ЗАЯВОК В СЕМЬЮ" in msg.embeds[0].title:
+                    target_message = msg
+                    break
+    
+    from applications.views import ApplicationPublicView
     
     if target_message:
         await target_message.edit(embed=embed, view=ApplicationPublicView())
+        print(f"✅ Обновлён embed в канале #{channel.name}")
     else:
         await channel.send(embed=embed, view=ApplicationPublicView())
+        print(f"✅ Создан новый embed в канале #{channel.name}")
 
 
 class ApplicationsInitializer:

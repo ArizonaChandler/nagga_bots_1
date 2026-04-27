@@ -415,13 +415,40 @@ class SetSubmitTextModal(discord.ui.Modal, title="📝 ТЕКСТ НАД КНО�
         try:
             app_manager.save_setting('submit_text', self.text.value, str(interaction.user.id))
             
+            # Обновляем сообщение в канале подачи заявок
+            from applications.initializer import update_submit_channel
+            await update_submit_channel(interaction.client)
+            
             await interaction.response.send_message(
                 f"✅ Текст над кнопкой обновлён!",
                 ephemeral=True
             )
             
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
+
+class SetSubmitImageModal(discord.ui.Modal, title="🖼️ КАРТИНКА ДЛЯ ЭМБЕДА"):
+    
+    image_url = discord.ui.TextInput(
+        label="URL картинки",
+        placeholder="https://example.com/image.png",
+        max_length=500,
+        required=False
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            app_manager.save_setting('submit_image', self.image_url.value or "", str(interaction.user.id))
+            
             # Обновляем сообщение в канале подачи заявок
+            from applications.initializer import update_submit_channel
             await update_submit_channel(interaction.client)
+            
+            await interaction.response.send_message(
+                f"✅ Картинка для эмбеда {'установлена' if self.image_url.value else 'удалена'}!",
+                ephemeral=True
+            )
             
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
