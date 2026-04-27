@@ -76,7 +76,7 @@ setup_scheduler(bot)
 @bot.event
 async def on_ready():
     print("\n" + "="*60)
-    print("✅ **UNIT MANAGEMENT SYSTEM v1.3**")
+    print("✅ **MAJESTIC BOT by Nagga**")
     print("="*60)
     print(f"🤖 Бот: {bot.user.name}")
     print(f"🆔 ID: {bot.user.id}")
@@ -190,6 +190,56 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         return
     print(f"❌ Ошибка: {error}")
+
+@bot.event
+async def on_member_join(member):
+    """Приветствие нового участника"""
+    try:
+        from applications.manager import app_manager
+        from core.config import CONFIG
+        
+        settings = app_manager.get_settings()
+        welcome_message = settings.get('welcome_message')
+        
+        if not welcome_message:
+            return
+        
+        # Получаем канал для приветствия (можно настроить отдельно или использовать системный)
+        welcome_channel_id = settings.get('submit_channel')  # или отдельный канал
+        if not welcome_channel_id:
+            return
+        
+        welcome_channel = member.guild.get_channel(int(welcome_channel_id))
+        if not welcome_channel:
+            return
+        
+        # Заменяем переменные в сообщении
+        welcome_text = welcome_message.format(
+            user=member.mention,
+            channel=welcome_channel.mention,
+            server=member.guild.name
+        )
+        
+        # Получаем картинку
+        welcome_image = settings.get('welcome_image')
+        
+        embed = discord.Embed(
+            title="👋 ДОБРО ПОЖАЛОВАТЬ!",
+            description=welcome_text,
+            color=0x00ff00,
+            timestamp=datetime.now()
+        )
+        
+        if welcome_image:
+            embed.set_image(url=welcome_image)
+        
+        embed.set_footer(text=member.guild.name)
+        
+        # Отправляем в канал
+        await welcome_channel.send(content=member.mention, embed=embed)
+        
+    except Exception as e:
+        print(f"❌ Ошибка при приветствии {member.name}: {e}")
 
 @bot.event
 async def on_member_remove(member):

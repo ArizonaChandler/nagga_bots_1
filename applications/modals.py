@@ -15,7 +15,7 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
     
     static = discord.ui.TextInput(
         label="🎯 Статик на сервере",
-        placeholder="Например: фарм, пвп, квиз и т.д.",
+        placeholder="Например: #15542",
         max_length=100,
         required=True
     )

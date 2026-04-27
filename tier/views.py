@@ -135,11 +135,11 @@ class TierModerationView(discord.ui.View):
         
         # Получаем названия ролей для отображения
         tier_names = {
-            "tier3": {"emoji": "🟤", "name": "Tier 3"},
-            "tier2": {"emoji": "⚪", "name": "Tier 2"},
-            "tier1": {"emoji": "🔴", "name": "Tier 1"}
+            "tier3": {"emoji": "🟤", "name": "Tier 3", "role_key": "tier3_role"},
+            "tier2": {"emoji": "⚪", "name": "Tier 2", "role_key": "tier2_role"},
+            "tier1": {"emoji": "🔴", "name": "Tier 1", "role_key": "tier1_role"}
         }
-        tier_info = tier_names.get(target_tier, {"emoji": "🌟", "name": target_tier.upper()})
+        tier_info = tier_names.get(target_tier, {"emoji": "🌟", "name": target_tier.upper(), "role_key": None})
         
         # Выдаём роль
         guild = interaction.guild
@@ -147,6 +147,8 @@ class TierModerationView(discord.ui.View):
         user_id = app['user_id']
         
         new_role = None
+        role_mention = tier_info['name']  # По умолчанию просто название тира
+        
         if member:
             # Убираем все предыдущие роли тиров
             tier1_role_id = CONFIG.get('tier1_role')
@@ -173,15 +175,19 @@ class TierModerationView(discord.ui.View):
                 new_role = guild.get_role(int(new_role_id))
                 if new_role:
                     await member.add_roles(new_role)
+                    role_mention = new_role.mention  # Берём упоминание роли
                     await interaction.followup.send(f"✅ Заявка одобрена! Выдана роль {new_role.mention}", ephemeral=True)
                 else:
-                    await interaction.followup.send(f"✅ Заявка одобрена, но роль не найдена", ephemeral=True)
+                    await interaction.followup.send(f"✅ Заявка одобрена, но роль не найдена (ID: {new_role_id})", ephemeral=True)
+            else:
+                await interaction.followup.send(f"✅ Заявка одобрена, но роль для {tier_info['name']} не настроена!", ephemeral=True)
+        else:
+            await interaction.followup.send(f"✅ Заявка одобрена, но пользователь не найден на сервере", ephemeral=True)
         
         # Отправляем ЛС пользователю
         try:
             user = await interaction.client.fetch_user(int(user_id))
             if user:
-                role_mention = new_role.mention if new_role else tier_info['name']
                 embed = discord.Embed(
                     title=f"{tier_info['emoji']} ПОЗДРАВЛЯЕМ!",
                     description=f"Ваша заявка на **{tier_info['name']}** одобрена!\n\n"

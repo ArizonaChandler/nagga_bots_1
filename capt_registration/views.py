@@ -18,7 +18,7 @@ class StartRegistrationModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИ
     
     enemy = discord.ui.TextInput(
         label="Против кого играем",
-        placeholder="Например: Пираты 50",
+        placeholder="Например: Cortez",
         max_length=100,
         required=True,
         style=discord.TextStyle.short
@@ -34,7 +34,7 @@ class StartRegistrationModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИ
     
     additional_info = discord.ui.TextInput(
         label="Дополнительная информация",
-        placeholder="Сбор у банка, форма одежды и т.д.",
+        placeholder="Сбор на особе, проверка по войсу за 5 минут до начала",
         max_length=500,
         required=False,
         style=discord.TextStyle.paragraph

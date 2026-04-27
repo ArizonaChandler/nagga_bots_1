@@ -15,6 +15,10 @@ class ApplicationManager:
             'applications_log_channel': CONFIG.get('applications_log_channel'),
             'applications_recruit_role': CONFIG.get('applications_recruit_role'),
             'applications_member_role': CONFIG.get('applications_member_role'),
+            'submit_text': CONFIG.get('submit_text') or "Нажмите кнопку ниже, чтобы подать заявку",
+            'submit_image': CONFIG.get('submit_image'),
+            'welcome_message': CONFIG.get('welcome_message'),
+            'welcome_image': CONFIG.get('welcome_image'),
         }
     
     def save_setting(self, key: str, value: str, updated_by: str = None):

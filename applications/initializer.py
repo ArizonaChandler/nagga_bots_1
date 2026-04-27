@@ -48,24 +48,8 @@ class ApplicationsInitializer:
             logger.error(f"❌ Канал подачи заявок {channel_id} не найден")
             return
         
-        # Ищем существующее сообщение
-        message_exists = False
-        async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user and msg.embeds:
-                if msg.embeds and "ПОДАЧА ЗАЯВОК В СЕМЬЮ" in msg.embeds[0].title:
-                    await msg.edit(view=ApplicationPublicView())
-                    message_exists = True
-                    logger.info(f"✅ Обновлена кнопка подачи заявок в #{channel.name}")
-                    break
-        
-        if not message_exists:
-            embed = discord.Embed(
-                title="📝 ПОДАЧА ЗАЯВОК В СЕМЬЮ",
-                description="Нажмите кнопку ниже, чтобы подать заявку",
-                color=0x00ff00
-            )
-            await channel.send(embed=embed, view=ApplicationPublicView())
-            logger.info(f"✅ Создана кнопка подачи заявок в #{channel.name}")
+        # Обновляем или создаём сообщение
+        await update_submit_channel(self.bot)
     
     async def _init_applications_channel(self, settings):
         """Проверка канала для анкет"""
@@ -170,6 +154,46 @@ class ApplicationsInitializer:
                 print(f"❌ Ошибка восстановления заявки {msg_data['application_id']}: {e}")
         
         print(f"✅ Восстановлено {restored} заявок")
+
+    async def update_submit_channel(bot):
+        """Обновить сообщение в канале подачи заявок"""
+        settings = app_manager.get_settings()
+        channel_id = settings.get('submit_channel')
+        
+        if not channel_id:
+            return
+        
+        channel = bot.get_channel(int(channel_id))
+        if not channel:
+            return
+        
+        from applications.views import ApplicationPublicView
+        
+        # Получаем настройки
+        submit_text = settings.get('submit_text') or "Нажмите кнопку ниже, чтобы подать заявку"
+        submit_image = settings.get('submit_image')
+        
+        # Создаём embed
+        embed = discord.Embed(
+            title="📝 ПОДАЧА ЗАЯВОК В СЕМЬЮ",
+            description=submit_text,
+            color=0x00ff00
+        )
+        
+        if submit_image:
+            embed.set_image(url=submit_image)
+        
+        # Ищем существующее сообщение бота
+        target_message = None
+        async for msg in channel.history(limit=50):
+            if msg.author == bot.user and msg.embeds:
+                target_message = msg
+                break
+        
+        if target_message:
+            await target_message.edit(embed=embed, view=ApplicationPublicView())
+        else:
+            await channel.send(embed=embed, view=ApplicationPublicView())
 
 # Глобальный экземпляр
 initializer = None
