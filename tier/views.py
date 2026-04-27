@@ -188,10 +188,17 @@ class TierModerationView(discord.ui.View):
         try:
             user = await interaction.client.fetch_user(int(user_id))
             if user:
+                # Получаем название роли (без упоминания)
+                role_name = tier_info['name']
+                
+                # Если роль найдена, берём её название, иначе используем название тира
+                if new_role:
+                    role_name = new_role.name
+                
                 embed = discord.Embed(
                     title=f"{tier_info['emoji']} ПОЗДРАВЛЯЕМ!",
                     description=f"Ваша заявка на **{tier_info['name']}** одобрена!\n\n"
-                                f"Вам выдана роль {role_mention}.\n\n"
+                                f"Вам выдана роль **{role_name}**.\n\n"
                                 f"Поздравляем с повышением!",
                     color=0x00ff00
                 )
