@@ -127,12 +127,27 @@ class ApplicationManager:
         
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            member: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True, manage_threads=True)
+            member: discord.PermissionOverwrite(
+                read_messages=True, 
+                send_messages=True, 
+                attach_files=True,
+                send_messages_in_threads=True,
+                create_public_threads=True
+            ),
+            guild.me: discord.PermissionOverwrite(
+                read_messages=True, 
+                send_messages=True, 
+                manage_channels=True, 
+                manage_threads=True
+            )
         }
         
         if recruit_role:
-            overwrites[recruit_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            overwrites[recruit_role] = discord.PermissionOverwrite(
+                read_messages=True, 
+                send_messages=True,
+                send_messages_in_threads=True
+            )
         
         # Создаём текстовый канал
         channel = await guild.create_text_channel(
@@ -160,59 +175,74 @@ class ApplicationManager:
                 "emoji": "🎮",
                 "title": "РП/МП",
                 "description": "Скриншоты с участием в РП/МП, отчёты о мероприятиях",
-                "color": 0x00ff00
+                "color": 0x00ff00,
+                "help_text": "📌 **Что сюда прикреплять:**\n└ {description}\n\n"
+                            "📝 **Как оформлять отчёты:**\n"
+                            "└ Прикрепляй скриншоты с датой и временем\n"
+                            "└ Указывай результат и свои действия\n\n"
+                            "👥 **Кто проверяет:**\n"
+                            "└ Кураторы и рекруты будут проверять и оставлять комментарии\n\n"
+                            "✨ Удачи в развитии!"
             },
             {
                 "emoji": "🎯",
                 "title": "CAPT/MCL",
                 "description": "Откаты CAPT или MCL, скриншоты результатов",
-                "color": 0xffa500
+                "color": 0xffa500,
+                "help_text": "📌 **Что сюда прикреплять:**\n└ {description}\n\n"
+                            "📝 **Как оформлять отчёты:**\n"
+                            "└ Прикрепляй откат с указанием даты/времени + против кого играли (если капт)\n"
+                            "└ Указывай если нужно где хотел бы разобрать момент\n\n"
+                            "👥 **Кто проверяет:**\n"
+                            "└ Кураторы и рекруты будут проверять и оставлять комментарии\n\n"
+                            "✨ Удачи в развитии!"
             },
             {
                 "emoji": "⚔️",
                 "title": "АРЕНА",
                 "description": "Скриншоты с арены, результаты боёв",
-                "color": 0xff0000
+                "color": 0xff0000,
+                "help_text": "📌 **Что сюда прикреплять:**\n└ {description}\n\n"
+                            "📝 **Как оформлять отчёты:**\n"
+                            "└ Прикрепляй скриншоты с датой и временем окончания арены\n\n"
+                            "👥 **Кто проверяет:**\n"
+                            "└ Кураторы и рекруты будут проверять и оставлять комментарии\n\n"
+                            "✨ Удачи в развитии!"
             },
             {
                 "emoji": "💬",
                 "title": "Общение с кураторами",
                 "description": "Вопросы, предложения, общение с кураторами и рекрутами",
-                "color": 0x7289da
+                "color": 0x7289da,
+                "help_text": "📌 **Что сюда писать?:**\n└ {description}\n\n"
+                            "📝 **Интересующие вопросы по семье**\n\n"
+                            "👥 **Кто отвечает:**\n"
+                            "└ Кураторы и рекруты"
             }
         ]
         
         # Создаём 4 сообщения и под каждым ветку
         for section in sections:
-            # Создаём embed для сообщения
             embed = discord.Embed(
                 title=f"{section['emoji']} {section['title']}",
                 description=section['description'],
                 color=section['color']
             )
             
-            # Отправляем сообщение
             msg = await channel.send(embed=embed)
             
-            # Создаём ветку под этим сообщением (без type, используем start_thread)
             try:
                 thread = await msg.create_thread(
                     name=f"{section['emoji']}-{section['title'].lower().replace(' ', '-')}",
                     auto_archive_duration=10080
                 )
                 
-                # Отправляем приветствие в ветку
+                # Используем настраиваемый текст для каждой ветки
+                help_text = section['help_text'].format(description=section['description'])
+                
                 thread_embed = discord.Embed(
                     title=f"{section['emoji']} {section['title']}",
-                    description=f"**Добро пожаловать в ветку для отчётов по направлению {section['title']}!**\n\n"
-                                f"📌 **Что сюда прикреплять:**\n"
-                                f"└ {section['description']}\n\n"
-                                f"📝 **Как оформлять отчёты:**\n"
-                                f"└ Прикрепляй скриншоты с датой и временем\n"
-                                f"└ Указывай результат и свои действия\n\n"
-                                f"👥 **Кто проверяет:**\n"
-                                f"└ Кураторы и рекруты будут проверять и оставлять комментарии\n\n"
-                                f"✨ Удачи в развитии!",
+                    description=help_text,
                     color=section['color']
                 )
                 await thread.send(embed=thread_embed)
