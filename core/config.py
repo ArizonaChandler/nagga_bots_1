@@ -84,6 +84,9 @@ def load_config():
     # Загружаем настройки TIER (НОВОЕ)
     db.load_tier_settings()
 
+    # Загружаем настройки статистики (НОВОЕ)
+    db.load_stats_settings()
+
 def save_config(updated_by: str = None):
     for key, value in CONFIG.items():
         if key not in ['user_token_1', 'user_token_2', 'super_admin_id']:

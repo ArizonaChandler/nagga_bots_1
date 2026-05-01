@@ -1361,6 +1361,18 @@ class Database:
                 CONFIG[key] = value
 
         # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ СТАТИСТИКИ =====
+
+    def load_stats_settings(self):
+        """Загрузить все настройки системы статистики в CONFIG"""
+        from core.config import CONFIG
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT key, value FROM stats_settings')
+            settings = dict(cursor.fetchall())
+        
+        for key, value in settings.items():
+            if value and value.lower() != 'null':
+                CONFIG[key] = value
     
     def get_stats_setting(self, key: str) -> str:
         """Получить настройку статистики"""

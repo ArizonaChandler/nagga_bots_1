@@ -36,18 +36,16 @@ class StatsInitializer:
             logger.error(f"❌ Канал настроек статистики {channel_id} не найден")
             return
         
-        # Ищем существующее сообщение с панелью настроек
+        # Ищем существующее сообщение
         message_exists = False
         async for msg in channel.history(limit=50):
             if msg.author == self.bot.user and msg.embeds:
                 if msg.embeds and "НАСТРОЙКИ СТАТИСТИКИ" in msg.embeds[0].title:
-                    # Обновляем view (кнопки)
                     await msg.edit(view=StatsSettingsView())
                     message_exists = True
                     logger.info(f"✅ Обновлена панель настроек статистики в #{channel.name}")
                     break
         
-        # Если сообщения нет - создаём новое
         if not message_exists:
             embed = discord.Embed(
                 title="📊 **НАСТРОЙКИ СТАТИСТИКИ**",
