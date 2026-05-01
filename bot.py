@@ -42,6 +42,7 @@ from tier import setup_tier
 # Импорт системы статистики
 from server_stats import setup_stats, setup_stats_collector
 
+
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
