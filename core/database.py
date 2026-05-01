@@ -319,8 +319,33 @@ class Database:
             cursor.execute('INSERT OR IGNORE INTO tier_requirements (tier, requirements) VALUES (?, ?)', 
                         ('tier1', '1. Выполнение требований Tier 2\n2. Лидерские качества\n3. Вклад в развитие семьи'))
 
-            
-            
+            # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ СТАТИСТИКИ =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS daily_stats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date TEXT NOT NULL UNIQUE,
+                    new_members INTEGER DEFAULT 0,
+                    left_members INTEGER DEFAULT 0,
+                    new_applications INTEGER DEFAULT 0,
+                    accepted_applications INTEGER DEFAULT 0,
+                    max_voice_online INTEGER DEFAULT 0,
+                    capt_registrations INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS stats_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            ''')
+
+            # Добавляем настройки по умолчанию
+            cursor.execute('INSERT OR IGNORE INTO stats_settings (key, value) VALUES (?, ?)', 
+                        ('stats_backup_enabled', 'true'))
+            cursor.execute('INSERT OR IGNORE INTO stats_settings (key, value) VALUES (?, ?)', 
+                        ('stats_channel', 'null'))
     
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
     def add_user(self, discord_id: str, added_by: str):
