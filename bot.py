@@ -241,7 +241,7 @@ async def on_member_join(member):
 
 @bot.event
 async def on_member_remove(member):
-    print(f"🔴🔴🔴 СОБЫТИЕ on_member_remove ВЫЗВАНО для {member.name}🔴🔴🔴")
+    print(f"🔴🔴🔴 СОБЫТИЕ on_member_remove ВЫЗВАНО для {member.name} (ID: {member.id}) 🔴🔴🔴")
     
     if collector:
         collector.increment_left_members()
@@ -250,7 +250,8 @@ async def on_member_remove(member):
         from applications.manager import app_manager
         from core.database import db
         
-        # 1. Получаем ID активной заявки ИЗ БД
+        # 1. Получаем ID активной заявки
+        print("🔍 Шаг 1: Поиск активной заявки в БД...")
         with db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -260,10 +261,11 @@ async def on_member_remove(member):
             app_result = cursor.fetchone()
             application_id = app_result[0] if app_result else None
         
-        print(f"🔍 Найдена активная заявка: {application_id}")
+        print(f"📊 Результат: активная заявка ID = {application_id}")
         
         # 2. Закрываем заявку
         if application_id:
+            print(f"🔍 Шаг 2: Закрываем заявку #{application_id}...")
             cursor.execute('''
                 UPDATE applications 
                 SET status = 'rejected', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, 
@@ -273,34 +275,57 @@ async def on_member_remove(member):
             conn.commit()
             print(f"✅ Заявка #{application_id} закрыта")
         
-        # 3. Удаляем каналы обзвона (ищем по категории)
+        # 3. Удаляем каналы обзвона
+        print("🔍 Шаг 3: Поиск каналов обзвона...")
         channels_to_delete = []
         
-        print("🔍 Ищем категорию '📞 ОБЗВОНЫ'...")
+        print("🔍 Поиск категории '📞 ОБЗВОНЫ'...")
+        found_category = False
         for category in member.guild.categories:
-            print(f"   Категория: {category.name}")
+            print(f"   └─ Категория: '{category.name}'")
             if category.name == "📞 ОБЗВОНЫ":
-                print(f"✅ Найдена категория обзвонов!")
+                found_category = True
+                print(f"   ✅ Найдена категория '📞 ОБЗВОНЫ'!")
+                print(f"   └─ Каналов в категории: {len(category.text_channels)}")
+                
                 for channel in category.text_channels:
-                    print(f"      Канал: {channel.name}, topic: {channel.topic}")
+                    print(f"      ├─ Канал: {channel.name}")
+                    print(f"      │  topic: {channel.topic}")
+                    print(f"      │  ID заявки в topic: {'✅' if channel.topic and f'#{application_id}' in channel.topic else '❌'}")
+                    print(f"      │  user_id в topic: {'✅' if channel.topic and str(member.id) in channel.topic else '❌'}")
+                    print(f"      │  имя в названии: {'✅' if member.name.lower() in channel.name.lower() else '❌'}")
+                    
                     if application_id and channel.topic and f"#{application_id}" in channel.topic:
                         channels_to_delete.append(channel)
-                        print(f"      🔍 Найден канал по ID заявки")
+                        print(f"      ✅ ДОБАВЛЕН В УДАЛЕНИЕ (по ID заявки)")
                     elif channel.topic and str(member.id) in channel.topic:
                         channels_to_delete.append(channel)
-                        print(f"      🔍 Найден канал по user_id")
+                        print(f"      ✅ ДОБАВЛЕН В УДАЛЕНИЕ (по user_id)")
                     elif member.name.lower() in channel.name.lower():
                         channels_to_delete.append(channel)
-                        print(f"      🔍 Найден канал по имени")
+                        print(f"      ✅ ДОБАВЛЕН В УДАЛЕНИЕ (по имени)")
+                    else:
+                        print(f"      ❌ НЕ ДОБАВЛЕН")
         
+        if not found_category:
+            print("❌ Категория '📞 ОБЗВОНЫ' НЕ НАЙДЕНА!")
+            print("🔍 Проверяем все текстовые каналы на сервере...")
+            for channel in member.guild.text_channels:
+                if channel.topic and (str(member.id) in channel.topic or (application_id and f"#{application_id}" in channel.topic)):
+                    channels_to_delete.append(channel)
+                    print(f"✅ Найден канал по topic: {channel.name}")
+        
+        # 4. Удаляем найденные каналы
+        print(f"\n🔍 Шаг 4: Удаление каналов (найдено {len(channels_to_delete)} шт.)")
         for channel in channels_to_delete:
             try:
                 await channel.delete()
-                print(f"✅ Удалён канал: {channel.name}")
+                print(f"✅ УДАЛЁН канал: {channel.name}")
             except Exception as e:
                 print(f"❌ Ошибка удаления {channel.name}: {e}")
         
-        # 4. Удаляем профиль
+        # 5. Удаляем профиль
+        print("🔍 Шаг 5: Поиск профиля в категории PROFILES...")
         for category in member.guild.categories:
             if category.name.startswith("📁 PROFILES"):
                 for channel in category.text_channels:
@@ -308,9 +333,11 @@ async def on_member_remove(member):
                         await channel.delete()
                         print(f"✅ Удалён профиль {channel.name}")
                         break
+        
+        print("🔚 Обработка выхода пользователя завершена")
                         
     except Exception as e:
-        print(f"❌ Ошибка: {e}")
+        print(f"❌ ОШИБКА: {e}")
         import traceback
         traceback.print_exc()
 
