@@ -314,6 +314,7 @@ async def on_member_remove(member):
         import traceback
         traceback.print_exc()
 
+
 async def main():
     async with bot:
         # Запускаем планировщик мероприятий
