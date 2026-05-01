@@ -150,13 +150,20 @@ async def on_ready():
         print(f"❌ Ошибка инициализации AFK: {e}")
         traceback.print_exc()
     
-    # Инициализация системы статистики
+    # Инициализация канала настроек статистики
     try:
-        from server_stats import setup_stats
-        print("📊 Инициализация системы статистики...")
+        print("📊 Инициализация панели настроек статистики...")
         await setup_stats(bot)
     except Exception as e:
-        print(f"❌ Ошибка инициализации статистики: {e}")
+        print(f"❌ Ошибка инициализации панели статистики: {e}")
+        traceback.print_exc()
+    
+    # Инициализация сборщика статистики (фоновые задачи)
+    try:
+        print("📊 Инициализация сборщика статистики...")
+        await setup_stats_collector(bot)
+    except Exception as e:
+        print(f"❌ Ошибка инициализации сборщика статистики: {e}")
         traceback.print_exc()
     
     await bot.change_presence(activity=discord.Activity(
