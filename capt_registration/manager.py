@@ -287,30 +287,31 @@ class CaptRegistrationManager:
         return True
     
     async def _send_capt_announcement(self, bot):
-        """Отправить оповещение о начале CAPT в настроенный канал"""
+        """Отправить оповещение о начале CAPT"""
         if not self.capt_info:
             return
         
-        if not self.alert_channel_id:
+        alert_channel_id = CONFIG.get('capt_alert_channel')
+        if not alert_channel_id:
             logger.warning("❌ Канал для оповещений CAPT не настроен")
             return
         
         try:
-            channel = bot.get_channel(int(self.alert_channel_id))
+            channel = bot.get_channel(int(alert_channel_id))
             if not channel:
-                logger.error(f"❌ Канал оповещений {self.alert_channel_id} не найден")
+                logger.error(f"❌ Канал оповещений {alert_channel_id} не найден")
                 return
             
             # Получаем публичный канал для регистрации
-            reserve_channel_mention = "не настроен"
+            reserve_channel_mention = "канал регистрации"
             if self.reserve_channel_id:
                 reserve_channel = bot.get_channel(int(self.reserve_channel_id))
                 if reserve_channel:
                     reserve_channel_mention = reserve_channel.mention
             
-            # Создаём красивое оповещение
+            # Создаём embed
             embed = discord.Embed(
-                title="🎯 **НАБОР НА CAPT**",
+                title="🎯 НАБОР НА CAPT",
                 description=f"Для участия нажми кнопку **ПРИСОЕДИНИТЬСЯ** в канале {reserve_channel_mention}",
                 color=0xff0000,
                 timestamp=datetime.now()
@@ -335,19 +336,7 @@ class CaptRegistrationManager:
                     inline=False
                 )
             
-            embed.add_field(
-                name="👤 Набрал",
-                value=self.capt_info['started_by'],
-                inline=True
-            )
-            
-            embed.add_field(
-                name="📍 Канал регистрации",
-                value=reserve_channel_mention,
-                inline=True
-            )
-            
-            embed.set_footer(text="Нажми кнопку в канале регистрации чтобы участвовать")
+            embed.set_footer(text="Регистрация активна")
             
             # Отправляем с @everyone
             await channel.send(
