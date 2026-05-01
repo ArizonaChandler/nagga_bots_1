@@ -346,7 +346,7 @@ class Database:
                         ('stats_backup_enabled', 'true'))
             cursor.execute('INSERT OR IGNORE INTO stats_settings (key, value) VALUES (?, ?)', 
                         ('stats_channel', 'null'))
-    
+
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
     def add_user(self, discord_id: str, added_by: str):
         with self.get_connection() as conn:
