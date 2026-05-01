@@ -1125,6 +1125,36 @@ class Database:
             conn.commit()
             return len(apps)
 
+    def get_active_application_id(self, user_id: str):
+        """Получить ID активной заявки пользователя"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id FROM applications 
+                WHERE user_id = ? AND status IN ('pending', 'interviewing')
+            ''', (user_id,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+
+    def get_interview_channels_for_user(self, user_id: str):
+        """Получить все каналы обзвона, связанные с пользователем"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            # Получаем ID активной заявки
+            app_id = self.get_active_application_id(user_id)
+            
+            if app_id:
+                # Ищем по ID заявки (хранится в application_messages)
+                cursor.execute('''
+                    SELECT channel_id, message_id FROM application_messages 
+                    WHERE application_id = ?
+                ''', (app_id,))
+                result = cursor.fetchone()
+                if result:
+                    return [{'channel_id': result[0], 'message_id': result[1], 'type': 'by_application'}]
+            
+            return []
+
     # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ AFK =====
     
     def get_afk_setting(self, key: str) -> str:

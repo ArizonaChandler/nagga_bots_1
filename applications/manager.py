@@ -66,6 +66,14 @@ class ApplicationManager:
     def close_user_applications(self, user_id: str):
         """Закрыть все активные заявки пользователя"""
         return db.close_user_applications(user_id)
+
+    def get_active_application_id(self, user_id: str):
+        """Получить ID активной заявки пользователя"""
+        return db.get_active_application_id(user_id)
+
+    def get_interview_channels_for_user(self, user_id: str):
+        """Получить каналы обзвона для пользователя"""
+        return db.get_interview_channels_for_user(user_id)
     
     # ===== МЕТОДЫ ДЛЯ РАБОТЫ С СООБЩЕНИЯМИ =====
     

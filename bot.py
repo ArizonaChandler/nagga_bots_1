@@ -248,22 +248,30 @@ async def on_member_remove(member):
         collector.increment_left_members()
     
     try:
-        # 1. Закрываем заявки в БД
         from applications.manager import app_manager
+        
+        # 1. Получаем ID активной заявки (без прямого SQL)
+        application_id = app_manager.get_active_application_id(str(member.id))
+        
+        # 2. Закрываем заявки в БД
         closed_count = app_manager.close_user_applications(str(member.id))
         if closed_count > 0:
             print(f"✅ Закрыто {closed_count} заявок пользователя {member.name}")
         
-        # 2. Удаляем каналы обзвона
+        # 3. Удаляем каналы обзвона
         channels_to_delete = []
         
         for category in member.guild.categories:
             for channel in category.text_channels:
-                # Проверяем по topic
-                if channel.topic and str(member.id) in channel.topic:
+                # Проверяем по ID заявки в topic
+                if application_id and channel.topic and f"#{application_id}" in channel.topic:
                     channels_to_delete.append(channel)
-                    print(f"🔍 Найден канал по topic: {channel.name}")
-                # Проверяем по названию
+                    print(f"🔍 Найден канал по ID заявки #{application_id}: {channel.name}")
+                # Проверяем по user_id в topic
+                elif channel.topic and str(member.id) in channel.topic:
+                    channels_to_delete.append(channel)
+                    print(f"🔍 Найден канал по user_id в topic: {channel.name}")
+                # Проверяем по имени
                 elif f"обзвон-{member.name.lower()}" in channel.name.lower() or f"обзвон-{member.display_name.lower()}" in channel.name.lower():
                     channels_to_delete.append(channel)
                     print(f"🔍 Найден канал по имени: {channel.name}")
@@ -282,7 +290,7 @@ async def on_member_remove(member):
             except Exception as e:
                 print(f"❌ Ошибка удаления канала {channel.name}: {e}")
         
-        # 3. Удаляем профиль (категория PROFILES)
+        # 4. Удаляем профиль
         for category in member.guild.categories:
             if category.name.startswith("📁 PROFILES"):
                 for channel in category.text_channels:
