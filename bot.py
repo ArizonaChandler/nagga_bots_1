@@ -241,85 +241,58 @@ async def on_member_join(member):
 
 @bot.event
 async def on_member_remove(member):
-    """При выходе пользователя удаляем его личный профиль и каналы обзвона"""
+    """При выходе пользователя удаляем его личный профиль, каналы обзвона и закрываем заявки"""
     
     # В систему статистики
     if collector:
         collector.increment_left_members()
     
     try:
-        # 1. Удаляем профиль (категория PROFILES)
+        # 1. Закрываем заявки в БД
+        from applications.manager import app_manager
+        closed_count = app_manager.close_user_applications(str(member.id))
+        if closed_count > 0:
+            print(f"✅ Закрыто {closed_count} заявок пользователя {member.name}")
+        
+        # 2. Удаляем каналы обзвона
+        channels_to_delete = []
+        
+        for category in member.guild.categories:
+            for channel in category.text_channels:
+                # Проверяем по topic
+                if channel.topic and str(member.id) in channel.topic:
+                    channels_to_delete.append(channel)
+                    print(f"🔍 Найден канал по topic: {channel.name}")
+                # Проверяем по названию
+                elif f"обзвон-{member.name.lower()}" in channel.name.lower() or f"обзвон-{member.display_name.lower()}" in channel.name.lower():
+                    channels_to_delete.append(channel)
+                    print(f"🔍 Найден канал по имени: {channel.name}")
+                # Проверяем по правам доступа
+                else:
+                    for target, overwrite in channel.overwrites.items():
+                        if hasattr(target, 'id') and target.id == member.id:
+                            channels_to_delete.append(channel)
+                            print(f"🔍 Найден канал по правам доступа: {channel.name}")
+                            break
+        
+        for channel in channels_to_delete:
+            try:
+                await channel.delete()
+                print(f"✅ Удалён канал {channel.name}")
+            except Exception as e:
+                print(f"❌ Ошибка удаления канала {channel.name}: {e}")
+        
+        # 3. Удаляем профиль (категория PROFILES)
         for category in member.guild.categories:
             if category.name.startswith("📁 PROFILES"):
                 for channel in category.text_channels:
                     if channel.topic and str(member.id) in channel.topic:
                         await channel.delete()
-                        print(f"✅ Удалён профиль пользователя {member.name} (ID: {member.id})")
+                        print(f"✅ Удалён профиль пользователя {member.name}")
                         break
         
-        # 2. Удаляем каналы обзвона (категория ОБЗВОНЫ)
-        for category in member.guild.categories:
-            if category.name.startswith("📞 ОБЗВОНЫ"):
-                channels_to_delete = []
-                for channel in category.text_channels:
-                    # Проверяем по topic
-                    if channel.topic and str(member.id) in channel.topic:
-                        channels_to_delete.append(channel)
-                        print(f"🔍 Найден канал обзвона по topic: {channel.name}")
-                    # Проверяем по названию канала
-                    elif member.name.lower() in channel.name.lower() or member.display_name.lower() in channel.name.lower():
-                        channels_to_delete.append(channel)
-                        print(f"🔍 Найден канал обзвона по имени: {channel.name}")
-                    # Проверяем по ID заявки (если есть)
-                    else:
-                        # Проверяем права доступа канала
-                        for target, overwrite in channel.overwrites.items():
-                            if hasattr(target, 'id') and target.id == member.id:
-                                channels_to_delete.append(channel)
-                                print(f"🔍 Найден канал обзвона по правам доступа: {channel.name}")
-                                break
-                
-                for channel in channels_to_delete:
-                    try:
-                        await channel.delete()
-                        print(f"✅ Удалён канал обзвона {channel.name} для {member.name}")
-                    except Exception as e:
-                        print(f"❌ Ошибка удаления канала {channel.name}: {e}")
-        
-        # 3. Также проверяем заявку в БД и закрываем её
-        try:
-            from applications.manager import app_manager
-            from core.database import db
-            
-            # Получаем активную заявку пользователя
-            with db.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT id, status FROM applications 
-                    WHERE user_id = ? AND status IN ('pending', 'interviewing')
-                ''', (str(member.id),))
-                app = cursor.fetchone()
-            
-            if app:
-                app_id, status = app
-                # Закрываем заявку
-                cursor.execute('''
-                    UPDATE applications 
-                    SET status = 'rejected', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, 
-                        reject_reason = ?
-                    WHERE id = ?
-                ''', ('system', 'Пользователь покинул сервер', app_id))
-                conn.commit()
-                print(f"✅ Заявка #{app_id} закрыта (пользователь покинул сервер)")
-                
-                # Удаляем запись о сообщении заявки
-                cursor.execute('DELETE FROM application_messages WHERE application_id = ?', (app_id,))
-                conn.commit()
-        except Exception as e:
-            print(f"❌ Ошибка при закрытии заявки: {e}")
-        
     except Exception as e:
-        print(f"❌ Ошибка при удалении каналов пользователя {member.name}: {e}")
+        print(f"❌ Ошибка при обработке выхода {member.name}: {e}")
 
 async def main():
     async with bot:

@@ -62,6 +62,10 @@ class ApplicationManager:
         """Проверить, находится ли пользователь на сервере"""
         member = guild.get_member(int(user_id))
         return member is not None
+
+    def close_user_applications(self, user_id: str):
+        """Закрыть все активные заявки пользователя"""
+        return db.close_user_applications(user_id)
     
     # ===== МЕТОДЫ ДЛЯ РАБОТЫ С СООБЩЕНИЯМИ =====
     

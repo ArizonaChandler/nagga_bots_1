@@ -1095,6 +1095,36 @@ class Database:
             
             return True, f"✅ Удалено {deleted_count} заявок пользователя <@{user_id}>"
 
+    def close_user_applications(self, user_id: str):
+        """Закрыть все активные заявки пользователя при выходе с сервера"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Получаем активные заявки
+            cursor.execute('''
+                SELECT id FROM applications 
+                WHERE user_id = ? AND status IN ('pending', 'interviewing')
+            ''', (user_id,))
+            apps = cursor.fetchall()
+            
+            if not apps:
+                return 0
+            
+            # Закрываем все заявки
+            cursor.execute('''
+                UPDATE applications 
+                SET status = 'rejected', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, 
+                    reject_reason = ?
+                WHERE user_id = ? AND status IN ('pending', 'interviewing')
+            ''', ('system', 'Пользователь покинул сервер', user_id))
+            
+            # Удаляем записи о сообщениях
+            for app in apps:
+                cursor.execute('DELETE FROM application_messages WHERE application_id = ?', (app[0],))
+            
+            conn.commit()
+            return len(apps)
+
     # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ AFK =====
     
     def get_afk_setting(self, key: str) -> str:
