@@ -31,6 +31,7 @@ CONFIG = {
     'submit_text': "Нажмите кнопку ниже, чтобы подать заявку",
     'submit_image': None,
     'welcome_message': None,
+    'welcome_channel': None,
     'welcome_image': None,
     'family_name': 'Семья',
     'afk_channel': None,
@@ -46,6 +47,9 @@ CONFIG = {
     'tier1_role': None,
     'tier2_role': None,
     'tier3_role': None,
+    'stats_channel': None,
+    'stats_backup_enabled': True,
+    'stats_settings_channel': None,
 }
 
 # Создаём экземпляр БД

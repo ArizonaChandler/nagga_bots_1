@@ -347,6 +347,18 @@ class GlobalSettingsView(BaseMenuView):
         tier_settings_channel_btn.callback = tier_settings_channel_cb
         self.add_item(tier_settings_channel_btn)
 
+        # РЯД 4: НАСТРОЙКИ КАНАЛОВ СТАТИСТИКИ
+        stats_settings_channel_btn = discord.ui.Button(
+            label="📊 Канал настроек статистики",
+            style=discord.ButtonStyle.secondary,
+            emoji="📊",
+            row=4
+        )
+        async def stats_settings_channel_cb(i):
+            await i.response.send_modal(SetStatsSettingsChannelModal(self.guild))
+        stats_settings_channel_btn.callback = stats_settings_channel_cb
+        self.add_item(stats_settings_channel_btn)
+
         # РЯД 4: НАЗАД
         self.add_back_button(row=4)
     

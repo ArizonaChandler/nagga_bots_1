@@ -39,6 +39,10 @@ from afk import setup_afk
 # Импорт системы TIER 
 from tier import setup_tier
 
+# Импорт системы статистики
+from server_stats import setup_stats
+from server_stats.stat_collector import collector
+
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -183,6 +187,14 @@ async def on_ready():
         print(f"❌ Ошибка инициализации TIR: {e}")
         traceback.print_exc()
 
+    # Инициализация системы статистики
+    try:
+        print("📊 Инициализация системы статистики...")
+        await setup_stats(bot)
+    except Exception as e:
+        print(f"❌ Ошибка инициализации статистики: {e}")
+        traceback.print_exc()
+
     print("="*60 + "\n")
 
 @bot.event
@@ -194,6 +206,10 @@ async def on_command_error(ctx, error):
 @bot.event
 async def on_member_join(member):
     """Приветствие нового участника"""
+    # В систему статистики
+    if collector:
+        collector.increment_new_members()
+
     try:
         from applications.manager import app_manager
         from core.config import CONFIG
@@ -204,19 +220,24 @@ async def on_member_join(member):
         if not welcome_message:
             return
         
-        # Получаем канал для приветствия (можно настроить отдельно или использовать системный)
-        welcome_channel_id = settings.get('submit_channel')  # или отдельный канал
+        # Используем отдельный канал для приветствий
+        welcome_channel_id = settings.get('welcome_channel')
         if not welcome_channel_id:
+            # Если канал не настроен, не отправляем
             return
         
         welcome_channel = member.guild.get_channel(int(welcome_channel_id))
         if not welcome_channel:
             return
         
+        # Получаем канал подачи заявок для ссылки
+        submit_channel_id = settings.get('submit_channel')
+        submit_channel_mention = f"<#{submit_channel_id}>" if submit_channel_id else "канал подачи заявок"
+        
         # Заменяем переменные в сообщении
         welcome_text = welcome_message.format(
             user=member.mention,
-            channel=welcome_channel.mention,
+            channel=submit_channel_mention,
             server=member.guild.name
         )
         
@@ -235,26 +256,45 @@ async def on_member_join(member):
         
         embed.set_footer(text=member.guild.name)
         
-        # Отправляем в канал
+        # Отправляем в канал приветствий
         await welcome_channel.send(content=member.mention, embed=embed)
+        print(f"✅ Приветствие отправлено для {member.name} в #{welcome_channel.name}")
         
     except Exception as e:
         print(f"❌ Ошибка при приветствии {member.name}: {e}")
 
 @bot.event
 async def on_member_remove(member):
-    """При выходе пользователя удаляем его личный профиль (канал и все ветки)"""
+    
+    # В систему статистики
+    if collector:
+        collector.increment_left_members()
+
+    """При выходе пользователя удаляем его личный профиль и каналы обзвона"""
     try:
+        # 1. Удаляем профиль (категория PROFILES)
         for category in member.guild.categories:
             if category.name.startswith("📁 PROFILES"):
                 for channel in category.text_channels:
-                    # Проверяем, принадлежит ли канал этому пользователю
                     if channel.topic and str(member.id) in channel.topic:
                         await channel.delete()
                         print(f"✅ Удалён профиль пользователя {member.name} (ID: {member.id})")
                         break
+        
+        # 2. Удаляем каналы обзвона (категория ОБЗВОНЫ)
+        for category in member.guild.categories:
+            if category.name.startswith("📞 ОБЗВОНЫ"):
+                for channel in category.text_channels:
+                    # Проверяем по topic или по имени
+                    if channel.topic and str(member.id) in channel.topic:
+                        await channel.delete()
+                        print(f"✅ Удалён канал обзвона {channel.name} для {member.name}")
+                    elif member.display_name.lower() in channel.name.lower():
+                        await channel.delete()
+                        print(f"✅ Удалён канал обзвона {channel.name} для {member.name}")
+        
     except Exception as e:
-        print(f"❌ Ошибка при удалении профиля {member.name}: {e}")
+        print(f"❌ Ошибка при удалении каналов пользователя {member.name}: {e}")
 
 async def main():
     async with bot:

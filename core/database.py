@@ -318,6 +318,9 @@ class Database:
                         ('tier2', '1. Выполнение требований Tier 3\n2. Регулярные отчёты\n3. Помощь новичкам'))
             cursor.execute('INSERT OR IGNORE INTO tier_requirements (tier, requirements) VALUES (?, ?)', 
                         ('tier1', '1. Выполнение требований Tier 2\n2. Лидерские качества\n3. Вклад в развитие семьи'))
+
+            
+            
     
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
     def add_user(self, discord_id: str, added_by: str):
@@ -837,15 +840,6 @@ class Database:
             if cursor.fetchone():
                 return None, "❌ У вас уже есть активная заявка"
             
-            # Проверяем, была ли уже принятая заявка (опционально)
-            cursor.execute('''
-                SELECT id FROM applications 
-                WHERE user_id = ? AND status = 'accepted'
-            ''', (user_id,))
-            
-            if cursor.fetchone():
-                return None, "❌ Вы уже приняты в семью"
-            
             cursor.execute('''
                 INSERT INTO applications 
                 (user_id, user_name, nickname, static, previous_families, prime_time, hours_per_day)
@@ -1340,5 +1334,66 @@ class Database:
         for key, value in settings.items():
             if value and value.lower() != 'null':
                 CONFIG[key] = value
+
+        # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ СТАТИСТИКИ =====
+    
+    def get_stats_setting(self, key: str) -> str:
+        """Получить настройку статистики"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT value FROM stats_settings WHERE key = ?', (key,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+    
+    def set_stats_setting(self, key: str, value: str, updated_by: str = None):
+        """Установить настройку статистики"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO stats_settings (key, value)
+                VALUES (?, ?)
+            ''', (key, value))
+            conn.commit()
+            if updated_by:
+                self.log_action(updated_by, f"SET_STATS_SETTING", f"{key}={value}")
+    
+    def save_daily_stats(self, stats_data: dict):
+        """Сохранить дневную статистику"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO daily_stats 
+                (date, new_members, left_members, new_applications, accepted_applications, max_voice_online, capt_registrations)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                stats_data['date'],
+                stats_data.get('new_members', 0),
+                stats_data.get('left_members', 0),
+                stats_data.get('new_applications', 0),
+                stats_data.get('accepted_applications', 0),
+                stats_data.get('max_voice_online', 0),
+                stats_data.get('capt_registrations', 0)
+            ))
+            conn.commit()
+    
+    def get_stats_for_date(self, date_str: str):
+        """Получить статистику за конкретную дату"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM daily_stats WHERE date = ?', (date_str,))
+            row = cursor.fetchone()
+            
+            if row:
+                columns = [description[0] for description in cursor.description]
+                return dict(zip(columns, row))
+            return None
+    
+    def get_today_stats(self):
+        """Получить статистику за сегодня"""
+        from datetime import datetime
+        import pytz
+        msk_tz = pytz.timezone('Europe/Moscow')
+        today = datetime.now(msk_tz).date().isoformat()
+        return self.get_stats_for_date(today)
 
 db = Database()

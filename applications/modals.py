@@ -2,6 +2,7 @@
 import discord
 from applications.manager import app_manager
 from datetime import datetime
+from server_stats.stat_collector import collector
 
 class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"):
     """Модалка для создания заявки"""
@@ -45,6 +46,26 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
     async def on_submit(self, interaction: discord.Interaction):
         
         print(f"🔍 Начало обработки заявки от {interaction.user.id}")
+        
+        try:
+            # Создаем заявку
+            print("📝 Создание заявки в БД...")
+            app_id, error = app_manager.create_application(
+                user_id=str(interaction.user.id),
+                user_name=interaction.user.display_name,
+                nickname=self.nickname.value,
+                static=self.static.value,
+                previous_families=self.previous_families.value or "Не указано",
+                prime_time=self.prime_time.value,
+                hours_per_day=self.hours_per_day.value
+            )
+            
+            if error:
+                print(f"❌ Ошибка создания заявки: {error}")
+                await interaction.response.send_message(error, ephemeral=True)
+                return
+            
+            print(f"✅ Заявка создана с ID: {app_id}")
         
         try:
             # Создаем заявку
@@ -140,6 +161,10 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
                 message_id=str(sent_message.id),
                 user_id=str(interaction.user.id)
             )
+
+            # После успешного создания заявки в систему статистики
+            if collector:
+                collector.increment_new_applications()
             print(f"✅ Заявка отправлена и сохранена (message_id: {sent_message.id})")
             
         except Exception as e:

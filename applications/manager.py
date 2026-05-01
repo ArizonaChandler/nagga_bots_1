@@ -19,6 +19,7 @@ class ApplicationManager:
             'submit_image': CONFIG.get('submit_image'),
             'welcome_message': CONFIG.get('welcome_message'),
             'welcome_image': CONFIG.get('welcome_image'),
+            'welcome_channel': CONFIG.get('welcome_channel'),
         }
     
     def save_setting(self, key: str, value: str, updated_by: str = None):

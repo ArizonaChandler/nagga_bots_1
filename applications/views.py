@@ -5,6 +5,7 @@ from core.config import CONFIG
 from applications.manager import app_manager
 from applications.base import PermanentView
 from applications.modals import ApplicationModal
+from server_stats.stat_collector import collector
 
 
 # ===== КЛАСС 1: ПУБЛИЧНАЯ КНОПКА ДЛЯ ПОДАЧИ ЗАЯВОК =====
@@ -226,6 +227,10 @@ class ApplicationModerationView(discord.ui.View):
         # Очищаем запись о сообщении
         await self.cleanup_message_record()
         
+        # В систему статистики
+        if collector:
+            collector.increment_accepted_applications()
+
         # Отправляем финальное сообщение
         await interaction.followup.send("✅ Заявка принята, личный профиль создан", ephemeral=True)
         print(f"✅ Заявка {self.application_id} принята, канал удалён, профиль создан")

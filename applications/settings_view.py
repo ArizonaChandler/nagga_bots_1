@@ -103,6 +103,17 @@ class ApplicationsCombinedPanel(PermanentView):
         """Настроить приветственное сообщение для новых участников"""
         await interaction.response.send_modal(SetWelcomeMessageModal())
 
+    @discord.ui.button(
+        label="👋 Канал приветствий", 
+        style=discord.ButtonStyle.secondary,
+        emoji="👋",
+        row=1,
+        custom_id="apps_welcome_channel"
+    )
+    async def set_welcome_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Настроить канал для приветствия новых участников"""
+        await interaction.response.send_modal(SetWelcomeChannelModal())
+
     # ===== РЯД 2: МОДЕРАЦИЯ =====
     @discord.ui.button(
         label="📋 Ожидающие заявки", 
@@ -503,6 +514,33 @@ class SetWelcomeMessageModal(discord.ui.Modal, title="👋 ПРИВЕТСТВИ�
             
             await interaction.response.send_message(
                 f"✅ Приветственное сообщение настроено!",
+                ephemeral=True
+            )
+            
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
+
+class SetWelcomeChannelModal(discord.ui.Modal, title="👋 КАНАЛ ПРИВЕТСТВИЙ"):
+    
+    channel_id = discord.ui.TextInput(
+        label="ID канала для приветствий",
+        placeholder="123456789012345678",
+        max_length=20,
+        required=True
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            channel = interaction.guild.get_channel(int(self.channel_id.value))
+            if not channel:
+                await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
+                return
+            
+            app_manager.save_setting('welcome_channel', self.channel_id.value, str(interaction.user.id))
+            
+            await interaction.response.send_message(
+                f"✅ Канал приветствий настроен: {channel.mention}",
                 ephemeral=True
             )
             

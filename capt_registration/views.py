@@ -8,6 +8,7 @@ from core.utils import has_access
 from capt_registration.manager import capt_reg_manager
 from capt_registration.capt_core import capt_core
 from core.config import CONFIG
+from server_stats.stat_collector import collector
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,10 @@ class StartRegistrationModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИ
             f"Противник: {self.enemy.value}, Время: {self.teleport_time.value}"
         )
         
+        # В систему статистики
+        if collector:
+            collector.increment_capt_registrations()
+
         # Отправляем подтверждение
         await interaction.response.send_message(
             f"✅ Регистрация начата!\n"
