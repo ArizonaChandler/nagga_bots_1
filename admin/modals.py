@@ -1446,12 +1446,33 @@ class SetStatsSettingsChannelModal(discord.ui.Modal, title="📊 КАНАЛ НА
         from server_stats.settings_view import StatsSettingsView
         
         try:
-            guild = interaction.guild
-            channel = guild.get_channel(int(self.channel_id.value))
-            if not channel:
-                await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
+            # Получаем сервер из CONFIG
+            server_id = CONFIG.get('server_id')
+            if not server_id:
+                await interaction.response.send_message(
+                    "❌ Сначала установите ID сервера в Глобальных настройках",
+                    ephemeral=True
+                )
                 return
             
+            guild = interaction.client.get_guild(int(server_id))
+            if not guild:
+                await interaction.response.send_message(
+                    f"❌ Сервер с ID {server_id} не найден",
+                    ephemeral=True
+                )
+                return
+            
+            # Получаем канал
+            channel = guild.get_channel(int(self.channel_id.value))
+            if not channel:
+                await interaction.response.send_message(
+                    f"❌ Канал {self.channel_id.value} не найден на сервере {guild.name}",
+                    ephemeral=True
+                )
+                return
+            
+            # Сохраняем в CONFIG и БД
             CONFIG['stats_settings_channel'] = self.channel_id.value
             db.set_setting('stats_settings_channel', self.channel_id.value, str(interaction.user.id))
             save_config(str(interaction.user.id))

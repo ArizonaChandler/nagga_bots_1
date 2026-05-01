@@ -94,45 +94,6 @@ async def on_ready():
         for channel in guild.channels:
             print(f"  │  └─ #{channel.name} (ID: {channel.id})")
     
-    # Проверяем проблемный канал
-    channel_id = "1471570430983934099"
-    channel = bot.get_channel(int(channel_id))
-    if channel:
-        print(f"✅ Канал {channel_id} найден: #{channel.name}")
-    else:
-        print(f"❌ Канал {channel_id} НЕ НАЙДЕН в кэше!")
-    
-    # Синхронизация слэш-команд (если есть)
-    try:
-        print("🔄 Синхронизация слэш-команд...")
-        synced = await bot.tree.sync()
-        print(f"✅ Синхронизировано {len(synced)} глобальных слэш-команд")
-        
-        if synced:
-            for cmd in synced:
-                if hasattr(cmd, 'name'):
-                    print(f"   - /{cmd.name}")
-                elif hasattr(cmd, 'commands'):
-                    print(f"   - /{cmd.name} (группа с {len(cmd.commands)} командами)")
-    except Exception as e:
-        print(f"❌ Ошибка синхронизации: {e}")
-    
-    # Инициализация постоянных кнопок CAPT регистрации
-    try:
-        from capt_registration.manager import capt_reg_manager
-        print("🔄 Инициализация CAPT регистрации...")
-        await capt_reg_manager.initialize_buttons(bot)
-    except Exception as e:
-        print(f"❌ Ошибка инициализации CAPT регистрации: {e}")
-        import traceback
-        traceback.print_exc()
-    
-    family = CONFIG.get('family_name', 'Семья')
-    await bot.change_presence(activity=discord.Activity(
-        type=discord.ActivityType.watching,
-        name=f"{family} | !info"
-    ))
-    
     # Инициализация CAPT регистрации
     try:
         from capt_registration.manager import capt_reg_manager
@@ -170,30 +131,38 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Ошибка инициализации системы заявок: {e}")
         traceback.print_exc()
-
+    
+    # Инициализация системы TIER
+    try:
+        from tier import setup_tier
+        print("🔄 Инициализация системы TIER...")
+        await setup_tier(bot)
+    except Exception as e:
+        print(f"❌ Ошибка инициализации TIER: {e}")
+        traceback.print_exc()
+    
     # Инициализация системы AFK
     try:
+        from afk import setup_afk
         print("🔄 Инициализация системы AFK...")
         await setup_afk(bot)
     except Exception as e:
         print(f"❌ Ошибка инициализации AFK: {e}")
         traceback.print_exc()
-
-    # Инициализация системы TIR
-    try:
-        print("🔄 Инициализация системы TIR...")
-        await setup_tier(bot)
-    except Exception as e:
-        print(f"❌ Ошибка инициализации TIR: {e}")
-        traceback.print_exc()
-
+    
     # Инициализация системы статистики
     try:
+        from server_stats import setup_stats
         print("📊 Инициализация системы статистики...")
         await setup_stats(bot)
     except Exception as e:
         print(f"❌ Ошибка инициализации статистики: {e}")
         traceback.print_exc()
+    
+    await bot.change_presence(activity=discord.Activity(
+        type=discord.ActivityType.watching,
+        name=f"{CONFIG.get('family_name', 'Семья')} | !info"
+    ))
 
     print("="*60 + "\n")
 
