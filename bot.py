@@ -41,6 +41,7 @@ from tier import setup_tier
 
 # Импорт системы статистики
 from server_stats import setup_stats, setup_stats_collector
+from server_stats.stat_collector import collector
 
 
 import discord
