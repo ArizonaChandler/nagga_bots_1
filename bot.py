@@ -241,7 +241,7 @@ async def on_member_join(member):
 
 @bot.event
 async def on_member_remove(member):
-    """При выходе пользователя удаляем его личный профиль и каналы обзвона"""
+    """При выходе пользователя удаляем его каналы обзвона по категории и ID заявки"""
     
     # В систему статистики
     if collector:
@@ -249,8 +249,9 @@ async def on_member_remove(member):
     
     try:
         from applications.manager import app_manager
+        from core.database import db
         
-        # 1. Получаем ID активной заявки
+        # 1. Получаем ID активной заявки (без прямого SQL)
         application_id = app_manager.get_active_application_id(str(member.id))
         print(f"🔍 Активная заявка пользователя {member.name}: {application_id}")
         
@@ -259,23 +260,24 @@ async def on_member_remove(member):
         if closed_count > 0:
             print(f"✅ Закрыто {closed_count} заявок пользователя {member.name}")
         
-        # 3. Удаляем каналы обзвона (ищем по всей категории)
+        # 3. Удаляем каналы обзвона (по категории)
         channels_to_delete = []
         
-        # Ищем категорию "📞 ОБЗВОНЫ"
+        # Проходим по всем категориям
         for category in member.guild.categories:
+            # Если это категория обзвонов
             if category.name == "📞 ОБЗВОНЫ":
                 print(f"🔍 Найдена категория обзвонов: {category.name}")
                 for channel in category.text_channels:
-                    # Проверяем по ID заявки в topic (это самый надёжный способ)
+                    # Проверяем по ID заявки в topic
                     if application_id and channel.topic and f"#{application_id}" in channel.topic:
                         channels_to_delete.append(channel)
                         print(f"🔍 Найден канал по ID заявки #{application_id}: {channel.name}")
-                    # Проверяем по user_id в topic
+                    # Проверяем по ID пользователя в topic
                     elif channel.topic and str(member.id) in channel.topic:
                         channels_to_delete.append(channel)
                         print(f"🔍 Найден канал по user_id: {channel.name}")
-                    # Проверяем по имени пользователя
+                    # Проверяем по имени пользователя в названии
                     elif member.name.lower() in channel.name.lower() or member.display_name.lower() in channel.name.lower():
                         channels_to_delete.append(channel)
                         print(f"🔍 Найден канал по имени: {channel.name}")
@@ -296,6 +298,16 @@ async def on_member_remove(member):
                         await channel.delete()
                         print(f"✅ Удалён профиль пользователя {member.name}")
                         break
+        # 5. ЕСЛИ НИЧЕГО НЕ НАШЛИ - ПРОХОДИМ ПО ВСЕМ КАНАЛАМ
+        if not channels_to_delete:
+            print(f"⚠️ Не найдены каналы по критериям, проверяем все текстовые каналы...")
+            for channel in member.guild.text_channels:
+                if channel.topic and (str(member.id) in channel.topic or (application_id and f"#{application_id}" in channel.topic)):
+                    try:
+                        await channel.delete()
+                        print(f"✅ Удалён канал по topic: {channel.name}")
+                    except Exception as e:
+                        print(f"❌ Ошибка удаления {channel.name}: {e}")
         
     except Exception as e:
         print(f"❌ Ошибка при обработке выхода {member.name}: {e}")
