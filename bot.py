@@ -321,6 +321,7 @@ async def test_category(ctx):
                 print(f"     topic: {channel.topic}")
     await ctx.send("Проверка завершена, смотри консоль")
 
+
 async def main():
     async with bot:
         # Запускаем планировщик мероприятий
