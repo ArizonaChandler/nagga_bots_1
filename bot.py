@@ -241,7 +241,7 @@ async def on_member_join(member):
 
 @bot.event
 async def on_member_remove(member):
-    """При выходе пользователя удаляем его личный профиль, каналы обзвона и закрываем заявки"""
+    """При выходе пользователя удаляем его личный профиль и каналы обзвона"""
     
     # В систему статистики
     if collector:
@@ -250,47 +250,45 @@ async def on_member_remove(member):
     try:
         from applications.manager import app_manager
         
-        # 1. Получаем ID активной заявки (без прямого SQL)
+        # 1. Получаем ID активной заявки
         application_id = app_manager.get_active_application_id(str(member.id))
+        print(f"🔍 Активная заявка пользователя {member.name}: {application_id}")
         
         # 2. Закрываем заявки в БД
         closed_count = app_manager.close_user_applications(str(member.id))
         if closed_count > 0:
             print(f"✅ Закрыто {closed_count} заявок пользователя {member.name}")
         
-        # 3. Удаляем каналы обзвона
+        # 3. Удаляем каналы обзвона (ищем по всей категории)
         channels_to_delete = []
         
+        # Ищем категорию "📞 ОБЗВОНЫ"
         for category in member.guild.categories:
-            for channel in category.text_channels:
-                # Проверяем по ID заявки в topic
-                if application_id and channel.topic and f"#{application_id}" in channel.topic:
-                    channels_to_delete.append(channel)
-                    print(f"🔍 Найден канал по ID заявки #{application_id}: {channel.name}")
-                # Проверяем по user_id в topic
-                elif channel.topic and str(member.id) in channel.topic:
-                    channels_to_delete.append(channel)
-                    print(f"🔍 Найден канал по user_id в topic: {channel.name}")
-                # Проверяем по имени
-                elif f"обзвон-{member.name.lower()}" in channel.name.lower() or f"обзвон-{member.display_name.lower()}" in channel.name.lower():
-                    channels_to_delete.append(channel)
-                    print(f"🔍 Найден канал по имени: {channel.name}")
-                # Проверяем по правам доступа
-                else:
-                    for target, overwrite in channel.overwrites.items():
-                        if hasattr(target, 'id') and target.id == member.id:
-                            channels_to_delete.append(channel)
-                            print(f"🔍 Найден канал по правам доступа: {channel.name}")
-                            break
+            if category.name == "📞 ОБЗВОНЫ":
+                print(f"🔍 Найдена категория обзвонов: {category.name}")
+                for channel in category.text_channels:
+                    # Проверяем по ID заявки в topic (это самый надёжный способ)
+                    if application_id and channel.topic and f"#{application_id}" in channel.topic:
+                        channels_to_delete.append(channel)
+                        print(f"🔍 Найден канал по ID заявки #{application_id}: {channel.name}")
+                    # Проверяем по user_id в topic
+                    elif channel.topic and str(member.id) in channel.topic:
+                        channels_to_delete.append(channel)
+                        print(f"🔍 Найден канал по user_id: {channel.name}")
+                    # Проверяем по имени пользователя
+                    elif member.name.lower() in channel.name.lower() or member.display_name.lower() in channel.name.lower():
+                        channels_to_delete.append(channel)
+                        print(f"🔍 Найден канал по имени: {channel.name}")
         
+        # Удаляем найденные каналы
         for channel in channels_to_delete:
             try:
                 await channel.delete()
-                print(f"✅ Удалён канал {channel.name}")
+                print(f"✅ Удалён канал обзвона: {channel.name}")
             except Exception as e:
                 print(f"❌ Ошибка удаления канала {channel.name}: {e}")
         
-        # 4. Удаляем профиль
+        # 4. Удаляем профиль (категория PROFILES)
         for category in member.guild.categories:
             if category.name.startswith("📁 PROFILES"):
                 for channel in category.text_channels:
