@@ -243,15 +243,14 @@ async def on_member_join(member):
 async def on_member_remove(member):
     print(f"🔴🔴🔴 СОБЫТИЕ on_member_remove ВЫЗВАНО для {member.name} (ID: {member.id}) 🔴🔴🔴")
     
-    if collector:
-        collector.increment_left_members()
-    
     try:
+        if collector:
+            collector.increment_left_members()
+        
         from applications.manager import app_manager
         from core.database import db
         
-        # 1. Получаем ID активной заявки
-        print("🔍 Шаг 1: Поиск активной заявки в БД...")
+        print("🔍 Шаг 1: Поиск активной заявки...")
         with db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -260,86 +259,67 @@ async def on_member_remove(member):
             ''', (str(member.id),))
             app_result = cursor.fetchone()
             application_id = app_result[0] if app_result else None
+        print(f"📊 Заявка ID: {application_id}")
         
-        print(f"📊 Результат: активная заявка ID = {application_id}")
-        
-        # 2. Закрываем заявку
         if application_id:
-            print(f"🔍 Шаг 2: Закрываем заявку #{application_id}...")
-            cursor.execute('''
-                UPDATE applications 
-                SET status = 'rejected', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, 
-                    reject_reason = ?
-                WHERE id = ?
-            ''', ('system', 'Пользователь покинул сервер', application_id))
-            conn.commit()
+            print(f"🔍 Шаг 2: Закрываем заявку...")
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE applications 
+                    SET status = 'rejected', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, 
+                        reject_reason = ?
+                    WHERE id = ?
+                ''', ('system', 'Пользователь покинул сервер', application_id))
+                conn.commit()
             print(f"✅ Заявка #{application_id} закрыта")
         
-        # 3. Удаляем каналы обзвона
-        print("🔍 Шаг 3: Поиск каналов обзвона...")
-        channels_to_delete = []
-        
-        print("🔍 Поиск категории '📞 ОБЗВОНЫ'...")
-        found_category = False
+        print("🔍 Шаг 3: Поиск категории '📞 ОБЗВОНЫ'...")
         for category in member.guild.categories:
-            print(f"   └─ Категория: '{category.name}'")
+            print(f"   Категория: {category.name}")
             if category.name == "📞 ОБЗВОНЫ":
-                found_category = True
-                print(f"   ✅ Найдена категория '📞 ОБЗВОНЫ'!")
-                print(f"   └─ Каналов в категории: {len(category.text_channels)}")
-                
+                print(f"   ✅ НАЙДЕНА КАТЕГОРИЯ!")
                 for channel in category.text_channels:
-                    print(f"      ├─ Канал: {channel.name}")
-                    print(f"      │  topic: {channel.topic}")
-                    print(f"      │  ID заявки в topic: {'✅' if channel.topic and f'#{application_id}' in channel.topic else '❌'}")
-                    print(f"      │  user_id в topic: {'✅' if channel.topic and str(member.id) in channel.topic else '❌'}")
-                    print(f"      │  имя в названии: {'✅' if member.name.lower() in channel.name.lower() else '❌'}")
-                    
+                    print(f"      Канал: {channel.name}")
+                    print(f"      Topic: {channel.topic}")
                     if application_id and channel.topic and f"#{application_id}" in channel.topic:
-                        channels_to_delete.append(channel)
-                        print(f"      ✅ ДОБАВЛЕН В УДАЛЕНИЕ (по ID заявки)")
+                        print(f"      ✅ УДАЛЯЕМ по ID заявки")
+                        await channel.delete()
                     elif channel.topic and str(member.id) in channel.topic:
-                        channels_to_delete.append(channel)
-                        print(f"      ✅ ДОБАВЛЕН В УДАЛЕНИЕ (по user_id)")
+                        print(f"      ✅ УДАЛЯЕМ по user_id")
+                        await channel.delete()
                     elif member.name.lower() in channel.name.lower():
-                        channels_to_delete.append(channel)
-                        print(f"      ✅ ДОБАВЛЕН В УДАЛЕНИЕ (по имени)")
-                    else:
-                        print(f"      ❌ НЕ ДОБАВЛЕН")
+                        print(f"      ✅ УДАЛЯЕМ по имени")
+                        await channel.delete()
         
-        if not found_category:
-            print("❌ Категория '📞 ОБЗВОНЫ' НЕ НАЙДЕНА!")
-            print("🔍 Проверяем все текстовые каналы на сервере...")
-            for channel in member.guild.text_channels:
-                if channel.topic and (str(member.id) in channel.topic or (application_id and f"#{application_id}" in channel.topic)):
-                    channels_to_delete.append(channel)
-                    print(f"✅ Найден канал по topic: {channel.name}")
-        
-        # 4. Удаляем найденные каналы
-        print(f"\n🔍 Шаг 4: Удаление каналов (найдено {len(channels_to_delete)} шт.)")
-        for channel in channels_to_delete:
-            try:
-                await channel.delete()
-                print(f"✅ УДАЛЁН канал: {channel.name}")
-            except Exception as e:
-                print(f"❌ Ошибка удаления {channel.name}: {e}")
-        
-        # 5. Удаляем профиль
-        print("🔍 Шаг 5: Поиск профиля в категории PROFILES...")
+        print("🔍 Шаг 4: Поиск профиля...")
         for category in member.guild.categories:
             if category.name.startswith("📁 PROFILES"):
                 for channel in category.text_channels:
                     if channel.topic and str(member.id) in channel.topic:
                         await channel.delete()
-                        print(f"✅ Удалён профиль {channel.name}")
+                        print(f"✅ Удалён профиль {member.name}")
                         break
         
-        print("🔚 Обработка выхода пользователя завершена")
-                        
+        print("🔚 Обработка завершена")
+        
     except Exception as e:
-        print(f"❌ ОШИБКА: {e}")
+        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
         import traceback
         traceback.print_exc()
+
+@bot.command(name='test_category')
+async def test_category(ctx):
+    """Проверить категорию обзвонов"""
+    print("🔍 Проверка категории '📞 ОБЗВОНЫ'...")
+    for category in ctx.guild.categories:
+        print(f"Категория: {category.name}")
+        if category.name == "📞 ОБЗВОНЫ":
+            print(f"✅ Найдена! Каналов: {len(category.text_channels)}")
+            for channel in category.text_channels:
+                print(f"   - {channel.name}")
+                print(f"     topic: {channel.topic}")
+    await ctx.send("Проверка завершена, смотри консоль")
 
 async def main():
     async with bot:
