@@ -83,7 +83,7 @@ class TierSubmitView(PermanentView):
 
 
 class TierModerationView(discord.ui.View):
-    """Кнопки для модерации заявки на тир (с выбором тира)"""
+    """Кнопки для модерации заявки на тир"""
     
     def __init__(self, application_id: int):
         super().__init__(timeout=None)
@@ -111,6 +111,7 @@ class TierModerationView(discord.ui.View):
     
     async def process_approve(self, interaction: discord.Interaction, target_tier: str):
         """Обработка одобрения заявки с выдачей конкретного тира"""
+        # Делаем кнопки неактивными
         for child in self.children:
             child.disabled = True
         await interaction.message.edit(view=self)
@@ -147,7 +148,7 @@ class TierModerationView(discord.ui.View):
         user_id = app['user_id']
         
         new_role = None
-        role_mention = tier_info['name']  # По умолчанию просто название тира
+        role_mention = tier_info['name']
         
         if member:
             # Убираем все предыдущие роли тиров
@@ -175,7 +176,7 @@ class TierModerationView(discord.ui.View):
                 new_role = guild.get_role(int(new_role_id))
                 if new_role:
                     await member.add_roles(new_role)
-                    role_mention = new_role.mention  # Берём упоминание роли
+                    role_mention = new_role.mention
                     await interaction.followup.send(f"✅ Заявка одобрена! Выдана роль {new_role.mention}", ephemeral=True)
                 else:
                     await interaction.followup.send(f"✅ Заявка одобрена, но роль не найдена (ID: {new_role_id})", ephemeral=True)
@@ -188,17 +189,10 @@ class TierModerationView(discord.ui.View):
         try:
             user = await interaction.client.fetch_user(int(user_id))
             if user:
-                # Получаем название роли (без упоминания)
-                role_name = tier_info['name']
-                
-                # Если роль найдена, берём её название, иначе используем название тира
-                if new_role:
-                    role_name = new_role.name
-                
                 embed = discord.Embed(
                     title=f"{tier_info['emoji']} ПОЗДРАВЛЯЕМ!",
                     description=f"Ваша заявка на **{tier_info['name']}** одобрена!\n\n"
-                                f"Вам выдана роль **{role_name}**.\n\n"
+                                f"Вам выдана роль {role_mention}.\n\n"
                                 f"Поздравляем с повышением!",
                     color=0x00ff00
                 )
@@ -221,14 +215,14 @@ class TierModerationView(discord.ui.View):
                 embed.add_field(name="👤 Модератор", value=interaction.user.mention)
                 await log_channel.send(embed=embed)
         
-        # Удаляем для восстановления
-        tier_manager.delete_application_message(self.application_id)
-
         # Обновляем сообщение
         embed = interaction.message.embeds[0]
         embed.color = 0x00ff00
-        embed.add_field(name="✅ Статус", value=f"Одобрена модератором {interaction.user.mention} на {tier_info['name']}", inline=False)
+        embed.add_field(name="✅ Статус", value=f"Одобрена модератором {interaction.user.mention} na {tier_info['name']}", inline=False)
         await interaction.message.edit(embed=embed, view=self)
+        
+        # Удаляем запись о сообщении
+        tier_manager.delete_application_message(self.application_id)
 
 
 class TierRejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА"):
@@ -247,8 +241,6 @@ class TierRejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКА
         self.application_id = application_id
     
     async def on_submit(self, interaction: discord.Interaction):
-        from tier.manager import tier_manager
-        
         await interaction.response.defer(ephemeral=True)
         
         success = tier_manager.reject_application(
@@ -292,9 +284,6 @@ class TierRejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКА
                 embed.add_field(name="📝 Причина", value=self.reason.value)
                 await log_channel.send(embed=embed)
         
-        # Удаляем для восстановления
-        tier_manager.delete_application_message(self.application_id)
-
         # Обновляем сообщение
         message = interaction.message
         embed = message.embeds[0]
@@ -306,4 +295,8 @@ class TierRejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКА
             child.disabled = True
         
         await message.edit(embed=embed, view=None)
+        
+        # Удаляем запись о сообщении
+        tier_manager.delete_application_message(self.application_id)
+        
         await interaction.followup.send("❌ Заявка отклонена", ephemeral=True)

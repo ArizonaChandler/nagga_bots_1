@@ -212,15 +212,13 @@ class TierInitializer:
                     tier_manager.delete_application_message(msg_data['application_id'])
                     continue
                 
-                # Восстанавливаем view
-                view = TierModerationView(
-                    msg_data['application_id'],
-                    msg_data['target_tier']
-                )
+                # Восстанавливаем view - передаём ТОЛЬКО application_id
+                # target_tier будет определён из данных заявки в самом view
+                view = TierModerationView(msg_data['application_id'])
                 
                 await message.edit(view=view)
                 restored += 1
-                print(f"✅ Восстановлена заявка TIER {msg_data['application_id']} от {msg_data.get('nickname', 'Unknown')} в #{channel.name}")
+                print(f"✅ Восстановлена заявка TIER {msg_data['application_id']} от {msg_data.get('nickname', 'Unknown')} in #{channel.name}")
                 
             except Exception as e:
                 print(f"❌ Ошибка восстановления заявки TIER {msg_data['application_id']}: {e}")
