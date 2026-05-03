@@ -293,6 +293,18 @@ class Database:
                 )
             ''')
 
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS tier_application_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    application_id INTEGER NOT NULL,
+                    channel_id TEXT NOT NULL,
+                    message_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    FOREIGN KEY (application_id) REFERENCES tier_applications (id) ON DELETE CASCADE,
+                    UNIQUE(application_id)
+                )
+            ''')
+
             # Добавляем настройки по умолчанию
             cursor.execute('INSERT OR IGNORE INTO tier_settings (key, value) VALUES (?, ?)', 
                         ('tier_submit_channel', 'null'))
@@ -1419,6 +1431,65 @@ class Database:
         for key, value in settings.items():
             if value and value.lower() != 'null':
                 CONFIG[key] = value
+
+    def save_tier_application_message(self, application_id: int, channel_id: str, message_id: str, user_id: str):
+        """Сохранить ID сообщения с заявкой TIER"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO tier_application_messages (application_id, channel_id, message_id, user_id)
+                VALUES (?, ?, ?, ?)
+            ''', (application_id, channel_id, message_id, user_id))
+            conn.commit()
+            self.log_action(user_id, "SAVE_TIER_APP_MESSAGE", f"App {application_id}, Msg {message_id}")
+
+    def get_all_tier_application_messages(self):
+        """Получить все сохранённые сообщения с заявками TIER"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT tam.application_id, tam.channel_id, tam.message_id, tam.user_id,
+                    ta.status, ta.user_id as applicant_id, ta.nickname, ta.target_tier
+                FROM tier_application_messages tam
+                JOIN tier_applications ta ON tam.application_id = ta.id
+                WHERE ta.status = 'pending'
+            ''')
+            
+            columns = [description[0] for description in cursor.description]
+            rows = cursor.fetchall()
+            
+            return [dict(zip(columns, row)) for row in rows]
+
+    def delete_tier_application_message(self, application_id: int):
+        """Удалить запись о сообщении TIER"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM tier_application_messages WHERE application_id = ?', (application_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def reset_stuck_tier_applications(self):
+        """Сбросить все зависшие заявки TIER"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Находим заявки без записей в application_messages
+            cursor.execute('''
+                SELECT ta.id FROM tier_applications ta
+                LEFT JOIN tier_application_messages tam ON ta.id = tam.application_id
+                WHERE ta.status = 'pending' AND tam.id IS NULL
+            ''')
+            stuck_apps = cursor.fetchall()
+            
+            if not stuck_apps:
+                return 0
+            
+            # Удаляем зависшие заявки
+            for app in stuck_apps:
+                cursor.execute('DELETE FROM tier_applications WHERE id = ?', (app[0],))
+            
+            conn.commit()
+            return len(stuck_apps)
 
         # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ СТАТИСТИКИ =====
 

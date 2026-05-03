@@ -221,6 +221,9 @@ class TierModerationView(discord.ui.View):
                 embed.add_field(name="👤 Модератор", value=interaction.user.mention)
                 await log_channel.send(embed=embed)
         
+        # Удаляем для восстановления
+        tier_manager.delete_application_message(self.application_id)
+
         # Обновляем сообщение
         embed = interaction.message.embeds[0]
         embed.color = 0x00ff00
@@ -289,6 +292,9 @@ class TierRejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКА
                 embed.add_field(name="📝 Причина", value=self.reason.value)
                 await log_channel.send(embed=embed)
         
+        # Удаляем для восстановления
+        tier_manager.delete_application_message(self.application_id)
+
         # Обновляем сообщение
         message = interaction.message
         embed = message.embeds[0]

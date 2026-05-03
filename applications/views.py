@@ -230,6 +230,7 @@ class ApplicationModerationView(discord.ui.View):
         # В систему статистики
         if collector:
             collector.increment_accepted_applications()
+            print(f"📊 Статистика: принята заявка #{self.application_id}")
 
         # Отправляем финальное сообщение
         await interaction.followup.send("✅ Заявка принята, личный профиль создан", ephemeral=True)

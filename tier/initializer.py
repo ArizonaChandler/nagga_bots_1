@@ -19,6 +19,11 @@ class TierInitializer:
         """Инициализировать все каналы системы TIER"""
         logger.info("🔄 Инициализация системы TIER...")
         
+        # Очищаем зависшие заявки
+        stuck_count = tier_manager.reset_stuck_applications()
+        if stuck_count > 0:
+            logger.info(f"🧹 Очищено {stuck_count} зависших заявок TIER")
+        
         settings = tier_manager.get_settings()
         
         # 1. Канал с информацией о тирах (только embed, без кнопок)
@@ -29,6 +34,9 @@ class TierInitializer:
         
         # 3. Канал настроек
         await self._init_settings_channel()
+        
+        # 4. Восстанавливаем кнопки у активных заявок
+        await self._restore_application_buttons()
         
         logger.info("✅ Инициализация системы TIER завершена")
     
@@ -177,6 +185,47 @@ class TierInitializer:
             await channel.send(embed=embed, view=TierSettingsView())
             logger.info(f"✅ Создана панель настроек TIER в #{channel.name}")
 
+    async def _restore_application_buttons(self):
+        """Восстановить кнопки у всех активных заявок TIER"""
+        from tier.views import TierModerationView
+        
+        print("🔄 Восстановление кнопок заявок TIER...")
+        
+        messages = tier_manager.get_all_application_messages()
+        
+        if not messages:
+            print("📭 Нет активных заявок TIER для восстановления")
+            return
+        
+        restored = 0
+        for msg_data in messages:
+            try:
+                channel = self.bot.get_channel(int(msg_data['channel_id']))
+                if not channel:
+                    print(f"❌ Канал {msg_data['channel_id']} не найден")
+                    continue
+                
+                try:
+                    message = await channel.fetch_message(int(msg_data['message_id']))
+                except discord.NotFound:
+                    print(f"❌ Сообщение {msg_data['message_id']} не найдено")
+                    tier_manager.delete_application_message(msg_data['application_id'])
+                    continue
+                
+                # Восстанавливаем view
+                view = TierModerationView(
+                    msg_data['application_id'],
+                    msg_data['target_tier']
+                )
+                
+                await message.edit(view=view)
+                restored += 1
+                print(f"✅ Восстановлена заявка TIER {msg_data['application_id']} от {msg_data.get('nickname', 'Unknown')} в #{channel.name}")
+                
+            except Exception as e:
+                print(f"❌ Ошибка восстановления заявки TIER {msg_data['application_id']}: {e}")
+        
+        print(f"✅ Восстановлено {restored} заявок TIER")
 
 # Глобальный экземпляр
 initializer = None

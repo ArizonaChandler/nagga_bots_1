@@ -187,6 +187,7 @@ async def on_member_join(member):
     # В систему статистики
     if collector:
         collector.increment_new_members()
+        print(f"📊 Статистика: новый участник {member.name}")
 
     try:
         from applications.manager import app_manager
@@ -248,6 +249,7 @@ async def on_member_remove(member):
     try:
         if collector:
             collector.increment_left_members()
+            print(f"📊 Статистика: уход участника {member.name}")
         
         from applications.manager import app_manager
         from core.database import db

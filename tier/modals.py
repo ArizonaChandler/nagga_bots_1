@@ -85,4 +85,15 @@ class TierApplicationModal(discord.ui.Modal, title="🌟 ЗАЯВКА НА TIER"
                 embed.add_field(name="📝 Дополнительно", value=self.additional.value or "Нет", inline=False)
                 embed.set_footer(text=f"Заявка ID: {app_id}")
                 
-                await channel.send(embed=embed, view=TierModerationView(app_id))
+                # Отправляем сообщение с кнопками
+                sent_message = await channel.send(embed=embed, view=TierModerationView(app_id))
+                
+                # ===== СОХРАНЯЕМ ID СООБЩЕНИЯ ДЛЯ ВОССТАНОВЛЕНИЯ =====
+                tier_manager.save_application_message(
+                    application_id=app_id,
+                    channel_id=str(channel.id),
+                    message_id=str(sent_message.id),
+                    user_id=str(interaction.user.id)
+                )
+                print(f"✅ Заявка TIER отправлена и сохранена (message_id: {sent_message.id})")
+                # ===== КОНЕЦ СОХРАНЕНИЯ =====

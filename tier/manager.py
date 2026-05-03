@@ -87,4 +87,20 @@ class TierManager:
                 return tiers[idx + 1]
         return None
 
+    def save_application_message(self, application_id: int, channel_id: str, message_id: str, user_id: str):
+        """Сохранить ID сообщения с заявкой"""
+        return db.save_tier_application_message(application_id, channel_id, message_id, user_id)
+
+    def get_all_application_messages(self):
+        """Получить все сохранённые сообщения с заявками"""
+        return db.get_all_tier_application_messages()
+
+    def delete_application_message(self, application_id: int):
+        """Удалить запись о сообщении"""
+        return db.delete_tier_application_message(application_id)
+
+    def reset_stuck_applications(self):
+        """Сбросить все зависшие заявки (со статусом pending, но без активных сообщений)"""
+        return db.reset_stuck_tier_applications()
+
 tier_manager = TierManager()
