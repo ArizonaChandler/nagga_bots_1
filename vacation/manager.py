@@ -1,4 +1,5 @@
 """Менеджер для работы с системой отпусков"""
+import discord
 from core.database import db
 from core.config import CONFIG
 
