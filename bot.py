@@ -71,7 +71,7 @@ bot = commands.Bot(
 setup_info(bot)
 setup_settings(bot)
 setup_log(bot)
-setup_stats(bot)
+#setup_stats(bot)
 
 # Настройка команд авто-рекламы
 setup_ad_commands(bot)
