@@ -360,6 +360,8 @@ class Database:
                         ('stats_channel', 'null'))
 
             # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ ОТПУСКОВ =====
+
+            # Таблица заявок на отпуск
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS vacation_applications (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -368,6 +370,7 @@ class Database:
                     days INTEGER NOT NULL,
                     reason TEXT NOT NULL,
                     saved_roles TEXT,
+                    guild_id TEXT NOT NULL,
                     status TEXT DEFAULT 'pending',
                     until_date DATE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -377,6 +380,7 @@ class Database:
                 )
             ''')
 
+            # Таблица настроек
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS vacation_settings (
                     key TEXT PRIMARY KEY,
@@ -384,6 +388,7 @@ class Database:
                 )
             ''')
 
+            # Таблица активных отпусков (куда переносятся одобренные заявки)
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS vacation_active (
                     user_id TEXT PRIMARY KEY,
@@ -391,10 +396,12 @@ class Database:
                     reason TEXT NOT NULL,
                     until_date DATE NOT NULL,
                     saved_roles TEXT NOT NULL,
+                    guild_id TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
 
+            # Таблица для хранения ID сообщений (для восстановления кнопок)
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS vacation_application_messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,

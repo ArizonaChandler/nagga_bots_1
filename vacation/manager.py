@@ -1,5 +1,6 @@
 """Менеджер для работы с системой отпусков"""
 import discord
+import asyncio
 from datetime import datetime
 from core.database import db
 from core.config import CONFIG
@@ -44,9 +45,9 @@ class VacationManager:
         db.set_vacation_setting(key, value, updated_by)
         CONFIG[key] = value
     
-    def create_application(self, user_id: str, user_name: str, days: int, reason: str, roles: list) -> tuple:
+    def create_application(self, user_id: str, user_name: str, days: int, reason: str, roles: list, guild_id: str) -> tuple:
         """Создать заявку на отпуск"""
-        return db.create_vacation_application(user_id, user_name, days, reason, roles)
+        return db.create_vacation_application(user_id, user_name, days, reason, roles, guild_id)
     
     def get_pending_applications(self):
         """Получить ожидающие заявки"""
@@ -80,6 +81,18 @@ class VacationManager:
         
         print(f"🔍 Данные отпуска: {vacation}")
         
+        # Получаем ID сервера, с которого были сохранены роли
+        target_guild_id = vacation.get('guild_id')
+        if not target_guild_id:
+            return False, "❌ Не указан ID сервера для восстановления ролей"
+        
+        # Находим нужный сервер
+        guild = bot.get_guild(int(target_guild_id))
+        if not guild:
+            return False, f"❌ Сервер с ID {target_guild_id} не найден"
+        
+        print(f"✅ Найден сервер: {guild.name}")
+        
         # Отправляем ЛС пользователю
         try:
             user = await bot.fetch_user(int(user_id))
@@ -93,25 +106,17 @@ class VacationManager:
         except Exception as e:
             print(f"❌ Ошибка отправки ЛС: {e}")
         
-        # Находим сервер и пользователя
-        guild = None
-        for g in bot.guilds:
-            member = g.get_member(int(user_id))
-            if member:
-                guild = g
-                break
-        
-        if not guild:
-            return False, "❌ Сервер не найден"
-        
-        # ПРИНУДИТЕЛЬНО ОБНОВЛЯЕМ КЭШ РОЛЕЙ
-        await guild.chunk()  # загружаем всех участников
-        for role in guild.roles:
-            print(f"🎭 Доступная роль: {role.name} (ID: {role.id})")
-        
+        # Получаем участника
         member = guild.get_member(int(user_id))
         if not member:
-            return False, "❌ Пользователь не найден на сервере"
+            try:
+                member = await guild.fetch_member(int(user_id))
+            except:
+                return False, "❌ Пользователь не найден на сервере"
+        
+        # Показываем все доступные роли на сервере
+        for role in guild.roles:
+            print(f"🎭 Доступная роль: {role.name} (ID: {role.id})")
         
         # Восстанавливаем сохранённые роли
         saved_roles_str = vacation.get('saved_roles', '')
@@ -123,20 +128,11 @@ class VacationManager:
             role_ids = [rid.strip() for rid in saved_roles_str.split(',') if rid.strip()]
             print(f"🎭 ID ролей для восстановления: {role_ids}")
             
-            # Показываем все доступные роли на сервере
             all_role_ids = [str(role.id) for role in guild.roles]
             print(f"🎭 Все ID ролей на сервере: {all_role_ids}")
             
             for rid in role_ids:
-                # Проверяем, существует ли роль в кэше
                 role = guild.get_role(int(rid))
-                
-                if not role:
-                    # Пробуем найти роль среди всех ролей сервера
-                    for r in guild.roles:
-                        if str(r.id) == rid:
-                            role = r
-                            break
                 
                 if not role:
                     failed_roles.append(f"ID:{rid} (не найдена)")
@@ -145,7 +141,6 @@ class VacationManager:
                 
                 print(f"🎭 Найдена роль: {role.name} (ID: {role.id})")
                 
-                # Проверяем, может ли бот управлять этой ролью
                 if role.position >= guild.me.top_role.position:
                     skipped_roles.append(role.name)
                     print(f"⚠️ Роль {role.name} выше бота, пропускаем")
@@ -162,8 +157,6 @@ class VacationManager:
                 except Exception as e:
                     failed_roles.append(role.name)
                     print(f"❌ Ошибка восстановления {role.name}: {e}")
-        else:
-            print(f"⚠️ Нет сохранённых ролей для восстановления")
         
         # Снимаем роль отпуска
         vacation_role_id = CONFIG.get('vacation_role')
