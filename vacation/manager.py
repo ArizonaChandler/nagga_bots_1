@@ -8,8 +8,15 @@ class VacationManager:
     
     def get_settings(self):
         """Получить все настройки из CONFIG"""
+        max_days = CONFIG.get('vacation_max_days', 30)
+        # Преобразуем в число
+        if isinstance(max_days, str):
+            try:
+                max_days = int(max_days)
+            except:
+                max_days = 30
+        
         approve_roles = CONFIG.get('vacation_approve_roles', [])
-        # Если это строка, пробуем распарсить JSON
         if isinstance(approve_roles, str):
             try:
                 import json
@@ -24,7 +31,7 @@ class VacationManager:
             'vacation_settings_channel': CONFIG.get('vacation_settings_channel'),
             'vacation_approve_roles': approve_roles,
             'vacation_role': CONFIG.get('vacation_role'),
-            'vacation_max_days': CONFIG.get('vacation_max_days', 30),
+            'vacation_max_days': max_days,
         }
     
     def save_setting(self, key: str, value, updated_by: str = None):

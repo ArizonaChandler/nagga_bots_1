@@ -25,11 +25,20 @@ class VacationModal(discord.ui.Modal, title="🏖️ ЗАЯВКА НА ОТПУ�
     
     async def on_submit(self, interaction: discord.Interaction):
         from vacation.views import VacationModerationView
+        from datetime import datetime
         
         print(f"🔍 Начало обработки заявки на отпуск от {interaction.user}")
         
         try:
             max_days = CONFIG.get('vacation_max_days', 30)
+            
+            # Преобразуем max_days в число, если оно строка
+            if isinstance(max_days, str):
+                try:
+                    max_days = int(max_days)
+                except:
+                    max_days = 30
+            
             user_id = str(interaction.user.id)
             
             # Проверяем формат дней
@@ -133,6 +142,7 @@ class VacationModal(discord.ui.Modal, title="🏖️ ЗАЯВКА НА ОТПУ�
             
         except Exception as e:
             print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
+            import traceback
             traceback.print_exc()
             try:
                 await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
