@@ -359,6 +359,58 @@ class Database:
             cursor.execute('INSERT OR IGNORE INTO stats_settings (key, value) VALUES (?, ?)', 
                         ('stats_channel', 'null'))
 
+            # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ ОТПУСКОВ =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS vacation_applications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    user_name TEXT NOT NULL,
+                    days INTEGER NOT NULL,
+                    reason TEXT NOT NULL,
+                    saved_roles TEXT,
+                    status TEXT DEFAULT 'pending',
+                    until_date DATE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    reviewed_by TEXT,
+                    reviewed_at TIMESTAMP,
+                    reject_reason TEXT
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS vacation_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS vacation_active (
+                    user_id TEXT PRIMARY KEY,
+                    user_name TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    until_date DATE NOT NULL,
+                    saved_roles TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS vacation_application_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    application_id INTEGER NOT NULL,
+                    channel_id TEXT NOT NULL,
+                    message_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    FOREIGN KEY (application_id) REFERENCES vacation_applications (id) ON DELETE CASCADE,
+                    UNIQUE(application_id)
+                )
+            ''')
+
+            # Настройки по умолчанию
+            cursor.execute('INSERT OR IGNORE INTO vacation_settings (key, value) VALUES (?, ?)', 
+                        ('vacation_max_days', '30'))
+
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
     def add_user(self, discord_id: str, added_by: str):
         with self.get_connection() as conn:
@@ -1563,5 +1615,160 @@ class Database:
         msk_tz = pytz.timezone('Europe/Moscow')
         today = datetime.now(msk_tz).date().isoformat()
         return self.get_stats_for_date(today)
+
+        # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ОТПУСКОВ =====
+    
+    def get_vacation_setting(self, key: str) -> str:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT value FROM vacation_settings WHERE key = ?', (key,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+    
+    def set_vacation_setting(self, key: str, value: str, updated_by: str = None):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('INSERT OR REPLACE INTO vacation_settings (key, value) VALUES (?, ?)', (key, value))
+            conn.commit()
+            if updated_by:
+                self.log_action(updated_by, f"SET_VACATION_SETTING", f"{key}={value}")
+    
+    def create_vacation_application(self, user_id: str, user_name: str, days: int, reason: str, roles: list) -> tuple:
+        from datetime import datetime, timedelta
+        import pytz
+        msk_tz = pytz.timezone('Europe/Moscow')
+        until_date = (datetime.now(msk_tz) + timedelta(days=days)).date().isoformat()
+        
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO vacation_applications (user_id, user_name, days, reason, saved_roles, until_date)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (user_id, user_name, days, reason, ','.join(roles) if roles else '', until_date))
+            conn.commit()
+            return cursor.lastrowid, None
+    
+    def get_pending_vacation_applications(self):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM vacation_applications WHERE status = "pending" ORDER BY created_at')
+            columns = [description[0] for description in cursor.description]
+            rows = cursor.fetchall()
+            return [dict(zip(columns, row)) for row in rows]
+    
+    def get_vacation_application(self, app_id: int):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM vacation_applications WHERE id = ?', (app_id,))
+            columns = [description[0] for description in cursor.description]
+            row = cursor.fetchone()
+            return dict(zip(columns, row)) if row else None
+    
+    def approve_vacation_application(self, app_id: int, reviewer_id: str) -> bool:
+        from datetime import datetime
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT user_id, user_name, reason, until_date, saved_roles FROM vacation_applications WHERE id = ? AND status = "pending"', (app_id,))
+            app = cursor.fetchone()
+            if not app:
+                return False
+            
+            user_id, user_name, reason, until_date, saved_roles = app
+            
+            # Добавляем в активные отпуска
+            cursor.execute('''
+                INSERT OR REPLACE INTO vacation_active (user_id, user_name, reason, until_date, saved_roles)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, user_name, reason, until_date, saved_roles))
+            
+            # Обновляем статус заявки
+            cursor.execute('''
+                UPDATE vacation_applications 
+                SET status = "approved", reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (reviewer_id, app_id))
+            conn.commit()
+            return True
+    
+    def reject_vacation_application(self, app_id: int, reviewer_id: str, reason: str) -> bool:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE vacation_applications 
+                SET status = "rejected", reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, reject_reason = ?
+                WHERE id = ?
+            ''', (reviewer_id, reason, app_id))
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def get_user_vacation(self, user_id: str):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM vacation_active WHERE user_id = ?', (user_id,))
+            columns = [description[0] for description in cursor.description]
+            row = cursor.fetchone()
+            return dict(zip(columns, row)) if row else None
+    
+    def get_all_vacations(self):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM vacation_active ORDER BY until_date')
+            columns = [description[0] for description in cursor.description]
+            rows = cursor.fetchall()
+            return [dict(zip(columns, row)) for row in rows]
+    
+    def return_from_vacation(self, user_id: str) -> bool:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM vacation_active WHERE user_id = ?', (user_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def check_expired_vacations(self):
+        from datetime import datetime
+        import pytz
+        msk_tz = pytz.timezone('Europe/Moscow')
+        today = datetime.now(msk_tz).date().isoformat()
+        
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT user_id, user_name FROM vacation_active WHERE until_date < ?', (today,))
+            expired = cursor.fetchall()
+            
+            for user_id, user_name in expired:
+                cursor.execute('DELETE FROM vacation_active WHERE user_id = ?', (user_id,))
+            
+            conn.commit()
+            return expired
+    
+    def save_vacation_application_message(self, application_id: int, channel_id: str, message_id: str, user_id: str):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO vacation_application_messages (application_id, channel_id, message_id, user_id)
+                VALUES (?, ?, ?, ?)
+            ''', (application_id, channel_id, message_id, user_id))
+            conn.commit()
+    
+    def get_all_vacation_application_messages(self):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT vm.application_id, vm.channel_id, vm.message_id, vm.user_id,
+                       va.status, va.user_id as applicant_id, va.user_name
+                FROM vacation_application_messages vm
+                JOIN vacation_applications va ON vm.application_id = va.id
+                WHERE va.status = 'pending'
+            ''')
+            columns = [description[0] for description in cursor.description]
+            rows = cursor.fetchall()
+            return [dict(zip(columns, row)) for row in rows]
+    
+    def delete_vacation_application_message(self, application_id: int):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM vacation_application_messages WHERE application_id = ?', (application_id,))
+            conn.commit()
+            return cursor.rowcount > 0
 
 db = Database()

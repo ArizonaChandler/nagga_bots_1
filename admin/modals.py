@@ -1504,3 +1504,77 @@ class SetStatsSettingsChannelModal(discord.ui.Modal, title="📊 КАНАЛ НА
             
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
+class SetVacationSettingsChannelModal(discord.ui.Modal, title="🏖️ КАНАЛ НАСТРОЕК ОТПУСКОВ"):
+    def __init__(self, guild=None):
+        super().__init__()
+        self.guild = guild
+    
+    channel_id = discord.ui.TextInput(
+        label="ID канала для настроек отпусков",
+        placeholder="ID канала где будут постоянные кнопки",
+        max_length=20,
+        required=True
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        from core.config import CONFIG, save_config
+        from core.database import db
+        from vacation.settings_view import VacationSettingsView
+        
+        try:
+            server_id = CONFIG.get('server_id')
+            if not server_id:
+                await interaction.response.send_message(
+                    "❌ Сначала установите ID сервера в Глобальных настройках",
+                    ephemeral=True
+                )
+                return
+            
+            guild = interaction.client.get_guild(int(server_id))
+            if not guild:
+                await interaction.response.send_message(
+                    f"❌ Сервер с ID {server_id} не найден",
+                    ephemeral=True
+                )
+                return
+            
+            channel = guild.get_channel(int(self.channel_id.value))
+            if not channel:
+                await interaction.response.send_message(
+                    f"❌ Канал {self.channel_id.value} не найден",
+                    ephemeral=True
+                )
+                return
+            
+            CONFIG['vacation_settings_channel'] = self.channel_id.value
+            db.set_setting('vacation_settings_channel', self.channel_id.value, str(interaction.user.id))
+            save_config(str(interaction.user.id))
+            
+            # Ищем существующее сообщение
+            message_exists = False
+            async for msg in channel.history(limit=50):
+                if msg.author == interaction.client.user and msg.embeds:
+                    if msg.embeds and "НАСТРОЙКИ ОТПУСКОВ" in msg.embeds[0].title:
+                        await msg.edit(view=VacationSettingsView())
+                        message_exists = True
+                        await interaction.response.send_message(
+                            f"✅ Панель настроек отпусков обновлена в {channel.mention}",
+                            ephemeral=True
+                        )
+                        break
+            
+            if not message_exists:
+                embed = discord.Embed(
+                    title="⚙️ **НАСТРОЙКИ ОТПУСКОВ**",
+                    description="Настройка системы отпусков",
+                    color=0x00ff00
+                )
+                await channel.send(embed=embed, view=VacationSettingsView())
+                await interaction.response.send_message(
+                    f"✅ Канал настроек отпусков создан: {channel.mention}",
+                    ephemeral=True
+                )
+            
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)

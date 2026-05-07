@@ -44,6 +44,9 @@ from tier import setup_tier
 # Импорт системы статистики
 from server_stats.global_collector import set_collector, get_collector
 
+# Импорт системы отпусков
+from vacation import setup_vacation
+
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -179,6 +182,14 @@ async def on_ready():
             
     except Exception as e:
         print(f"❌ Общая ошибка статистики: {e}")
+        traceback.print_exc()
+
+    # Инициализация системы отпусков
+    try:
+        print("🏖️ Инициализация системы отпусков...")
+        await setup_vacation(bot)
+    except Exception as e:
+        print(f"❌ Ошибка инициализации отпусков: {e}")
         traceback.print_exc()
     
     await bot.change_presence(activity=discord.Activity(

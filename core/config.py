@@ -50,6 +50,13 @@ CONFIG = {
     'stats_channel': None,
     'stats_backup_enabled': True,
     'stats_settings_channel': None,
+    'vacation_public_channel': None,
+    'vacation_applications_channel': None,
+    'vacation_log_channel': None,
+    'vacation_settings_channel': None,
+    'vacation_approve_roles': [],
+    'vacation_role': None,
+    'vacation_max_days': 30,
 }
 
 # Создаём экземпляр БД
