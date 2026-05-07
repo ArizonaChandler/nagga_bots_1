@@ -383,7 +383,18 @@ async def check_role(ctx, role_id: int):
     else:
         await ctx.send(f"❌ Роль с ID {role_id} не найдена")
 
-
+@bot.command(name='check_role_cache')
+async def check_role_cache(ctx, role_id: int):
+    """Проверить, видит ли бот роль в кэше"""
+    role = ctx.guild.get_role(role_id)
+    if role:
+        await ctx.send(f"✅ Роль найдена в кэше: {role.name}")
+    else:
+        await ctx.send(f"❌ Роль с ID {role_id} НЕ найдена в кэше")
+        
+        # Показываем все роли
+        roles_list = "\n".join([f"• {r.name} (ID: {r.id})" for r in ctx.guild.roles if not r.is_default()])
+        await ctx.send(f"📋 Доступные роли в кэше:\n{roles_list}")
 
 
 async def main():
