@@ -79,19 +79,17 @@ class VacationManager:
             return False, "❌ Вы не в отпуске"
         
         print(f"🔍 Данные отпуска: {vacation}")
-        print(f"🎭 Сохранённые роли (raw): {vacation.get('saved_roles', '')}")
         
-        # Отправляем ЛС пользователю
+        # Отправляем ЛС пользователю (предварительное)
         try:
             user = await bot.fetch_user(int(user_id))
             if user:
                 embed = discord.Embed(
-                    title="✅ ВОЗВРАТ ИЗ ОТПУСКА",
-                    description="Вы вернулись из отпуска!",
-                    color=0x00ff00
+                    title="🔄 ВОЗВРАТ ИЗ ОТПУСКА",
+                    description="Идёт восстановление ваших ролей...",
+                    color=0xffa500
                 )
                 await user.send(embed=embed)
-                print(f"✅ ЛС отправлено пользователю {user_id}")
         except Exception as e:
             print(f"❌ Ошибка отправки ЛС: {e}")
         
@@ -103,66 +101,91 @@ class VacationManager:
                 guild = g
                 break
         
-        if guild:
-            member = guild.get_member(int(user_id))
-            if not member:
-                return False, "❌ Пользователь не найден на сервере"
+        if not guild:
+            return False, "❌ Сервер не найден"
+        
+        member = guild.get_member(int(user_id))
+        if not member:
+            return False, "❌ Пользователь не найден на сервере"
+        
+        # Восстанавливаем сохранённые роли
+        saved_roles_str = vacation.get('saved_roles', '')
+        restored_roles = []
+        failed_roles = []
+        skipped_roles = []  # роли, которые выше бота
+        
+        if saved_roles_str:
+            role_ids = [rid.strip() for rid in saved_roles_str.split(',') if rid.strip()]
+            print(f"🎭 ID ролей для восстановления: {role_ids}")
             
-            # Восстанавливаем сохранённые роли
-            saved_roles_str = vacation.get('saved_roles', '')
-            failed_roles = []
-            restored_roles = []
-            
-            if saved_roles_str:
-                # Разбираем строку с ролями
-                role_ids = [rid.strip() for rid in saved_roles_str.split(',') if rid.strip()]
-                print(f"🎭 ID ролей для восстановления: {role_ids}")
+            for rid in role_ids:
+                role = guild.get_role(int(rid))
+                if not role:
+                    failed_roles.append(f"ID:{rid} (не найдена)")
+                    print(f"❌ Роль с ID {rid} не найдена")
+                    continue
                 
-                for rid in role_ids:
-                    role = guild.get_role(int(rid))
-                    if role:
-                        print(f"🎭 Найдена роль: {role.name} (ID: {role.id}, позиция: {role.position})")
-                        try:
-                            await member.add_roles(role)
-                            restored_roles.append(role.name)
-                            print(f"✅ Восстановлена роль: {role.name}")
-                        except discord.Forbidden:
-                            failed_roles.append(role.name)
-                            print(f"❌ Нет прав для восстановления роли: {role.name}")
-                        except Exception as e:
-                            failed_roles.append(role.name)
-                            print(f"❌ Ошибка восстановления роли {role.name}: {e}")
-                    else:
-                        print(f"❌ Роль с ID {rid} не найдена на сервере")
-                        failed_roles.append(f"ID:{rid}")
-            else:
-                print(f"⚠️ Нет сохранённых ролей для восстановления")
-            
-            # Снимаем роль отпуска
-            vacation_role_id = CONFIG.get('vacation_role')
-            if vacation_role_id:
-                vacation_role = guild.get_role(int(vacation_role_id))
-                if vacation_role and vacation_role in member.roles:
-                    try:
-                        await member.remove_roles(vacation_role)
-                        print(f"✅ Снята роль отпуска")
-                    except Exception as e:
-                        print(f"❌ Ошибка снятия роли отпуска: {e}")
-            
-            # Отправляем результат пользователю в ЛС
-            if failed_roles:
+                # Проверяем, может ли бот управлять этой ролью
+                if role.position >= guild.me.top_role.position:
+                    skipped_roles.append(role.name)
+                    print(f"⚠️ Роль {role.name} выше бота, пропускаем")
+                    continue
+                
                 try:
-                    user = await bot.fetch_user(int(user_id))
-                    if user:
-                        embed = discord.Embed(
-                            title="⚠️ НЕКОТОРЫЕ РОЛИ НЕ ВОССТАНОВЛЕНЫ",
-                            description=f"Не удалось восстановить роли: {', '.join(failed_roles)}\n\n"
-                                        f"Обратитесь к администратору для восстановления ролей вручную.",
-                            color=0xffa500
-                        )
-                        await user.send(embed=embed)
-                except:
-                    pass
+                    await member.add_roles(role)
+                    restored_roles.append(role.name)
+                    print(f"✅ Восстановлена роль: {role.name}")
+                    await asyncio.sleep(0.5)  # небольшая задержка
+                except discord.Forbidden:
+                    failed_roles.append(role.name)
+                    print(f"❌ Нет прав для роли: {role.name}")
+                except Exception as e:
+                    failed_roles.append(role.name)
+                    print(f"❌ Ошибка восстановления {role.name}: {e}")
+        
+        # Снимаем роль отпуска
+        vacation_role_id = CONFIG.get('vacation_role')
+        if vacation_role_id:
+            vacation_role = guild.get_role(int(vacation_role_id))
+            if vacation_role and vacation_role in member.roles:
+                try:
+                    await member.remove_roles(vacation_role)
+                    print(f"✅ Снята роль отпуска")
+                except Exception as e:
+                    print(f"❌ Ошибка снятия роли отпуска: {e}")
+        
+        # Удаляем из БД (в любом случае, чтобы отпуск закрылся)
+        db.return_from_vacation(user_id)
+        
+        # Формируем итоговое сообщение
+        result_msg = "✅ Вы вернулись из отпуска!\n\n"
+        
+        if restored_roles:
+            result_msg += f"✅ Восстановлены роли: {', '.join(restored_roles)}\n"
+        else:
+            result_msg += f"⚠️ Не удалось восстановить ни одной роли\n"
+        
+        if skipped_roles:
+            result_msg += f"⚠️ Пропущены (выше бота): {', '.join(skipped_roles)}\n"
+        
+        if failed_roles:
+            result_msg += f"❌ Ошибки: {', '.join(failed_roles)}\n"
+        
+        # Отправляем результат пользователю в ЛС
+        try:
+            user = await bot.fetch_user(int(user_id))
+            if user:
+                color = 0x00ff00 if restored_roles else 0xffa500
+                embed = discord.Embed(
+                    title="✅ ВОЗВРАТ ИЗ ОТПУСКА" if restored_roles else "⚠️ ВОЗВРАТ ИЗ ОТПУСКА (С ОШИБКАМИ)",
+                    description=result_msg,
+                    color=color
+                )
+                if skipped_roles:
+                    embed.add_field(name="💡 Решение", value="Попросите администратора поднять роль бота выше этих ролей", inline=False)
+                await user.send(embed=embed)
+        except Exception as e:
+            print(f"❌ Ошибка отправки финального ЛС: {e}")
         
         # Логируем в канал логов
         log_channel_id = CONFIG.get('vacation_log_channel')
@@ -172,21 +195,13 @@ class VacationManager:
                 embed = discord.Embed(
                     title="✅ ВОЗВРАТ ИЗ ОТПУСКА",
                     description=f"Пользователь <@{user_id}> вернулся из отпуска",
-                    color=0x00ff00,
+                    color=0x00ff00 if restored_roles else 0xffa500,
                     timestamp=datetime.now()
                 )
-                status_msg = f"Восстановлено: {', '.join(restored_roles) if restored_roles else 'нет'}"
-                if failed_roles:
-                    status_msg += f"\n⚠️ Не удалось: {', '.join(failed_roles)}"
-                embed.add_field(name="📝 Результат", value=status_msg, inline=False)
+                embed.add_field(name="📝 Результат", value=result_msg, inline=False)
                 await log_channel.send(embed=embed)
         
-        # Удаляем из БД
-        db.return_from_vacation(user_id)
-        
-        if failed_roles:
-            return True, f"✅ Вы вернулись из отпуска!\n⚠️ Не удалось восстановить роли: {', '.join(failed_roles)}"
-        return True, "✅ Вы вернулись из отпуска! Все роли восстановлены."
+        return True, result_msg
     
     def check_expired_vacations(self):
         """Проверить просроченные отпуска"""

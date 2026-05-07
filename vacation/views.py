@@ -160,10 +160,11 @@ class VacationModerationView(discord.ui.View):
         except Exception as e:
             print(f"❌ Ошибка отправки ЛС: {e}")
         
-        # Выдаём роль отпуска и пытаемся снять другие роли
+        # Выдаём роль отпуска и снимаем другие роли
         guild = interaction.guild
         member = guild.get_member(int(app['user_id']))
         
+        # Получаем ID роли отпуска из CONFIG
         vacation_role_id = CONFIG.get('vacation_role')
         print(f"🎭 ID роли отпуска из CONFIG: {vacation_role_id}")
         
@@ -171,9 +172,22 @@ class VacationModerationView(discord.ui.View):
             vacation_role = guild.get_role(int(vacation_role_id))
             
             if vacation_role:
-                # Пытаемся снять все роли (кроме @everyone)
-                roles_to_remove = [r for r in member.roles if not r.is_default() and r != vacation_role]
-                print(f"👥 Попытка снять роли: {[r.name for r in roles_to_remove]}")
+                # Снимаем только те роли, которые ниже роли бота
+                roles_to_remove = []
+                skipped_roles = []
+                
+                for role in member.roles:
+                    if role.is_default():
+                        continue
+                    if role == vacation_role:
+                        continue
+                    if role.position >= guild.me.top_role.position:
+                        skipped_roles.append(role.name)
+                        print(f"⚠️ Роль {role.name} выше бота, не снимаем")
+                        continue
+                    roles_to_remove.append(role)
+                
+                print(f"👥 Снимаем роли: {[r.name for r in roles_to_remove]}")
                 
                 removed_count = 0
                 failed_roles = []
@@ -190,13 +204,16 @@ class VacationModerationView(discord.ui.View):
                         failed_roles.append(role.name)
                         print(f"   ❌ Ошибка снятия роли {role.name}: {e}")
                 
-                if failed_roles:
-                    print(f"⚠️ Не удалось снять роли: {', '.join(failed_roles)}")
+                if skipped_roles:
+                    print(f"⚠️ Пропущены роли (выше бота): {', '.join(skipped_roles)}")
                     await interaction.followup.send(
-                        f"⚠️ Не удалось снять некоторые роли: {', '.join(failed_roles)}\n"
-                        f"Роль отпуска выдана, но некоторые роли остались.",
+                        f"⚠️ Некоторые роли не были сняты (они выше бота): {', '.join(skipped_roles)}\n"
+                        f"Роль отпуска выдана.",
                         ephemeral=True
                     )
+                
+                if failed_roles:
+                    print(f"⚠️ Не удалось снять роли: {', '.join(failed_roles)}")
                 
                 # Выдаём роль отпуска
                 try:
