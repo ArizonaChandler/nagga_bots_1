@@ -88,17 +88,30 @@ class VacationManager:
         
         if guild:
             member = guild.get_member(int(user_id))
-            roles_to_restore = vacation.get('saved_roles', [])
-            if roles_to_restore:
-                roles = [guild.get_role(int(r)) for r in roles_to_restore if guild.get_role(int(r))]
-                if roles:
-                    await member.add_roles(*roles)
+            if not member:
+                return False, "❌ Пользователь не найден на сервере"
             
+            # Восстанавливаем сохранённые роли
+            saved_roles_str = vacation.get('saved_roles', '')
+            if saved_roles_str:
+                role_ids = saved_roles_str.split(',') if isinstance(saved_roles_str, str) else saved_roles_str
+                roles_to_restore = []
+                for rid in role_ids:
+                    if rid:
+                        role = guild.get_role(int(rid))
+                        if role:
+                            roles_to_restore.append(role)
+                if roles_to_restore:
+                    await member.add_roles(*roles_to_restore)
+                    print(f"✅ Восстановлены роли: {[r.name for r in roles_to_restore]}")
+            
+            # Снимаем роль отпуска
             vacation_role_id = CONFIG.get('vacation_role')
             if vacation_role_id:
                 vacation_role = guild.get_role(int(vacation_role_id))
                 if vacation_role and vacation_role in member.roles:
                     await member.remove_roles(vacation_role)
+                    print(f"✅ Снята роль отпуска")
         
         # Удаляем из БД
         db.return_from_vacation(user_id)

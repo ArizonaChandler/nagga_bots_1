@@ -6,6 +6,7 @@ from vacation.base import PermanentView
 from vacation.modals import VacationModal
 from vacation.manager import vacation_manager
 from core.config import CONFIG
+import traceback
 
 MSK_TZ = pytz.timezone('Europe/Moscow')
 
@@ -80,17 +81,30 @@ class VacationPublicView(PermanentView):
     )
     async def back_vacation(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Вернуться из отпуска"""
-        success, msg = await vacation_manager.return_from_vacation(
-            str(interaction.user.id),
-            interaction.client
-        )
+        print(f"🔍 Нажата кнопка 'Вернуться' от {interaction.user}")
         
-        if success:
-            # Обновляем embed
-            settings = vacation_manager.get_settings()
-            await update_vacation_embed(interaction.client, settings.get('vacation_public_channel'))
+        # Отвечаем сразу, чтобы не было ошибки взаимодействия
+        await interaction.response.defer(ephemeral=True)
         
-        await interaction.response.send_message(msg, ephemeral=True)
+        try:
+            success, msg = await vacation_manager.return_from_vacation(
+                str(interaction.user.id),
+                interaction.client
+            )
+            
+            if success:
+                # Обновляем embed в публичном канале
+                settings = vacation_manager.get_settings()
+                public_channel_id = settings.get('vacation_public_channel')
+                if public_channel_id:
+                    await update_vacation_embed(interaction.client, public_channel_id)
+            
+            await interaction.followup.send(msg, ephemeral=True)
+            
+        except Exception as e:
+            print(f"❌ Ошибка при возврате из отпуска: {e}")
+            traceback.print_exc()
+            await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
 
 
 class VacationModerationView(discord.ui.View):
@@ -133,15 +147,23 @@ class VacationModerationView(discord.ui.View):
         member = guild.get_member(int(app['user_id']))
         
         vacation_role_id = CONFIG.get('vacation_role')
+        print(f"🎭 Роль отпуска ID: {vacation_role_id}")
+        
         if vacation_role_id and member:
             vacation_role = guild.get_role(int(vacation_role_id))
             if vacation_role:
-                # Снимаем все роли
+                # Снимаем все роли (кроме @everyone)
                 roles_to_remove = [r for r in member.roles if not r.is_default()]
+                print(f"👥 Снимаем роли: {[r.name for r in roles_to_remove]}")
                 for role in roles_to_remove:
                     await member.remove_roles(role)
                 # Выдаём роль отпуска
                 await member.add_roles(vacation_role)
+                print(f"✅ Выдана роль отпуска: {vacation_role.name}")
+            else:
+                print(f"❌ Роль отпуска с ID {vacation_role_id} не найдена на сервере")
+        else:
+            print(f"❌ vacation_role_id={vacation_role_id}, member={member}")
         
         # Логируем
         log_channel_id = CONFIG.get('vacation_log_channel')
@@ -158,17 +180,19 @@ class VacationModerationView(discord.ui.View):
                 embed.add_field(name="📝 Причина", value=app['reason'])
                 await log_channel.send(embed=embed)
         
-        # Обновляем embed
+        # Обновляем embed в публичном канале
         settings = vacation_manager.get_settings()
-        await update_vacation_embed(interaction.client, settings.get('vacation_public_channel'))
+        public_channel_id = settings.get('vacation_public_channel')
+        if public_channel_id:
+            await update_vacation_embed(interaction.client, public_channel_id)
         
-        # Обновляем сообщение
+        # Обновляем сообщение с заявкой
         embed = interaction.message.embeds[0]
         embed.color = 0x00ff00
         embed.add_field(name="✅ Статус", value=f"Одобрена модератором {interaction.user.mention}", inline=False)
         await interaction.message.edit(embed=embed, view=self)
         
-        # Удаляем запись
+        # Удаляем запись о сообщении
         vacation_manager.delete_application_message(self.application_id)
         
         await interaction.followup.send("✅ Заявка одобрена", ephemeral=True)
