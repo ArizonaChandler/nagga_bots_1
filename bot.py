@@ -42,8 +42,8 @@ from afk import setup_afk
 from tier import setup_tier
 
 # Импорт системы статистики
-from server_stats import setup_stats, set_collector
-from server_stats.stat_collector import collector
+from server_stats import setup_stats as setup_stats_panel
+from server_stats.global_collector import set_collector, get_collector
 
 import discord
 from discord.ext import commands
@@ -160,21 +160,25 @@ async def on_ready():
         print(f"❌ Ошибка инициализации панели статистики: {e}")
         traceback.print_exc()
     
-    # Инициализация системы статистики
+    # Инициализация панели настроек статистики
     try:
-        from server_stats import setup_stats
-        from server_stats.global_collector import set_collector
-        
         print("📊 Инициализация панели настроек статистики...")
-        await setup_stats(bot)
-        
-        # Устанавливаем глобальный collector
+        await setup_stats_panel(bot)
+    except Exception as e:
+        print(f"❌ Ошибка инициализации панели статистики: {e}")
+        traceback.print_exc()
+    
+    # Инициализация сборщика статистики
+    try:
         print("📊 Инициализация сборщика статистики...")
         set_collector(bot)
-        await collector.start()
-        
+        collector = get_collector()
+        if collector:
+            await collector.start()
+        else:
+            print("❌ collector не инициализирован")
     except Exception as e:
-        print(f"❌ Ошибка инициализации статистики: {e}")
+        print(f"❌ Ошибка инициализации сборщика статистики: {e}")
         traceback.print_exc()
     
     await bot.change_presence(activity=discord.Activity(
