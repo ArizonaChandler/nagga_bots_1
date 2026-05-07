@@ -51,7 +51,7 @@ class VacationManager:
         """Получить всех в отпуске"""
         return db.get_all_vacations()
     
-    def return_from_vacation(self, user_id: str, bot) -> tuple:
+    async def return_from_vacation(self, user_id: str, bot) -> tuple:
         """Вернуть пользователя из отпуска"""
         vacation = db.get_user_vacation(user_id)
         if not vacation:
