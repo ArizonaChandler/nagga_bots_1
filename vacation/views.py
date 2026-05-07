@@ -141,6 +141,23 @@ class VacationModerationView(discord.ui.View):
             await interaction.followup.send("❌ Не удалось принять заявку", ephemeral=True)
             return
         
+        # Отправляем ЛС пользователю об одобрении
+        try:
+            user = await interaction.client.fetch_user(int(app['user_id']))
+            if user:
+                embed = discord.Embed(
+                    title="✅ ЗАЯВКА НА ОТПУСК ОДОБРЕНА",
+                    description=f"Ваша заявка на отпуск одобрена!\n\n"
+                                f"📅 Дней: {app['days']}\n"
+                                f"📝 Причина: {app['reason']}\n"
+                                f"📅 Дата возврата: {app['until_date']}",
+                    color=0x00ff00
+                )
+                await user.send(embed=embed)
+                print(f"✅ ЛС отправлено пользователю {app['user_id']}")
+        except Exception as e:
+            print(f"❌ Ошибка отправки ЛС: {e}")
+        
         # Выдаём роль отпуска и снимаем другие роли
         guild = interaction.guild
         member = guild.get_member(int(app['user_id']))
@@ -163,7 +180,7 @@ class VacationModerationView(discord.ui.View):
         else:
             print(f"❌ vacation_role_id={vacation_role_id}, member={member}")
         
-        # Логируем
+        # Логируем в канал логов
         log_channel_id = CONFIG.get('vacation_log_channel')
         if log_channel_id:
             log_channel = interaction.client.get_channel(int(log_channel_id))
@@ -184,11 +201,11 @@ class VacationModerationView(discord.ui.View):
         if public_channel_id:
             await update_vacation_embed(interaction.client, public_channel_id)
         
-        # Обновляем сообщение с заявкой
+        # Обновляем сообщение с заявкой (делаем неактивным)
         embed = interaction.message.embeds[0]
         embed.color = 0x00ff00
         embed.add_field(name="✅ Статус", value=f"Одобрена модератором {interaction.user.mention}", inline=False)
-        await interaction.message.edit(embed=embed, view=self)
+        await interaction.message.edit(embed=embed, view=None)  # убираем кнопки
         
         # Удаляем запись о сообщении
         vacation_manager.delete_application_message(self.application_id)
@@ -227,7 +244,21 @@ class VacationRejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТ
         app = vacation_manager.get_application(self.application_id)
         
         if app:
-            # Логируем
+            # Отправляем ЛС пользователю об отказе
+            try:
+                user = await interaction.client.fetch_user(int(app['user_id']))
+                if user:
+                    embed = discord.Embed(
+                        title="❌ ЗАЯВКА НА ОТПУСК ОТКЛОНЕНА",
+                        description=f"Ваша заявка на отпуск отклонена.\n\n**Причина:** {self.reason.value}",
+                        color=0xff0000
+                    )
+                    await user.send(embed=embed)
+                    print(f"✅ ЛС отправлено пользователю {app['user_id']}")
+            except Exception as e:
+                print(f"❌ Ошибка отправки ЛС: {e}")
+            
+            # Логируем в канал логов
             log_channel_id = CONFIG.get('vacation_log_channel')
             if log_channel_id:
                 log_channel = interaction.client.get_channel(int(log_channel_id))
@@ -242,17 +273,17 @@ class VacationRejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТ
                     embed.add_field(name="📝 Причина", value=self.reason.value)
                     await log_channel.send(embed=embed)
         
-        # Обновляем сообщение
+        # Обновляем сообщение с заявкой (делаем неактивным)
         message = interaction.message
         embed = message.embeds[0]
         embed.color = 0xff0000
         embed.add_field(name="❌ Статус", value=f"Отклонена модератором {interaction.user.mention}", inline=False)
         embed.add_field(name="📝 Причина", value=self.reason.value, inline=False)
         
-        for child in message.components[0].children:
-            child.disabled = True
-        
+        # Убираем кнопки
         await message.edit(embed=embed, view=None)
+        
+        # Удаляем запись о сообщении
         vacation_manager.delete_application_message(self.application_id)
         
         await interaction.followup.send("❌ Заявка отклонена", ephemeral=True)

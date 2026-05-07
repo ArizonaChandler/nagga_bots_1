@@ -78,6 +78,19 @@ class VacationManager:
         if not vacation:
             return False, "❌ Вы не в отпуске"
         
+        # Отправляем ЛС пользователю
+        try:
+            user = await bot.fetch_user(int(user_id))
+            if user:
+                embed = discord.Embed(
+                    title="✅ ВОЗВРАТ ИЗ ОТПУСКА",
+                    description="Вы вернулись из отпуска! Ваши роли восстановлены.",
+                    color=0x00ff00
+                )
+                await user.send(embed=embed)
+        except Exception as e:
+            print(f"❌ Ошибка отправки ЛС: {e}")
+        
         # Восстанавливаем роли
         guild = None
         for g in bot.guilds:
@@ -112,6 +125,19 @@ class VacationManager:
                 if vacation_role and vacation_role in member.roles:
                     await member.remove_roles(vacation_role)
                     print(f"✅ Снята роль отпуска")
+        
+        # Логируем в канал логов
+        log_channel_id = CONFIG.get('vacation_log_channel')
+        if log_channel_id:
+            log_channel = bot.get_channel(int(log_channel_id))
+            if log_channel:
+                embed = discord.Embed(
+                    title="✅ ВОЗВРАТ ИЗ ОТПУСКА",
+                    description=f"Пользователь <@{user_id}> вернулся из отпуска",
+                    color=0x00ff00,
+                    timestamp=datetime.now()
+                )
+                await log_channel.send(embed=embed)
         
         # Удаляем из БД
         db.return_from_vacation(user_id)
