@@ -94,6 +94,9 @@ def load_config():
     # Загружаем настройки статистики (НОВОЕ)
     db.load_stats_settings()
 
+    # Загружаем настройки отпусков (НОВОЕ)
+    db.load_vacation_settings()
+
 def save_config(updated_by: str = None):
     for key, value in CONFIG.items():
         if key not in ['user_token_1', 'user_token_2', 'super_admin_id']:

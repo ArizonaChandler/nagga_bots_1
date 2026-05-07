@@ -1777,4 +1777,25 @@ class Database:
             conn.commit()
             return cursor.rowcount > 0
 
+    def load_vacation_settings(self):
+        """Загрузить все настройки системы отпусков в CONFIG"""
+        from core.config import CONFIG
+        import json
+        
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT key, value FROM vacation_settings')
+            settings = dict(cursor.fetchall())
+        
+        for key, value in settings.items():
+            if value and value.lower() != 'null':
+                # Пробуем распарсить JSON для списков
+                if key == 'vacation_approve_roles':
+                    try:
+                        CONFIG[key] = json.loads(value)
+                    except:
+                        CONFIG[key] = value.split(',') if value else []
+                else:
+                    CONFIG[key] = value
+
 db = Database()
