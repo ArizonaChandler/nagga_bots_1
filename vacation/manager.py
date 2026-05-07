@@ -84,7 +84,7 @@ class VacationManager:
             if user:
                 embed = discord.Embed(
                     title="✅ ВОЗВРАТ ИЗ ОТПУСКА",
-                    description="Вы вернулись из отпуска! Ваши роли восстановлены.",
+                    description="Вы вернулись из отпуска!",
                     color=0x00ff00
                 )
                 await user.send(embed=embed)
@@ -107,10 +107,12 @@ class VacationManager:
             
             # Восстанавливаем сохранённые роли
             saved_roles_str = vacation.get('saved_roles', '')
+            failed_roles = []
+            restored_roles = []
+            
             if saved_roles_str:
                 role_ids = saved_roles_str.split(',') if isinstance(saved_roles_str, str) else saved_roles_str
                 roles_to_restore = []
-                failed_roles = []
                 
                 for rid in role_ids:
                     if rid:
@@ -121,16 +123,14 @@ class VacationManager:
                 for role in roles_to_restore:
                     try:
                         await member.add_roles(role)
+                        restored_roles.append(role.name)
                         print(f"✅ Восстановлена роль: {role.name}")
                     except discord.Forbidden:
                         failed_roles.append(role.name)
-                        print(f"❌ Нет прав для восстановления роли: {role.name}")
+                        print(f"❌ Нет прав для восстановления роли (роль выше бота): {role.name}")
                     except Exception as e:
                         failed_roles.append(role.name)
                         print(f"❌ Ошибка восстановления роли {role.name}: {e}")
-                
-                if failed_roles:
-                    print(f"⚠️ Не удалось восстановить роли: {', '.join(failed_roles)}")
             
             # Снимаем роль отпуска
             vacation_role_id = CONFIG.get('vacation_role')
@@ -142,6 +142,21 @@ class VacationManager:
                         print(f"✅ Снята роль отпуска")
                     except Exception as e:
                         print(f"❌ Ошибка снятия роли отпуска: {e}")
+            
+            # Отправляем результат пользователю в ЛС
+            if failed_roles:
+                try:
+                    user = await bot.fetch_user(int(user_id))
+                    if user:
+                        embed = discord.Embed(
+                            title="⚠️ НЕКОТОРЫЕ РОЛИ НЕ ВОССТАНОВЛЕНЫ",
+                            description=f"Не удалось восстановить роли: {', '.join(failed_roles)}\n\n"
+                                        f"Обратитесь к администратору для восстановления ролей вручную.",
+                            color=0xffa500
+                        )
+                        await user.send(embed=embed)
+                except:
+                    pass
         
         # Логируем в канал логов
         log_channel_id = CONFIG.get('vacation_log_channel')
@@ -154,12 +169,18 @@ class VacationManager:
                     color=0x00ff00,
                     timestamp=datetime.now()
                 )
-                embed.add_field(name="📝 Результат", value="Роли восстановлены" + (f" (не удалось: {', '.join(failed_roles)})" if failed_roles else ""), inline=False)
+                status_msg = f"Восстановлено: {', '.join(restored_roles) if restored_roles else 'нет'}"
+                if failed_roles:
+                    status_msg += f"\n⚠️ Не удалось: {', '.join(failed_roles)}"
+                embed.add_field(name="📝 Результат", value=status_msg, inline=False)
                 await log_channel.send(embed=embed)
         
         # Удаляем из БД
         db.return_from_vacation(user_id)
-        return True, "✅ Вы вернулись из отпуска!"
+        
+        if failed_roles:
+            return True, f"✅ Вы вернулись из отпуска!\n⚠️ Не удалось восстановить роли: {', '.join(failed_roles)}"
+        return True, "✅ Вы вернулись из отпуска! Все роли восстановлены."
     
     def check_expired_vacations(self):
         """Проверить просроченные отпуска"""
