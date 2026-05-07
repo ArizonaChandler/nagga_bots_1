@@ -1646,23 +1646,22 @@ class Database:
             if updated_by:
                 self.log_action(updated_by, f"SET_VACATION_SETTING", f"{key}={value}")
     
-    def create_vacation_application(self, user_id: str, user_name: str, days: int, reason: str, roles: list) -> tuple:
+    def create_vacation_application(self, user_id: str, user_name: str, days: int, reason: str, roles: list, guild_id: str) -> tuple:
         from datetime import datetime, timedelta
         import pytz
         msk_tz = pytz.timezone('Europe/Moscow')
         until_date = (datetime.now(msk_tz) + timedelta(days=days)).date().isoformat()
         
-        # Преобразуем список ролей в строку через запятую
         roles_str = ','.join(roles) if roles else ''
-        print(f"💾 Сохраняем роли в БД: {roles_str}")
+        print(f"💾 Сохраняем роли в БД для сервера {guild_id}: {roles_str}")
         
         with self.get_connection() as conn:
             cursor = conn.cursor()
             try:
                 cursor.execute('''
-                    INSERT INTO vacation_applications (user_id, user_name, days, reason, saved_roles, until_date)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (user_id, user_name, days, reason, roles_str, until_date))
+                    INSERT INTO vacation_applications (user_id, user_name, days, reason, saved_roles, guild_id, until_date)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (user_id, user_name, days, reason, roles_str, guild_id, until_date))
                 conn.commit()
                 return cursor.lastrowid, None
             except Exception as e:
@@ -1689,30 +1688,27 @@ class Database:
         from datetime import datetime
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            # Получаем данные заявки
-            cursor.execute('SELECT user_id, user_name, reason, until_date, saved_roles FROM vacation_applications WHERE id = ? AND status = "pending"', (app_id,))
+            cursor.execute('SELECT user_id, user_name, reason, until_date, saved_roles, guild_id FROM vacation_applications WHERE id = ? AND status = "pending"', (app_id,))
             app = cursor.fetchone()
             if not app:
                 print(f"❌ Заявка {app_id} не найдена или уже обработана")
                 return False
             
-            user_id, user_name, reason, until_date, saved_roles = app
-            print(f"💾 Переносим в vacation_active: user={user_id}, roles={saved_roles}")
+            user_id, user_name, reason, until_date, saved_roles, guild_id = app
+            print(f"💾 Переносим в vacation_active: user={user_id}, guild={guild_id}, roles={saved_roles}")
             
-            # Добавляем в активные отпуска
             cursor.execute('''
-                INSERT OR REPLACE INTO vacation_active (user_id, user_name, reason, until_date, saved_roles)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (user_id, user_name, reason, until_date, saved_roles))
+                INSERT OR REPLACE INTO vacation_active (user_id, user_name, reason, until_date, saved_roles, guild_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (user_id, user_name, reason, until_date, saved_roles, guild_id))
             
-            # Обновляем статус заявки
             cursor.execute('''
                 UPDATE vacation_applications 
                 SET status = "approved", reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             ''', (reviewer_id, app_id))
             conn.commit()
-            print(f"✅ Заявка {app_id} одобрена, данные перенесены")
+            print(f"✅ Заявка {app_id} одобрена")
             return True
     
     def reject_vacation_application(self, app_id: int, reviewer_id: str, reason: str) -> bool:
@@ -1737,7 +1733,7 @@ class Database:
     def get_all_vacations(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT user_id, user_name, reason, until_date, saved_roles FROM vacation_active ORDER BY until_date')
+            cursor.execute('SELECT user_id, user_name, reason, until_date, saved_roles, guild_id FROM vacation_active ORDER BY until_date')
             rows = cursor.fetchall()
             columns = [description[0] for description in cursor.description]
             return [dict(zip(columns, row)) for row in rows]
