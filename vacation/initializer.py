@@ -2,7 +2,7 @@
 import asyncio
 import discord
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from vacation.manager import vacation_manager
 from vacation.views import VacationPublicView, update_vacation_embed
