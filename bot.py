@@ -368,6 +368,23 @@ async def check_vacation_db(ctx):
     
     await ctx.send(embed=embed)
 
+@bot.command(name='check_role')
+async def check_role(ctx, role_id: int):
+    """Проверить, видит ли бот роль"""
+    role = ctx.guild.get_role(role_id)
+    if role:
+        await ctx.send(f"✅ Роль найдена: {role.name}")
+        await ctx.send(f"📊 Позиция роли: {role.position}")
+        await ctx.send(f"🤖 Позиция бота: {ctx.guild.me.top_role.position}")
+        if role.position > ctx.guild.me.top_role.position:
+            await ctx.send(f"⚠️ Роль ВЫШЕ роли бота! Бот не может ей управлять.")
+        else:
+            await ctx.send(f"✅ Роль НИЖЕ роли бота, бот может ей управлять.")
+    else:
+        await ctx.send(f"❌ Роль с ID {role_id} не найдена")
+
+
+
 
 async def main():
     async with bot:
