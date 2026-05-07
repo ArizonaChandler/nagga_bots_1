@@ -42,7 +42,6 @@ from afk import setup_afk
 from tier import setup_tier
 
 # Импорт системы статистики
-from server_stats import setup_stats as setup_stats_panel
 from server_stats.global_collector import set_collector, get_collector
 
 import discord
@@ -152,33 +151,34 @@ async def on_ready():
         print(f"❌ Ошибка инициализации AFK: {e}")
         traceback.print_exc()
     
-    # Инициализация канала настроек статистики
+    # Инициализация системы статистики
     try:
-        print("📊 Инициализация панели настроек статистики...")
-        await setup_stats(bot)
+        from server_stats.global_collector import set_collector, get_collector
+        
+        # Инициализация панели настроек статистики
+        try:
+            print("📊 Инициализация панели настроек статистики...")
+            from server_stats.initializer import setup as setup_stats_panel
+            await setup_stats_panel(bot)
+        except Exception as e:
+            print(f"❌ Ошибка инициализации панели статистики: {e}")
+            traceback.print_exc()
+        
+        # Инициализация сборщика статистики
+        try:
+            print("📊 Инициализация сборщика статистики...")
+            set_collector(bot)
+            collector = get_collector()
+            if collector:
+                await collector.start()
+            else:
+                print("❌ collector не инициализирован")
+        except Exception as e:
+            print(f"❌ Ошибка инициализации сборщика статистики: {e}")
+            traceback.print_exc()
+            
     except Exception as e:
-        print(f"❌ Ошибка инициализации панели статистики: {e}")
-        traceback.print_exc()
-    
-    # Инициализация панели настроек статистики
-    try:
-        print("📊 Инициализация панели настроек статистики...")
-        await setup_stats_panel(bot)
-    except Exception as e:
-        print(f"❌ Ошибка инициализации панели статистики: {e}")
-        traceback.print_exc()
-    
-    # Инициализация сборщика статистики
-    try:
-        print("📊 Инициализация сборщика статистики...")
-        set_collector(bot)
-        collector = get_collector()
-        if collector:
-            await collector.start()
-        else:
-            print("❌ collector не инициализирован")
-    except Exception as e:
-        print(f"❌ Ошибка инициализации сборщика статистики: {e}")
+        print(f"❌ Общая ошибка статистики: {e}")
         traceback.print_exc()
     
     await bot.change_presence(activity=discord.Activity(
