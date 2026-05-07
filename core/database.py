@@ -1647,12 +1647,15 @@ class Database:
         
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('''
-                INSERT INTO vacation_applications (user_id, user_name, days, reason, saved_roles, until_date)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (user_id, user_name, days, reason, ','.join(roles) if roles else '', until_date))
-            conn.commit()
-            return cursor.lastrowid, None
+            try:
+                cursor.execute('''
+                    INSERT INTO vacation_applications (user_id, user_name, days, reason, saved_roles, until_date)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (user_id, user_name, days, reason, ','.join(roles) if roles else '', until_date))
+                conn.commit()
+                return cursor.lastrowid, None
+            except Exception as e:
+                return None, f"Ошибка БД: {e}"
     
     def get_pending_vacation_applications(self):
         with self.get_connection() as conn:
