@@ -339,18 +339,34 @@ async def on_member_remove(member):
         import traceback
         traceback.print_exc()
 
-@bot.command(name='test_category')
-async def test_category(ctx):
-    """Проверить категорию обзвонов"""
-    print("🔍 Проверка категории '📞 ОБЗВОНЫ'...")
-    for category in ctx.guild.categories:
-        print(f"Категория: {category.name}")
-        if category.name == "📞 ОБЗВОНЫ":
-            print(f"✅ Найдена! Каналов: {len(category.text_channels)}")
-            for channel in category.text_channels:
-                print(f"   - {channel.name}")
-                print(f"     topic: {channel.topic}")
-    await ctx.send("Проверка завершена, смотри консоль")
+@bot.command(name='check_vacation_db')
+async def check_vacation_db(ctx):
+    """Проверить данные в БД (только админ)"""
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send("❌ Только админ")
+        return
+    
+    from vacation.manager import vacation_manager
+    from core.database import db
+    
+    vacations = vacation_manager.get_all_vacations()
+    
+    if not vacations:
+        await ctx.send("📭 Нет активных отпусков")
+        return
+    
+    embed = discord.Embed(title="📊 Активные отпуска", color=0x00ff00)
+    
+    for vac in vacations:
+        embed.add_field(
+            name=f"👤 {vac['user_name']}",
+            value=f"📅 До: {vac['until_date']}\n"
+                  f"📝 Причина: {vac['reason']}\n"
+                  f"🎭 Сохранённые роли: {vac.get('saved_roles', 'Нет')}",
+            inline=False
+        )
+    
+    await ctx.send(embed=embed)
 
 
 async def main():

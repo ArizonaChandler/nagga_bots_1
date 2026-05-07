@@ -66,7 +66,9 @@ class VacationModal(discord.ui.Modal, title="🏖️ ЗАЯВКА НА ОТПУ�
             member = interaction.guild.get_member(interaction.user.id)
             saved_roles = [str(role.id) for role in member.roles if not role.is_default()]
             print(f"👥 Сохранено ролей: {len(saved_roles)}")
-            
+            print(f"👥 Список ID ролей: {saved_roles}")
+            print(f"👥 Список названий ролей: {[role.name for role in member.roles if not role.is_default()]}")
+
             # Создаём заявку
             app_id, error = vacation_manager.create_application(
                 user_id=user_id,

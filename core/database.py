@@ -1645,16 +1645,21 @@ class Database:
         msk_tz = pytz.timezone('Europe/Moscow')
         until_date = (datetime.now(msk_tz) + timedelta(days=days)).date().isoformat()
         
+        # Преобразуем список ролей в строку через запятую
+        roles_str = ','.join(roles) if roles else ''
+        print(f"💾 Сохраняем роли в БД: {roles_str}")
+        
         with self.get_connection() as conn:
             cursor = conn.cursor()
             try:
                 cursor.execute('''
                     INSERT INTO vacation_applications (user_id, user_name, days, reason, saved_roles, until_date)
                     VALUES (?, ?, ?, ?, ?, ?)
-                ''', (user_id, user_name, days, reason, ','.join(roles) if roles else '', until_date))
+                ''', (user_id, user_name, days, reason, roles_str, until_date))
                 conn.commit()
                 return cursor.lastrowid, None
             except Exception as e:
+                print(f"❌ Ошибка БД: {e}")
                 return None, f"Ошибка БД: {e}"
     
     def get_pending_vacation_applications(self):
@@ -1677,12 +1682,15 @@ class Database:
         from datetime import datetime
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            # Получаем данные заявки
             cursor.execute('SELECT user_id, user_name, reason, until_date, saved_roles FROM vacation_applications WHERE id = ? AND status = "pending"', (app_id,))
             app = cursor.fetchone()
             if not app:
+                print(f"❌ Заявка {app_id} не найдена или уже обработана")
                 return False
             
             user_id, user_name, reason, until_date, saved_roles = app
+            print(f"💾 Переносим в vacation_active: user={user_id}, roles={saved_roles}")
             
             # Добавляем в активные отпуска
             cursor.execute('''
@@ -1697,6 +1705,7 @@ class Database:
                 WHERE id = ?
             ''', (reviewer_id, app_id))
             conn.commit()
+            print(f"✅ Заявка {app_id} одобрена, данные перенесены")
             return True
     
     def reject_vacation_application(self, app_id: int, reviewer_id: str, reason: str) -> bool:
