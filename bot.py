@@ -339,47 +339,6 @@ async def on_member_remove(member):
         import traceback
         traceback.print_exc()
 
-@bot.command(name='fix_vacation_db')
-async def fix_vacation_db(ctx):
-    """Добавить колонку guild_id в таблицы отпусков (только супер-админ)"""
-    from core.utils import is_super_admin
-    
-    if not await is_super_admin(str(ctx.author.id)):
-        await ctx.send("❌ Только супер-админ")
-        return
-    
-    try:
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Добавляем колонку в vacation_applications
-            try:
-                cursor.execute('ALTER TABLE vacation_applications ADD COLUMN guild_id TEXT DEFAULT ""')
-                await ctx.send("✅ Добавлена колонка guild_id в vacation_applications")
-            except sqlite3.OperationalError as e:
-                if "duplicate column name" in str(e):
-                    await ctx.send("⚠️ Колонка guild_id уже есть в vacation_applications")
-                else:
-                    raise
-            
-            # Добавляем колонку в vacation_active
-            try:
-                cursor.execute('ALTER TABLE vacation_active ADD COLUMN guild_id TEXT DEFAULT ""')
-                await ctx.send("✅ Добавлена колонка guild_id в vacation_active")
-            except sqlite3.OperationalError as e:
-                if "duplicate column name" in str(e):
-                    await ctx.send("⚠️ Колонка guild_id уже есть в vacation_active")
-                else:
-                    raise
-            
-            conn.commit()
-        
-        await ctx.send("✅ База данных отпусков обновлена!")
-        
-    except Exception as e:
-        await ctx.send(f"❌ Ошибка: {e}")
-
-
 async def main():
     async with bot:
         # Запускаем планировщик мероприятий
