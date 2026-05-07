@@ -108,16 +108,28 @@ class VacationInitializer:
             logger.error(f"❌ Публичный канал {channel_id} не найден")
             return
         
-        # Ищем существующее сообщение
+        from vacation.views import VacationPublicView, update_vacation_embed
+        
+        # Ищем существующее сообщение с кнопками
         message_exists = False
         async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user and msg.embeds:
-                if msg.embeds and "СИСТЕМА ОТПУСКОВ" in msg.embeds[0].title:
-                    await msg.edit(view=VacationPublicView())
-                    message_exists = True
-                    logger.info(f"✅ Обновлена панель отпусков в #{channel.name}")
+            if msg.author == self.bot.user:
+                # Проверяем, есть ли в сообщении наша кнопка
+                if msg.components and len(msg.components) > 0:
+                    for component in msg.components:
+                        for button in component.children:
+                            if button.custom_id in ["vacation_go", "vacation_back"]:
+                                # Нашли наше сообщение, обновляем view
+                                await msg.edit(view=VacationPublicView())
+                                message_exists = True
+                                logger.info(f"✅ Обновлена панель отпусков в #{channel.name}")
+                                break
+                        if message_exists:
+                            break
+                if message_exists:
                     break
         
+        # Если сообщения нет - создаём новое
         if not message_exists:
             embed = discord.Embed(
                 title="🏖️ **СИСТЕМА ОТПУСКОВ**",
@@ -128,7 +140,7 @@ class VacationInitializer:
             await channel.send(embed=embed, view=VacationPublicView())
             logger.info(f"✅ Создана панель отпусков в #{channel.name}")
         
-        # Обновляем embed
+        # Обновляем embed со списком отпускников
         await update_vacation_embed(self.bot, channel_id)
     
     async def _init_settings_channel(self):

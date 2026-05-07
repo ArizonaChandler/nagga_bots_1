@@ -22,18 +22,12 @@ async def update_vacation_embed(bot, channel_id: str):
     target_message = None
     async for msg in channel.history(limit=50):
         if msg.author == bot.user and msg.embeds:
-            if msg.embeds and "🏖️ СИСТЕМА ОТПУСКОВ" in msg.embeds[0].title:
+            if msg.embeds and "🏖️ **СИСТЕМА ОТПУСКОВ**" in msg.embeds[0].title:
                 target_message = msg
                 break
     
     if not target_message:
-        embed = discord.Embed(
-            title="🏖️ **СИСТЕМА ОТПУСКОВ**",
-            description="✨ Никого нет в отпуске",
-            color=0x00ff00
-        )
-        embed.set_footer(text="Нажмите кнопку, чтобы подать заявку")
-        await channel.send(embed=embed, view=VacationPublicView())
+        # Если сообщения нет, выходим (оно создастся при инициализации)
         return
     
     if not vacations:
