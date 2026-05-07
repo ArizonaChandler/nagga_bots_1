@@ -135,6 +135,8 @@ class VacationModerationView(discord.ui.View):
             await interaction.followup.send("❌ Заявка не найдена", ephemeral=True)
             return
         
+        print(f"🔍 Одобрение заявки #{self.application_id}")
+        
         success = vacation_manager.approve_application(self.application_id, str(interaction.user.id))
         
         if not success:
@@ -158,27 +160,60 @@ class VacationModerationView(discord.ui.View):
         except Exception as e:
             print(f"❌ Ошибка отправки ЛС: {e}")
         
-        # Выдаём роль отпуска и снимаем другие роли
+        # Выдаём роль отпуска и пытаемся снять другие роли
         guild = interaction.guild
         member = guild.get_member(int(app['user_id']))
         
         vacation_role_id = CONFIG.get('vacation_role')
-        print(f"🎭 Роль отпуска ID: {vacation_role_id}")
+        print(f"🎭 ID роли отпуска из CONFIG: {vacation_role_id}")
         
         if vacation_role_id and member:
             vacation_role = guild.get_role(int(vacation_role_id))
+            
             if vacation_role:
-                # Снимаем все роли (кроме @everyone)
-                roles_to_remove = [r for r in member.roles if not r.is_default()]
-                print(f"👥 Снимаем роли: {[r.name for r in roles_to_remove]}")
+                # Пытаемся снять все роли (кроме @everyone)
+                roles_to_remove = [r for r in member.roles if not r.is_default() and r != vacation_role]
+                print(f"👥 Попытка снять роли: {[r.name for r in roles_to_remove]}")
+                
+                removed_count = 0
+                failed_roles = []
+                
                 for role in roles_to_remove:
-                    await member.remove_roles(role)
-                await member.add_roles(vacation_role)
-                print(f"✅ Выдана роль отпуска: {vacation_role.name}")
+                    try:
+                        await member.remove_roles(role)
+                        removed_count += 1
+                        print(f"   ✅ Снята роль: {role.name}")
+                    except discord.Forbidden:
+                        failed_roles.append(role.name)
+                        print(f"   ❌ Нет прав для снятия роли: {role.name}")
+                    except Exception as e:
+                        failed_roles.append(role.name)
+                        print(f"   ❌ Ошибка снятия роли {role.name}: {e}")
+                
+                if failed_roles:
+                    print(f"⚠️ Не удалось снять роли: {', '.join(failed_roles)}")
+                    await interaction.followup.send(
+                        f"⚠️ Не удалось снять некоторые роли: {', '.join(failed_roles)}\n"
+                        f"Роль отпуска выдана, но некоторые роли остались.",
+                        ephemeral=True
+                    )
+                
+                # Выдаём роль отпуска
+                try:
+                    await member.add_roles(vacation_role)
+                    print(f"✅ Выдана роль отпуска: {vacation_role.name}")
+                except Exception as e:
+                    print(f"❌ Ошибка выдачи роли отпуска: {e}")
+                    await interaction.followup.send(f"⚠️ Не удалось выдать роль отпуска: {e}", ephemeral=True)
             else:
                 print(f"❌ Роль отпуска с ID {vacation_role_id} не найдена")
+                await interaction.followup.send(f"⚠️ Роль отпуска с ID {vacation_role_id} не найдена", ephemeral=True)
         else:
-            print(f"❌ vacation_role_id={vacation_role_id}, member={member}")
+            if not vacation_role_id:
+                print(f"❌ Роль отпуска не настроена")
+                await interaction.followup.send(f"⚠️ Роль отпуска не настроена! Настройте её в панели управления.", ephemeral=True)
+            if not member:
+                print(f"❌ Пользователь {app['user_id']} не найден на сервере")
         
         # Логируем в канал логов
         log_channel_id = CONFIG.get('vacation_log_channel')
@@ -198,14 +233,18 @@ class VacationModerationView(discord.ui.View):
         # Обновляем embed в публичном канале
         settings = vacation_manager.get_settings()
         public_channel_id = settings.get('vacation_public_channel')
+        
         if public_channel_id:
             await update_vacation_embed(interaction.client, public_channel_id)
+            print(f"✅ Embed в публичном канале обновлён")
+        else:
+            print(f"❌ Публичный канал не настроен")
         
         # Обновляем сообщение с заявкой (делаем неактивным)
         embed = interaction.message.embeds[0]
         embed.color = 0x00ff00
         embed.add_field(name="✅ Статус", value=f"Одобрена модератором {interaction.user.mention}", inline=False)
-        await interaction.message.edit(embed=embed, view=None)  # убираем кнопки
+        await interaction.message.edit(embed=embed, view=None)
         
         # Удаляем запись о сообщении
         vacation_manager.delete_application_message(self.application_id)

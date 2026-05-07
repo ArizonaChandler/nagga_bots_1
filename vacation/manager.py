@@ -109,22 +109,38 @@ class VacationManager:
             if saved_roles_str:
                 role_ids = saved_roles_str.split(',') if isinstance(saved_roles_str, str) else saved_roles_str
                 roles_to_restore = []
+                failed_roles = []
+                
                 for rid in role_ids:
                     if rid:
                         role = guild.get_role(int(rid))
                         if role:
                             roles_to_restore.append(role)
-                if roles_to_restore:
-                    await member.add_roles(*roles_to_restore)
-                    print(f"✅ Восстановлены роли: {[r.name for r in roles_to_restore]}")
+                
+                for role in roles_to_restore:
+                    try:
+                        await member.add_roles(role)
+                        print(f"✅ Восстановлена роль: {role.name}")
+                    except discord.Forbidden:
+                        failed_roles.append(role.name)
+                        print(f"❌ Нет прав для восстановления роли: {role.name}")
+                    except Exception as e:
+                        failed_roles.append(role.name)
+                        print(f"❌ Ошибка восстановления роли {role.name}: {e}")
+                
+                if failed_roles:
+                    print(f"⚠️ Не удалось восстановить роли: {', '.join(failed_roles)}")
             
             # Снимаем роль отпуска
             vacation_role_id = CONFIG.get('vacation_role')
             if vacation_role_id:
                 vacation_role = guild.get_role(int(vacation_role_id))
                 if vacation_role and vacation_role in member.roles:
-                    await member.remove_roles(vacation_role)
-                    print(f"✅ Снята роль отпуска")
+                    try:
+                        await member.remove_roles(vacation_role)
+                        print(f"✅ Снята роль отпуска")
+                    except Exception as e:
+                        print(f"❌ Ошибка снятия роли отпуска: {e}")
         
         # Логируем в канал логов
         log_channel_id = CONFIG.get('vacation_log_channel')
@@ -137,6 +153,7 @@ class VacationManager:
                     color=0x00ff00,
                     timestamp=datetime.now()
                 )
+                embed.add_field(name="📝 Результат", value="Роли восстановлены" + (f" (не удалось: {', '.join(failed_roles)})" if failed_roles else ""), inline=False)
                 await log_channel.send(embed=embed)
         
         # Удаляем из БД
