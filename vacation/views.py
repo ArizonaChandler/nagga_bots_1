@@ -1,12 +1,12 @@
 """Кнопки для системы отпусков"""
 import discord
+import traceback
 from datetime import datetime
 import pytz
 from vacation.base import PermanentView
 from vacation.modals import VacationModal
 from vacation.manager import vacation_manager
 from core.config import CONFIG
-import traceback
 
 MSK_TZ = pytz.timezone('Europe/Moscow')
 
@@ -28,7 +28,6 @@ async def update_vacation_embed(bot, channel_id: str):
                 break
     
     if not target_message:
-        # Если сообщения нет, выходим (оно создастся при инициализации)
         return
     
     if not vacations:
@@ -40,7 +39,9 @@ async def update_vacation_embed(bot, channel_id: str):
     else:
         description = ""
         for vac in vacations:
+            # Преобразуем строку в datetime с часовым поясом
             until = datetime.fromisoformat(vac['until_date'])
+            until = MSK_TZ.localize(until)
             until_str = until.strftime("%d.%m.%Y")
             days_left = (until - datetime.now(MSK_TZ)).days
             description += f"👤 <@{vac['user_id']}>\n"
@@ -83,7 +84,6 @@ class VacationPublicView(PermanentView):
         """Вернуться из отпуска"""
         print(f"🔍 Нажата кнопка 'Вернуться' от {interaction.user}")
         
-        # Отвечаем сразу, чтобы не было ошибки взаимодействия
         await interaction.response.defer(ephemeral=True)
         
         try:
@@ -93,7 +93,6 @@ class VacationPublicView(PermanentView):
             )
             
             if success:
-                # Обновляем embed в публичном канале
                 settings = vacation_manager.get_settings()
                 public_channel_id = settings.get('vacation_public_channel')
                 if public_channel_id:
@@ -157,11 +156,10 @@ class VacationModerationView(discord.ui.View):
                 print(f"👥 Снимаем роли: {[r.name for r in roles_to_remove]}")
                 for role in roles_to_remove:
                     await member.remove_roles(role)
-                # Выдаём роль отпуска
                 await member.add_roles(vacation_role)
                 print(f"✅ Выдана роль отпуска: {vacation_role.name}")
             else:
-                print(f"❌ Роль отпуска с ID {vacation_role_id} не найдена на сервере")
+                print(f"❌ Роль отпуска с ID {vacation_role_id} не найдена")
         else:
             print(f"❌ vacation_role_id={vacation_role_id}, member={member}")
         

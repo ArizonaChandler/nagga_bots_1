@@ -1721,9 +1721,9 @@ class Database:
     def get_all_vacations(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT * FROM vacation_active ORDER BY until_date')
-            columns = [description[0] for description in cursor.description]
+            cursor.execute('SELECT user_id, user_name, reason, until_date, saved_roles FROM vacation_active ORDER BY until_date')
             rows = cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
             return [dict(zip(columns, row)) for row in rows]
     
     def return_from_vacation(self, user_id: str) -> bool:
