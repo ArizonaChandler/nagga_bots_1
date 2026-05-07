@@ -339,62 +339,45 @@ async def on_member_remove(member):
         import traceback
         traceback.print_exc()
 
-@bot.command(name='check_vacation_db')
-async def check_vacation_db(ctx):
-    """Проверить данные в БД (только админ)"""
-    if not ctx.author.guild_permissions.administrator:
-        await ctx.send("❌ Только админ")
+@bot.command(name='fix_vacation_db')
+async def fix_vacation_db(ctx):
+    """Добавить колонку guild_id в таблицы отпусков (только супер-админ)"""
+    from core.utils import is_super_admin
+    
+    if not await is_super_admin(str(ctx.author.id)):
+        await ctx.send("❌ Только супер-админ")
         return
     
-    from vacation.manager import vacation_manager
-    from core.database import db
-    
-    vacations = vacation_manager.get_all_vacations()
-    
-    if not vacations:
-        await ctx.send("📭 Нет активных отпусков")
-        return
-    
-    embed = discord.Embed(title="📊 Активные отпуска", color=0x00ff00)
-    
-    for vac in vacations:
-        embed.add_field(
-            name=f"👤 {vac['user_name']}",
-            value=f"📅 До: {vac['until_date']}\n"
-                  f"📝 Причина: {vac['reason']}\n"
-                  f"🎭 Сохранённые роли: {vac.get('saved_roles', 'Нет')}",
-            inline=False
-        )
-    
-    await ctx.send(embed=embed)
-
-@bot.command(name='check_role')
-async def check_role(ctx, role_id: int):
-    """Проверить, видит ли бот роль"""
-    role = ctx.guild.get_role(role_id)
-    if role:
-        await ctx.send(f"✅ Роль найдена: {role.name}")
-        await ctx.send(f"📊 Позиция роли: {role.position}")
-        await ctx.send(f"🤖 Позиция бота: {ctx.guild.me.top_role.position}")
-        if role.position > ctx.guild.me.top_role.position:
-            await ctx.send(f"⚠️ Роль ВЫШЕ роли бота! Бот не может ей управлять.")
-        else:
-            await ctx.send(f"✅ Роль НИЖЕ роли бота, бот может ей управлять.")
-    else:
-        await ctx.send(f"❌ Роль с ID {role_id} не найдена")
-
-@bot.command(name='check_role_cache')
-async def check_role_cache(ctx, role_id: int):
-    """Проверить, видит ли бот роль в кэше"""
-    role = ctx.guild.get_role(role_id)
-    if role:
-        await ctx.send(f"✅ Роль найдена в кэше: {role.name}")
-    else:
-        await ctx.send(f"❌ Роль с ID {role_id} НЕ найдена в кэше")
+    try:
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Добавляем колонку в vacation_applications
+            try:
+                cursor.execute('ALTER TABLE vacation_applications ADD COLUMN guild_id TEXT DEFAULT ""')
+                await ctx.send("✅ Добавлена колонка guild_id в vacation_applications")
+            except sqlite3.OperationalError as e:
+                if "duplicate column name" in str(e):
+                    await ctx.send("⚠️ Колонка guild_id уже есть в vacation_applications")
+                else:
+                    raise
+            
+            # Добавляем колонку в vacation_active
+            try:
+                cursor.execute('ALTER TABLE vacation_active ADD COLUMN guild_id TEXT DEFAULT ""')
+                await ctx.send("✅ Добавлена колонка guild_id в vacation_active")
+            except sqlite3.OperationalError as e:
+                if "duplicate column name" in str(e):
+                    await ctx.send("⚠️ Колонка guild_id уже есть в vacation_active")
+                else:
+                    raise
+            
+            conn.commit()
         
-        # Показываем все роли
-        roles_list = "\n".join([f"• {r.name} (ID: {r.id})" for r in ctx.guild.roles if not r.is_default()])
-        await ctx.send(f"📋 Доступные роли в кэше:\n{roles_list}")
+        await ctx.send("✅ База данных отпусков обновлена!")
+        
+    except Exception as e:
+        await ctx.send(f"❌ Ошибка: {e}")
 
 
 async def main():
