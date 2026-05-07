@@ -1,5 +1,6 @@
 """Панель настроек системы отпусков"""
 import discord
+import json
 from vacation.base import PermanentView
 from vacation.manager import vacation_manager
 from core.config import CONFIG, save_config
@@ -99,8 +100,15 @@ class VacationSettingsView(PermanentView):
         public_channel = format_mention(guild, settings.get('vacation_public_channel'), 'channel') if settings.get('vacation_public_channel') else "`Не настроен`"
         applications_channel = format_mention(guild, settings.get('vacation_applications_channel'), 'channel') if settings.get('vacation_applications_channel') else "`Не настроен`"
         log_channel = format_mention(guild, settings.get('vacation_log_channel'), 'channel') if settings.get('vacation_log_channel') else "`Не настроен`"
+        
         approve_roles = settings.get('vacation_approve_roles', [])
+        if isinstance(approve_roles, str):
+            try:
+                approve_roles = json.loads(approve_roles)
+            except:
+                approve_roles = []
         approve_roles_str = ", ".join([format_mention(guild, r, 'role') for r in approve_roles]) if approve_roles else "`Не настроены`"
+        
         vacation_role = format_mention(guild, settings.get('vacation_role'), 'role') if settings.get('vacation_role') else "`Не настроена`"
         max_days = settings.get('vacation_max_days', 30)
         
@@ -224,6 +232,7 @@ class SetVacationApproveRolesModal(discord.ui.Modal, title="👑 РОЛИ ДЛЯ
                     await interaction.response.send_message(f"❌ Роль {rid} не найдена", ephemeral=True)
                     return
             
+            # Сохраняем как список (manager сам преобразует в JSON)
             vacation_manager.save_setting('vacation_approve_roles', valid_roles, str(interaction.user.id))
             
             await interaction.response.send_message(

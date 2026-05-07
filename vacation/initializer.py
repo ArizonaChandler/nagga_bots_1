@@ -47,10 +47,14 @@ class VacationInitializer:
         while not self.bot.is_closed():
             now = datetime.now(MSK_TZ)
             
-            # Ждём до полуночи
-            next_midnight = datetime(now.year, now.month, now.day, 0, 0, 0) + timedelta(days=1)
+            # Вычисляем время до следующей полуночи (00:00 следующего дня)
+            tomorrow = now + timedelta(days=1)
+            next_midnight = datetime(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0, 0)
+            next_midnight = MSK_TZ.localize(next_midnight)
             seconds_to_wait = (next_midnight - now).total_seconds()
-            await asyncio.sleep(seconds_to_wait)
+            
+            if seconds_to_wait > 0:
+                await asyncio.sleep(seconds_to_wait)
             
             try:
                 expired = vacation_manager.check_expired_vacations()
@@ -60,7 +64,9 @@ class VacationInitializer:
                     settings = vacation_manager.get_settings()
                     
                     # Обновляем embed
-                    await update_vacation_embed(self.bot, settings.get('vacation_public_channel'))
+                    channel_id = settings.get('vacation_public_channel')
+                    if channel_id:
+                        await update_vacation_embed(self.bot, channel_id)
                     
                     # Отправляем логи и ЛС
                     log_channel_id = settings.get('vacation_log_channel')
@@ -80,7 +86,7 @@ class VacationInitializer:
                                 try:
                                     user = await self.bot.fetch_user(int(user_id))
                                     if user:
-                                        await user.send("✅ Ваш отпуск закончился! Добро пожаловать обратно!")
+                                        await user.send("✅ Ваш отпуск закончился! Добро пожалобратно!")
                                 except:
                                     pass
                 

@@ -8,18 +8,32 @@ class VacationManager:
     
     def get_settings(self):
         """Получить все настройки из CONFIG"""
+        approve_roles = CONFIG.get('vacation_approve_roles', [])
+        # Если это строка, пробуем распарсить JSON
+        if isinstance(approve_roles, str):
+            try:
+                import json
+                approve_roles = json.loads(approve_roles)
+            except:
+                approve_roles = []
+        
         return {
             'vacation_public_channel': CONFIG.get('vacation_public_channel'),
             'vacation_applications_channel': CONFIG.get('vacation_applications_channel'),
             'vacation_log_channel': CONFIG.get('vacation_log_channel'),
             'vacation_settings_channel': CONFIG.get('vacation_settings_channel'),
-            'vacation_approve_roles': CONFIG.get('vacation_approve_roles'),
+            'vacation_approve_roles': approve_roles,
             'vacation_role': CONFIG.get('vacation_role'),
             'vacation_max_days': CONFIG.get('vacation_max_days', 30),
         }
     
-    def save_setting(self, key: str, value: str, updated_by: str = None):
+    def save_setting(self, key: str, value, updated_by: str = None):
         """Сохранить настройку"""
+        # Если значение — список, преобразуем в JSON
+        if isinstance(value, list):
+            import json
+            value = json.dumps(value)
+        
         db.set_vacation_setting(key, value, updated_by)
         CONFIG[key] = value
     

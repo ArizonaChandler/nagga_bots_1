@@ -1626,6 +1626,12 @@ class Database:
             return result[0] if result else None
     
     def set_vacation_setting(self, key: str, value: str, updated_by: str = None):
+        """Установить настройку отпусков"""
+        # Если value — это список, преобразуем в JSON строку
+        if isinstance(value, list):
+            import json
+            value = json.dumps(value)
+        
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('INSERT OR REPLACE INTO vacation_settings (key, value) VALUES (?, ?)', (key, value))
