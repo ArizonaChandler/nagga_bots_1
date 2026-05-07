@@ -1,5 +1,6 @@
 """Менеджер для работы с системой отпусков"""
 import discord
+from datetime import datetime
 from core.database import db
 from core.config import CONFIG
 
@@ -10,7 +11,6 @@ class VacationManager:
     def get_settings(self):
         """Получить все настройки из CONFIG"""
         max_days = CONFIG.get('vacation_max_days', 30)
-        # Преобразуем в число
         if isinstance(max_days, str):
             try:
                 max_days = int(max_days)
@@ -37,9 +37,8 @@ class VacationManager:
     
     def save_setting(self, key: str, value, updated_by: str = None):
         """Сохранить настройку"""
-        # Если значение — список, преобразуем в JSON
+        import json
         if isinstance(value, list):
-            import json
             value = json.dumps(value)
         
         db.set_vacation_setting(key, value, updated_by)
@@ -57,11 +56,11 @@ class VacationManager:
         """Получить заявку по ID"""
         return db.get_vacation_application(app_id)
     
-    def approve_application(self, app_id: int, reviewer_id: str):
+    def approve_application(self, app_id: int, reviewer_id: str) -> bool:
         """Одобрить заявку"""
         return db.approve_vacation_application(app_id, reviewer_id)
     
-    def reject_application(self, app_id: int, reviewer_id: str, reason: str):
+    def reject_application(self, app_id: int, reviewer_id: str, reason: str) -> bool:
         """Отклонить заявку"""
         return db.reject_vacation_application(app_id, reviewer_id, reason)
     
@@ -89,6 +88,7 @@ class VacationManager:
                     color=0x00ff00
                 )
                 await user.send(embed=embed)
+                print(f"✅ ЛС отправлено пользователю {user_id}")
         except Exception as e:
             print(f"❌ Ошибка отправки ЛС: {e}")
         
@@ -176,5 +176,6 @@ class VacationManager:
     def delete_application_message(self, application_id: int):
         """Удалить запись о сообщении"""
         return db.delete_vacation_application_message(application_id)
+
 
 vacation_manager = VacationManager()
