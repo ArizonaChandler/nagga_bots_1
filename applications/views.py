@@ -228,9 +228,11 @@ class ApplicationModerationView(discord.ui.View):
         await self.cleanup_message_record()
         
         # В систему статистики
+        from server_stats.global_collector import get_collector
+
+        collector = get_collector()
         if collector:
             collector.increment_accepted_applications()
-            print(f"📊 Статистика: принята заявка #{self.application_id}")
 
         # Отправляем финальное сообщение
         await interaction.followup.send("✅ Заявка принята, личный профиль создан", ephemeral=True)

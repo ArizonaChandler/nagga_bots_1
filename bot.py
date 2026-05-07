@@ -42,7 +42,7 @@ from afk import setup_afk
 from tier import setup_tier
 
 # Импорт системы статистики
-from server_stats import setup_stats, setup_stats_collector
+from server_stats import setup_stats, set_collector
 from server_stats.stat_collector import collector
 
 import discord
@@ -160,12 +160,21 @@ async def on_ready():
         print(f"❌ Ошибка инициализации панели статистики: {e}")
         traceback.print_exc()
     
-    # Инициализация сборщика статистики (фоновые задачи)
+    # Инициализация системы статистики
     try:
+        from server_stats import setup_stats
+        from server_stats.global_collector import set_collector
+        
+        print("📊 Инициализация панели настроек статистики...")
+        await setup_stats(bot)
+        
+        # Устанавливаем глобальный collector
         print("📊 Инициализация сборщика статистики...")
-        await setup_stats_collector(bot)
+        set_collector(bot)
+        await collector.start()
+        
     except Exception as e:
-        print(f"❌ Ошибка инициализации сборщика статистики: {e}")
+        print(f"❌ Ошибка инициализации статистики: {e}")
         traceback.print_exc()
     
     await bot.change_presence(activity=discord.Activity(
@@ -185,9 +194,10 @@ async def on_command_error(ctx, error):
 async def on_member_join(member):
     """Приветствие нового участника"""
     # В систему статистики
+    from server_stats.global_collector import get_collector
+    collector = get_collector()
     if collector:
         collector.increment_new_members()
-        print(f"📊 Статистика: новый участник {member.name}")
 
     try:
         from applications.manager import app_manager
@@ -246,11 +256,13 @@ async def on_member_join(member):
 async def on_member_remove(member):
     print(f"🔴🔴🔴 СОБЫТИЕ on_member_remove ВЫЗВАНО для {member.name} (ID: {member.id}) 🔴🔴🔴")
     
+    # В систему статистики
+    from server_stats.global_collector import get_collector
+    collector = get_collector()
+    if collector:
+        collector.increment_left_members()
+
     try:
-        if collector:
-            collector.increment_left_members()
-            print(f"📊 Статистика: уход участника {member.name}")
-        
         from applications.manager import app_manager
         from core.database import db
         

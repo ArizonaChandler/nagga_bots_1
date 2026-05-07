@@ -79,9 +79,11 @@ class StartRegistrationModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИ
         )
         
         # В систему статистики
+        from server_stats.global_collector import get_collector
+
+        collector = get_collector()
         if collector:
             collector.increment_capt_registrations()
-            print(f"📊 Статистика: регистрация CAPT от {interaction.user.name}")
 
         # Отправляем подтверждение
         await interaction.response.send_message(

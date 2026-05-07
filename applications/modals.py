@@ -68,10 +68,11 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
             print(f"✅ Заявка создана с ID: {app_id}")
             
             # Увеличиваем счётчик новых заявок в статистике
-            from server_stats.stat_collector import collector
+            from server_stats.global_collector import get_collector
+
+            collector = get_collector()
             if collector:
                 collector.increment_new_applications()
-                print(f"📊 Статистика: новая заявка (#{app_id})")
             
             # Отправляем подтверждение пользователю
             embed = discord.Embed(
