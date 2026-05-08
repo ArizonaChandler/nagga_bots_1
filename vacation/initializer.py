@@ -108,7 +108,6 @@ class VacationInitializer:
                             try:
                                 role = guild.get_role(int(rid))
                                 if role:
-                                    # Проверяем, что роль не выше бота
                                     if role.position >= guild.me.top_role.position:
                                         logger.warning(f"⚠️ Роль {role.name} выше бота, пропускаем")
                                         failed_roles.append(f"{role.name} (выше бота)")
@@ -135,7 +134,7 @@ class VacationInitializer:
                             await member.remove_roles(vacation_role)
                             logger.info(f"   ✅ Снята роль отпуска {vacation_role.name}")
                     
-                    # Удаляем из БД (через database.py)
+                    # Удаляем из БД
                     with db.get_connection() as conn:
                         cursor = conn.cursor()
                         cursor.execute('DELETE FROM vacation_active WHERE user_id = ?', (user_id,))
@@ -211,8 +210,15 @@ class VacationInitializer:
         
         while not self.bot.is_closed():
             try:
-                # Проверяем просроченные отпуска через database.py
-                expired = db.get_expired_vacations()
+                # Проверяем просроченные отпуска
+                with db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        SELECT user_id, user_name, saved_roles, guild_id, reason, until_date
+                        FROM vacation_active 
+                        WHERE until_date < date('now')
+                    ''')
+                    expired = cursor.fetchall()
                 
                 if expired:
                     logger.info(f"⏰ Найдено просроченных отпусков: {len(expired)}")
@@ -224,8 +230,10 @@ class VacationInitializer:
                             logger.error(f"❌ Ошибка возврата {user_name}: {e}")
                     
                     # Удаляем просроченных из БД
-                    deleted = db.delete_expired_vacations()
-                    logger.info(f"✅ Удалено {deleted} просроченных отпусков из БД")
+                    with db.get_connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute('DELETE FROM vacation_active WHERE until_date < date("now")')
+                        conn.commit()
                     
                     # Обновляем embed
                     settings = vacation_manager.get_settings()
