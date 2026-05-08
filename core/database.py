@@ -1817,15 +1817,29 @@ class Database:
     
     def get_expired_vacations(self):
         """Получить все просроченные отпуска"""
+        from datetime import datetime
+        
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            # Преобразуем DD.MM.YYYY в YYYY-MM-DD для правильного сравнения
-            cursor.execute('''
-                SELECT user_id, user_name, saved_roles, guild_id, reason, until_date
-                FROM vacation_active 
-                WHERE substr(until_date, 7, 4) || '-' || substr(until_date, 4, 2) || '-' || substr(until_date, 1, 2) < date('now')
-            ''')
-            return cursor.fetchall()
+            cursor.execute('SELECT user_id, user_name, saved_roles, guild_id, reason, until_date FROM vacation_active')
+            all_vacations = cursor.fetchall()
+        
+        today = datetime.now().date()
+        expired = []
+        
+        for row in all_vacations:
+            user_id, user_name, saved_roles, guild_id, reason, until_date = row
+            try:
+                # Парсим дату из формата DD.MM.YYYY
+                until = datetime.strptime(until_date, '%d.%m.%Y').date()
+                if until < today:
+                    expired.append(row)
+                    print(f"📅 Просрочен: {user_name} (до {until_date}) < {today}")
+            except Exception as e:
+                print(f"❌ Ошибка парсинга даты {until_date} для {user_name}: {e}")
+        
+        print(f"📊 Найдено просроченных: {len(expired)}")
+        return expired
     
     def delete_expired_vacations(self):
         """Удалить все просроченные отпуска из БД"""
