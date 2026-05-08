@@ -1830,11 +1830,13 @@ class Database:
         for row in all_vacations:
             user_id, user_name, saved_roles, guild_id, reason, until_date = row
             try:
-                # Парсим дату из формата DD.MM.YYYY
-                until = datetime.strptime(until_date, '%d.%m.%Y').date()
+                # ТВОЙ ФОРМАТ: YYYY-MM-DD
+                until = datetime.strptime(until_date, '%Y-%m-%d').date()
                 if until < today:
                     expired.append(row)
                     print(f"📅 Просрочен: {user_name} (до {until_date}) < {today}")
+                else:
+                    print(f"✅ Ещё не просрочен: {user_name} (до {until_date}) >= {today}")
             except Exception as e:
                 print(f"❌ Ошибка парсинга даты {until_date} для {user_name}: {e}")
         
