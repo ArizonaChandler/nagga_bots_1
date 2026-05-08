@@ -1816,13 +1816,14 @@ class Database:
         # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ОТПУСКОВ (ДОПОЛНИТЕЛЬНЫЕ) =====
     
     def get_expired_vacations(self):
-        """Получить все просроченные отпуска (where until_date < date('now'))"""
+        """Получить все просроченные отпуска"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            # Преобразуем DD.MM.YYYY в YYYY-MM-DD для правильного сравнения
             cursor.execute('''
                 SELECT user_id, user_name, saved_roles, guild_id, reason, until_date
                 FROM vacation_active 
-                WHERE until_date < date('now')
+                WHERE substr(until_date, 7, 4) || '-' || substr(until_date, 4, 2) || '-' || substr(until_date, 1, 2) < date('now')
             ''')
             return cursor.fetchall()
     
@@ -1840,5 +1841,23 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('SELECT user_id, user_name, saved_roles, guild_id, reason, until_date FROM vacation_active')
             return cursor.fetchall()
+    
+    def delete_vacation_user(self, user_id: str):
+        """Удалить пользователя из отпуска"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM vacation_active WHERE user_id = ?', (user_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def get_role_ids_from_vacation(self, user_id: str):
+        """Получить сохранённые роли пользователя в отпуске"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT saved_roles FROM vacation_active WHERE user_id = ?', (user_id,))
+            result = cursor.fetchone()
+            if result and result[0]:
+                return result[0].split(',')
+            return []
 
 db = Database()
