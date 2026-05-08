@@ -161,25 +161,33 @@ class VacationInitializer:
         print("✅ ЗАПУЩЕН ФОНОВЫЙ ПРОВЕРЩИК (КАЖДУЮ МИНУТУ)")
     
     async def _check_expired_vacations(self):
-        """Фоновая задача: проверять каждые 60 секунд"""
+        """Фоновая задача: проверять раз в сутки в 00:00"""
         await self.bot.wait_until_ready()
         
-        print("🔄 ФОНОВЫЙ ПРОВЕРЩИК ЗАПУЩЕН, ЖДУ ПЕРВУЮ ПРОВЕРКУ...")
+        print("🔄 ФОНОВЫЙ ПРОВЕРЩИК ЗАПУЩЕН, БУДУ ПРОВЕРЯТЬ КАЖДЫЙ ДЕНЬ В 00:00")
         
         while not self.bot.is_closed():
-            await asyncio.sleep(60)  # Проверка каждую минуту
+            now = datetime.now(MSK_TZ)
+            
+            # Вычисляем время до следующей полуночи (00:00 следующего дня)
+            tomorrow = now + timedelta(days=1)
+            next_midnight = datetime(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0, 0)
+            next_midnight = MSK_TZ.localize(next_midnight)
+            seconds_to_wait = (next_midnight - now).total_seconds()
+            
+            print(f"⏰ Следующая проверка в 00:00 (через {int(seconds_to_wait)} секунд)")
+            
+            await asyncio.sleep(seconds_to_wait)
             
             try:
-                print("🔍 Фоновая проверка просроченных отпусков...")
+                print("🔍 Полуночная проверка просроченных отпусков...")
                 expired = db.get_expired_vacations()
                 
                 if expired:
                     print(f"⏰ Найдено просроченных отпусков: {len(expired)}")
-                    logger.info(f"⏰ Найдено просроченных отпусков: {len(expired)}")
                     
                     for user_id, user_name, saved_roles, guild_id, reason, until_date in expired:
                         try:
-                            # Возвращаем пользователя (ТОТ ЖЕ КОД, ЧТО В _check_expired_on_startup)
                             guild = self.bot.get_guild(int(guild_id))
                             if guild:
                                 member = guild.get_member(int(user_id))
@@ -203,6 +211,14 @@ class VacationInitializer:
                             
                             print(f"✅ {user_name} автоматически возвращён")
                             
+                            # Отправляем ЛС
+                            try:
+                                user = await self.bot.fetch_user(int(user_id))
+                                if user:
+                                    await user.send("✅ **Ваш отпуск закончился!** Добро пожаловать обратно!")
+                            except:
+                                pass
+                            
                         except Exception as e:
                             print(f"❌ Ошибка возврата {user_name}: {e}")
                     
@@ -212,8 +228,8 @@ class VacationInitializer:
                         await update_vacation_embed(self.bot, settings['vacation_public_channel'])
                 
             except Exception as e:
-                print(f"❌ Ошибка в фоновой проверке: {e}")
-                logger.error(f"❌ Ошибка в фоновой проверке: {e}")
+                print(f"❌ Ошибка в полуночной проверке: {e}")
+                logger.error(f"❌ Ошибка в полуночной проверке: {e}")
     
     async def _init_public_channel(self, settings):
         """Инициализация публичного канала с кнопками"""
