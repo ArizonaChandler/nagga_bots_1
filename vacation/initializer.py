@@ -23,19 +23,9 @@ class VacationInitializer:
         """Инициализировать все каналы системы отпусков"""
         logger.info("🔄 Инициализация системы отпусков...")
         
-        # ⭐ ВРЕМЕННЫЙ ЛОГ ДЛЯ ДИАГНОСТИКИ
-        logger.info("🔍 ВЫЗЫВАЮ _check_expired_on_startup()")
-        try:
-            await self._check_expired_on_startup()
-            logger.info("✅ _check_expired_on_startup() выполнен успешно")
-        except Exception as e:
-            logger.error(f"❌ ОШИБКА в _check_expired_on_startup(): {e}")
-            import traceback
-            traceback.print_exc()
-        
         settings = vacation_manager.get_settings()
         
-        # ⭐⭐⭐ ПРОВЕРКА ПРОСРОЧЕННЫХ ОТПУСКОВ ПРИ ЗАПУСКЕ ⭐⭐⭐
+        # ⭐ ПРОВЕРКА ПРОСРОЧЕННЫХ ОТПУСКОВ ПРИ ЗАПУСКЕ
         await self._check_expired_on_startup()
         
         # 1. Публичный канал с кнопками
@@ -44,7 +34,7 @@ class VacationInitializer:
         # 2. Канал настроек
         await self._init_settings_channel()
         
-        # 3. Запускаем фоновую проверку
+        # 3. Запускаем фоновую проверку (каждую минуту)
         await self.start_expiry_checker()
         
         logger.info("✅ Инициализация системы отпусков завершена")
