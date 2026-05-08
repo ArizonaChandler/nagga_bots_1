@@ -2,7 +2,7 @@
 import asyncio
 import discord
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from vacation.manager import vacation_manager
 from vacation.views import VacationPublicView, update_vacation_embed
@@ -23,17 +23,10 @@ class VacationInitializer:
         """Инициализировать все каналы системы отпусков"""
         logger.info("🔄 Инициализация системы отпусков...")
         
-        # ⭐⭐⭐ ПРОВЕРКА ПРОСРОЧЕННЫХ ПРИ ЗАПУСКЕ ⭐⭐⭐
-        try:
-            logger.info("🔍 ВЫЗЫВАЮ _check_expired_on_startup()...")
-            await self._check_expired_on_startup()
-            logger.info("✅ _check_expired_on_startup() ВЫПОЛНЕН")
-        except Exception as e:
-            logger.error(f"❌ ОШИБКА: {e}")
-            import traceback
-            traceback.print_exc()
-        
         settings = vacation_manager.get_settings()
+        
+        # ⭐ ДОБАВЛЕНА ПРОВЕРКА ПРОСРОЧЕННЫХ ПРИ ЗАПУСКЕ ⭐
+        await self._check_expired_on_startup()
         
         # 1. Публичный канал с кнопками
         await self._init_public_channel(settings)
@@ -41,38 +34,44 @@ class VacationInitializer:
         # 2. Канал настроек
         await self._init_settings_channel()
         
-        # 3. Запускаем фоновую проверку
+        # 3. Запускаем проверку просроченных отпусков
         await self.start_expiry_checker()
         
         logger.info("✅ Инициализация системы отпусков завершена")
     
     async def _check_expired_on_startup(self):
-        """ПРОВЕРКА ПРОСРОЧЕННЫХ ОТПУСКОВ ПРИ ЗАПУСКЕ"""
-        logger.info("🔍 === ПРОВЕРКА ПРОСРОЧЕННЫХ ОТПУСКОВ ПРИ ЗАПУСКЕ ===")
+        """ПРОВЕРКА ПРОСРОЧЕННЫХ ОТПУСКОВ ПРИ ЗАПУСКЕ (ДОБАВЛЕНО)"""
+        import traceback
+        
+        print("🔥🔥🔥 МЕТОД _check_expired_on_startup ВЫЗВАН 🔥🔥🔥")
+        logger.info("🔥🔥🔥 МЕТОД _check_expired_on_startup ВЫЗВАН 🔥🔥🔥")
         
         try:
+            print("🔍 1. Получаю подключение к БД...")
             with db.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Проверяем таблицу
+                print("🔍 2. Проверяю таблицу...")
                 cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='vacation_active'")
                 if not cursor.fetchone():
+                    print("⚠️ Таблица vacation_active не существует")
                     logger.warning("⚠️ Таблица vacation_active не существует")
                     return
                 
-                # Получаем просроченных
+                print("🔍 3. Ищу просроченных...")
                 cursor.execute("SELECT user_id, user_name, saved_roles, guild_id, until_date FROM vacation_active WHERE until_date < date('now')")
                 expired = cursor.fetchall()
                 
+                print(f"🔍 4. Найдено просроченных: {len(expired)}")
                 logger.info(f"📊 Найдено просроченных: {len(expired)}")
                 
                 for user_id, user_name, saved_roles, guild_id, until_date in expired:
                     try:
-                        logger.info(f"🔄 Возвращаю {user_name} (ID: {user_id})")
+                        print(f"🔍 5. Обрабатываю {user_name} (ID: {user_id})...")
                         
                         guild = self.bot.get_guild(int(guild_id))
                         if not guild:
-                            logger.error(f"❌ Гильдия {guild_id} не найдена")
+                            print(f"❌ Гильдия {guild_id} не найдена")
                             continue
                         
                         member = guild.get_member(int(user_id))
@@ -80,7 +79,7 @@ class VacationInitializer:
                             try:
                                 member = await guild.fetch_member(int(user_id))
                             except:
-                                logger.error(f"❌ Не могу найти {user_id} на сервере")
+                                print(f"❌ Не могу найти {user_id} на сервере")
                                 continue
                         
                         # Восстанавливаем роли
@@ -91,9 +90,9 @@ class VacationInitializer:
                                     role = guild.get_role(int(rid))
                                     if role and role.position < guild.me.top_role.position:
                                         await member.add_roles(role)
-                                        logger.info(f"   ✅ Добавлена роль {role.name}")
+                                        print(f"   ✅ Добавлена роль {role.name}")
                                 except Exception as e:
-                                    logger.error(f"   ❌ Не могу добавить роль {rid}: {e}")
+                                    print(f"   ❌ Не могу добавить роль {rid}: {e}")
                         
                         # Снимаем роль отпуска
                         vacation_role_id = vacation_manager.get_settings().get('vacation_role')
@@ -102,18 +101,18 @@ class VacationInitializer:
                                 vacation_role = guild.get_role(int(vacation_role_id))
                                 if vacation_role and vacation_role in member.roles:
                                     await member.remove_roles(vacation_role)
-                                    logger.info(f"   ✅ Снята роль отпуска")
+                                    print(f"   ✅ Снята роль отпуска")
                             except Exception as e:
-                                logger.error(f"   ❌ Ошибка снятия роли отпуска: {e}")
+                                print(f"   ❌ Ошибка снятия роли отпуска: {e}")
                         
                         # Отправляем ЛС
                         try:
                             user = await self.bot.fetch_user(int(user_id))
                             if user:
                                 await user.send(f"✅ **Вы автоматически возвращены из отпуска!**\nВаши роли восстановлены.")
-                                logger.info(f"   ✅ ЛС отправлено")
+                                print(f"   ✅ ЛС отправлено")
                         except Exception as e:
-                            logger.error(f"   ❌ Ошибка отправки ЛС: {e}")
+                            print(f"   ❌ Ошибка отправки ЛС: {e}")
                         
                         # Удаляем из БД
                         with db.get_connection() as conn2:
@@ -121,46 +120,72 @@ class VacationInitializer:
                             cur2.execute("DELETE FROM vacation_active WHERE user_id = ?", (user_id,))
                             conn2.commit()
                         
-                        logger.info(f"✅ {user_name} успешно возвращён")
+                        print(f"✅ {user_name} успешно возвращён")
                         
                     except Exception as e:
-                        logger.error(f"❌ Ошибка при возврате {user_name}: {e}")
+                        print(f"❌ Ошибка при возврате {user_name}: {e}")
                 
                 # Обновляем embed
                 if expired:
                     settings = vacation_manager.get_settings()
                     if settings.get('vacation_public_channel'):
                         await update_vacation_embed(self.bot, settings['vacation_public_channel'])
-                        logger.info(f"✅ Embed обновлён")
+                        print(f"✅ Embed обновлён")
                 
         except Exception as e:
-            logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
-            import traceback
+            print(f"❌❌❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
             traceback.print_exc()
+            logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
     
     async def start_expiry_checker(self):
-        """Запустить фоновую задачу для проверки просроченных отпусков (каждую минуту)"""
-        self.bot.loop.create_task(self._check_expired_periodically())
-        logger.info("✅ Запущен автоматический проверщик просроченных отпусков (каждую минуту)")
+        """Запустить фоновую задачу для проверки просроченных отпусков"""
+        self.bot.loop.create_task(self._check_expired_vacations())
+        logger.info("✅ Запущен автоматический проверщик просроченного отпуска")
     
-    async def _check_expired_periodically(self):
+    async def _check_expired_vacations(self):
         """Фоновая задача: проверять каждые 60 секунд"""
         await self.bot.wait_until_ready()
         
         while not self.bot.is_closed():
             try:
+                expired = vacation_manager.check_expired_vacations()
+                
+                if expired:
+                    logger.info(f"⏰ Найдено просроченных отпусков: {len(expired)}")
+                    settings = vacation_manager.get_settings()
+                    
+                    # Обновляем embed
+                    channel_id = settings.get('vacation_public_channel')
+                    if channel_id:
+                        await update_vacation_embed(self.bot, channel_id)
+                    
+                    # Отправляем логи и ЛС
+                    log_channel_id = settings.get('vacation_log_channel')
+                    if log_channel_id:
+                        log_channel = self.bot.get_channel(int(log_channel_id))
+                        if log_channel:
+                            for user_id, user_name in expired:
+                                embed = discord.Embed(
+                                    title="⏰ ОТПУСК ЗАКОНЧИЛСЯ",
+                                    description=f"У пользователя **{user_name}** закончился отпуск",
+                                    color=0xffa500,
+                                    timestamp=datetime.now(MSK_TZ)
+                                )
+                                await log_channel.send(embed=embed)
+                                
+                                # Отправляем ЛС
+                                try:
+                                    user = await self.bot.fetch_user(int(user_id))
+                                    if user:
+                                        await user.send("✅ Ваш отпуск закончился! Добро пожаловать обратно!")
+                                except:
+                                    pass
+                
                 await asyncio.sleep(60)
                 
-                with db.get_connection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM vacation_active WHERE until_date < date('now')")
-                    if cursor.rowcount > 0:
-                        logger.info(f"🗑️ Удалено {cursor.rowcount} просроченных отпусков")
-                        settings = vacation_manager.get_settings()
-                        if settings.get('vacation_public_channel'):
-                            await update_vacation_embed(self.bot, settings['vacation_public_channel'])
             except Exception as e:
-                logger.error(f"❌ Ошибка в фоновой проверке: {e}")
+                logger.error(f"❌ Ошибка в проверке отпусков: {e}")
+                await asyncio.sleep(60)
     
     async def _init_public_channel(self, settings):
         """Инициализация публичного канала с кнопками"""
@@ -174,14 +199,24 @@ class VacationInitializer:
             logger.error(f"❌ Публичный канал {channel_id} не найден")
             return
         
-        # Ищем существующее сообщение
+        from vacation.views import VacationPublicView, update_vacation_embed
+        
+        # Ищем существующее сообщение с кнопками
         message_exists = False
         async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user and msg.components:
-                await msg.edit(view=VacationPublicView())
-                message_exists = True
-                logger.info(f"✅ Обновлена панель отпусков в #{channel.name}")
-                break
+            if msg.author == self.bot.user:
+                if msg.components and len(msg.components) > 0:
+                    for component in msg.components:
+                        for button in component.children:
+                            if button.custom_id in ["vacation_go", "vacation_back"]:
+                                await msg.edit(view=VacationPublicView())
+                                message_exists = True
+                                logger.info(f"✅ Обновлена панель отпусков в #{channel.name}")
+                                break
+                        if message_exists:
+                            break
+                if message_exists:
+                    break
         
         if not message_exists:
             embed = discord.Embed(
