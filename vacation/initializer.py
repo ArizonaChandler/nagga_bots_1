@@ -41,22 +41,12 @@ class VacationInitializer:
         logger.info("✅ Запущен автоматический проверщик просроченных отпусков")
     
     async def _check_expired_vacations(self):
-        """Фоновая задача: проверять каждый день в 00:00"""
+        """Фоновая задача: проверять каждые 60 секунд"""
         await self.bot.wait_until_ready()
         
         while not self.bot.is_closed():
-            now = datetime.now(MSK_TZ)
-            
-            # Вычисляем время до следующей полуночи (00:00 следующего дня)
-            tomorrow = now + timedelta(days=1)
-            next_midnight = datetime(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0, 0)
-            next_midnight = MSK_TZ.localize(next_midnight)
-            seconds_to_wait = (next_midnight - now).total_seconds()
-            
-            if seconds_to_wait > 0:
-                await asyncio.sleep(seconds_to_wait)
-            
             try:
+                # Проверяем просроченные отпуска
                 expired = vacation_manager.check_expired_vacations()
                 
                 if expired:
@@ -86,10 +76,11 @@ class VacationInitializer:
                                 try:
                                     user = await self.bot.fetch_user(int(user_id))
                                     if user:
-                                        await user.send("✅ Ваш отпуск закончился! Добро пожалобратно!")
+                                        await user.send("✅ Ваш отпуск закончился! Добро пожаловать обратно!")
                                 except:
                                     pass
                 
+                # Проверяем каждую минуту, а не раз в сутки
                 await asyncio.sleep(60)
                 
             except Exception as e:
