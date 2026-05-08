@@ -1813,4 +1813,32 @@ class Database:
                 else:
                     CONFIG[key] = value
 
+        # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ОТПУСКОВ (ДОПОЛНИТЕЛЬНЫЕ) =====
+    
+    def get_expired_vacations(self):
+        """Получить все просроченные отпуска (where until_date < date('now'))"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT user_id, user_name, saved_roles, guild_id, reason, until_date
+                FROM vacation_active 
+                WHERE until_date < date('now')
+            ''')
+            return cursor.fetchall()
+    
+    def delete_expired_vacations(self):
+        """Удалить все просроченные отпуска из БД"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM vacation_active WHERE until_date < date("now")')
+            conn.commit()
+            return cursor.rowcount
+    
+    def get_all_vacation_active(self):
+        """Получить ВСЕХ активных в отпуске (для проверки при запуске)"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT user_id, user_name, saved_roles, guild_id, reason, until_date FROM vacation_active')
+            return cursor.fetchall()
+
 db = Database()

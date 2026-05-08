@@ -7,6 +7,7 @@ import pytz
 from vacation.manager import vacation_manager
 from vacation.views import VacationPublicView, update_vacation_embed
 from vacation.settings_view import VacationSettingsView
+from core.database import db
 
 logger = logging.getLogger(__name__)
 MSK_TZ = pytz.timezone('Europe/Moscow')
@@ -24,68 +25,211 @@ class VacationInitializer:
         
         settings = vacation_manager.get_settings()
         
+        # ⭐⭐⭐ ПРОВЕРКА ПРОСРОЧЕННЫХ ОТПУСКОВ ПРИ ЗАПУСКЕ ⭐⭐⭐
+        await self._check_expired_on_startup()
+        
         # 1. Публичный канал с кнопками
         await self._init_public_channel(settings)
         
         # 2. Канал настроек
         await self._init_settings_channel()
         
-        # 3. Запускаем проверку просроченных отпусков
+        # 3. Запускаем фоновую проверку
         await self.start_expiry_checker()
         
         logger.info("✅ Инициализация системы отпусков завершена")
     
-    async def start_expiry_checker(self):
-        """Запустить фоновую задачу для проверки просроченных отпусков"""
-        self.bot.loop.create_task(self._check_expired_vacations())
-        logger.info("✅ Запущен автоматический проверщик просроченных отпусков")
+    async def _check_expired_on_startup(self):
+        """Проверка просроченных отпусков при запуске бота (через database.py)"""
+        logger.info("🔍 Проверка просроченных отпусков при запуске...")
+        
+        try:
+            # Используем метод из database.py
+            expired = db.get_expired_vacations()
+            
+            if not expired:
+                logger.info("✅ Нет просроченных отпусков")
+                return
+            
+            logger.info(f"⚠️ Найдено {len(expired)} просроченных отпусков. Возвращаем пользователей...")
+            
+            for user_id, user_name, saved_roles, guild_id, reason, until_date in expired:
+                try:
+                    logger.info(f"🔄 Возвращаем {user_name} (ID: {user_id}) из отпуска, закончившегося {until_date}")
+                    
+                    # Находим сервер
+                    guild = self.bot.get_guild(int(guild_id))
+                    if not guild:
+                        logger.error(f"❌ Сервер {guild_id} не найден для {user_name}")
+                        continue
+                    
+                    # Получаем участника
+                    member = guild.get_member(int(user_id))
+                    if not member:
+                        try:
+                            member = await guild.fetch_member(int(user_id))
+                        except:
+                            logger.error(f"❌ Пользователь {user_id} не найден на сервере")
+                            continue
+                    
+                    # Восстанавливаем роли
+                    restored_roles = []
+                    failed_roles = []
+                    
+                    if saved_roles:
+                        role_ids = [rid.strip() for rid in saved_roles.split(',') if rid.strip()]
+                        logger.info(f"🎭 Восстанавливаем роли для {user_name}: {role_ids}")
+                        
+                        for rid in role_ids:
+                            try:
+                                role = guild.get_role(int(rid))
+                                if role:
+                                    if role.position >= guild.me.top_role.position:
+                                        logger.warning(f"⚠️ Роль {role.name} выше бота, пропускаем")
+                                        continue
+                                    await member.add_roles(role)
+                                    restored_roles.append(role.name)
+                                    logger.info(f"   ✅ Роль {role.name} восстановлена")
+                                else:
+                                    failed_roles.append(f"ID:{rid} (не найдена)")
+                            except discord.Forbidden:
+                                failed_roles.append(f"ID:{rid} (нет прав)")
+                            except Exception as e:
+                                failed_roles.append(f"ID:{rid} ({e})")
+                    
+                    # Снимаем роль отпуска
+                    vacation_role_id = vacation_manager.get_settings().get('vacation_role')
+                    if vacation_role_id:
+                        vacation_role = guild.get_role(int(vacation_role_id))
+                        if vacation_role and vacation_role in member.roles:
+                            await member.remove_roles(vacation_role)
+                            logger.info(f"   ✅ Снята роль отпуска")
+                    
+                    # Отправляем ЛС пользователю
+                    try:
+                        user = await self.bot.fetch_user(int(user_id))
+                        if user:
+                            embed = discord.Embed(
+                                title="✅ ВОЗВРАТ ИЗ ОТПУСКА (АВТОМАТИЧЕСКИ)",
+                                description=f"Ваш отпуск закончился.\n\n"
+                                            f"**Восстановлено ролей:** {len(restored_roles)}\n"
+                                            f"**Ошибок:** {len(failed_roles)}",
+                                color=0x00ff00 if restored_roles else 0xffa500
+                            )
+                            if restored_roles:
+                                embed.add_field(name="✅ Восстановленные роли", value=", ".join(restored_roles), inline=False)
+                            if failed_roles:
+                                embed.add_field(name="❌ Не удалось восстановить", value=", ".join(failed_roles), inline=False)
+                            await user.send(embed=embed)
+                    except Exception as e:
+                        logger.error(f"❌ Ошибка отправки ЛС: {e}")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Ошибка восстановления {user_name}: {e}")
+            
+            # Удаляем ВСЕ просроченные отпуска из БД (через database.py)
+            deleted_count = db.delete_expired_vacations()
+            logger.info(f"✅ Удалено {deleted_count} просроченных отпусков из БД")
+            
+            # Обновляем embed в публичном канале
+            settings = vacation_manager.get_settings()
+            public_channel_id = settings.get('vacation_public_channel')
+            if public_channel_id:
+                await update_vacation_embed(self.bot, public_channel_id)
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка в _check_expired_on_startup: {e}")
+            import traceback
+            traceback.print_exc()
     
-    async def _check_expired_vacations(self):
+    async def start_expiry_checker(self):
+        """Запустить фоновую задачу для проверки просроченных отпусков (каждую минуту)"""
+        self.bot.loop.create_task(self._check_expired_periodically())
+        logger.info("✅ Запущен автоматический проверщик просроченных отпусков (каждую минуту)")
+    
+    async def _check_expired_periodically(self):
         """Фоновая задача: проверять каждые 60 секунд"""
         await self.bot.wait_until_ready()
         
         while not self.bot.is_closed():
             try:
-                # Проверяем просроченные отпуска
-                expired = vacation_manager.check_expired_vacations()
+                # Проверяем просроченные отпуска через database.py
+                expired = db.get_expired_vacations()
                 
                 if expired:
                     logger.info(f"⏰ Найдено просроченных отпусков: {len(expired)}")
-                    settings = vacation_manager.get_settings()
+                    
+                    for user_id, user_name, saved_roles, guild_id, reason, until_date in expired:
+                        try:
+                            await self._return_user_from_vacation(user_id, user_name, saved_roles, guild_id, until_date)
+                        except Exception as e:
+                            logger.error(f"❌ Ошибка возврата {user_name}: {e}")
+                    
+                    # Удаляем просроченных из БД
+                    deleted = db.delete_expired_vacations()
+                    logger.info(f"✅ Удалено {deleted} просроченных отпусков из БД")
                     
                     # Обновляем embed
+                    settings = vacation_manager.get_settings()
                     channel_id = settings.get('vacation_public_channel')
                     if channel_id:
                         await update_vacation_embed(self.bot, channel_id)
-                    
-                    # Отправляем логи и ЛС
-                    log_channel_id = settings.get('vacation_log_channel')
-                    if log_channel_id:
-                        log_channel = self.bot.get_channel(int(log_channel_id))
-                        if log_channel:
-                            for user_id, user_name in expired:
-                                embed = discord.Embed(
-                                    title="⏰ ОТПУСК ЗАКОНЧИЛСЯ",
-                                    description=f"У пользователя **{user_name}** закончился отпуск",
-                                    color=0xffa500,
-                                    timestamp=datetime.now(MSK_TZ)
-                                )
-                                await log_channel.send(embed=embed)
-                                
-                                # Отправляем ЛС
-                                try:
-                                    user = await self.bot.fetch_user(int(user_id))
-                                    if user:
-                                        await user.send("✅ Ваш отпуск закончился! Добро пожаловать обратно!")
-                                except:
-                                    pass
                 
-                # Проверяем каждую минуту, а не раз в сутки
                 await asyncio.sleep(60)
                 
             except Exception as e:
                 logger.error(f"❌ Ошибка в проверке отпусков: {e}")
                 await asyncio.sleep(60)
+    
+    async def _return_user_from_vacation(self, user_id: str, user_name: str, saved_roles: str, guild_id: str, until_date: str):
+        """Вернуть пользователя из отпуска (вспомогательный метод)"""
+        guild = self.bot.get_guild(int(guild_id))
+        if not guild:
+            logger.error(f"❌ Сервер {guild_id} не найден")
+            return
+        
+        member = guild.get_member(int(user_id))
+        if not member:
+            try:
+                member = await guild.fetch_member(int(user_id))
+            except:
+                logger.error(f"❌ Пользователь {user_id} не найден")
+                return
+        
+        restored_roles = []
+        
+        if saved_roles:
+            role_ids = [rid.strip() for rid in saved_roles.split(',') if rid.strip()]
+            for rid in role_ids:
+                try:
+                    role = guild.get_role(int(rid))
+                    if role and role.position < guild.me.top_role.position:
+                        await member.add_roles(role)
+                        restored_roles.append(role.name)
+                except:
+                    pass
+        
+        # Снимаем роль отпуска
+        vacation_role_id = vacation_manager.get_settings().get('vacation_role')
+        if vacation_role_id:
+            vacation_role = guild.get_role(int(vacation_role_id))
+            if vacation_role and vacation_role in member.roles:
+                await member.remove_roles(vacation_role)
+        
+        # Отправляем ЛС
+        try:
+            user = await self.bot.fetch_user(int(user_id))
+            if user:
+                embed = discord.Embed(
+                    title="✅ ВОЗВРАТ ИЗ ОТПУСКА",
+                    description=f"Ваш отпуск закончился.\n\n**Восстановлено ролей:** {len(restored_roles)}",
+                    color=0x00ff00
+                )
+                await user.send(embed=embed)
+        except:
+            pass
+        
+        logger.info(f"✅ {user_name} возвращён из отпуска, восстановлено {len(restored_roles)} ролей")
     
     async def _init_public_channel(self, settings):
         """Инициализация публичного канала с кнопками"""
@@ -99,28 +243,15 @@ class VacationInitializer:
             logger.error(f"❌ Публичный канал {channel_id} не найден")
             return
         
-        from vacation.views import VacationPublicView, update_vacation_embed
-        
-        # Ищем существующее сообщение с кнопками
+        # Ищем существующее сообщение
         message_exists = False
         async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user:
-                # Проверяем, есть ли в сообщении наша кнопка
-                if msg.components and len(msg.components) > 0:
-                    for component in msg.components:
-                        for button in component.children:
-                            if button.custom_id in ["vacation_go", "vacation_back"]:
-                                # Нашли наше сообщение, обновляем view
-                                await msg.edit(view=VacationPublicView())
-                                message_exists = True
-                                logger.info(f"✅ Обновлена панель отпусков в #{channel.name}")
-                                break
-                        if message_exists:
-                            break
-                if message_exists:
-                    break
+            if msg.author == self.bot.user and msg.components:
+                await msg.edit(view=VacationPublicView())
+                message_exists = True
+                logger.info(f"✅ Обновлена панель отпусков в #{channel.name}")
+                break
         
-        # Если сообщения нет - создаём новое
         if not message_exists:
             embed = discord.Embed(
                 title="🏖️ **СИСТЕМА ОТПУСКОВ**",
@@ -131,7 +262,6 @@ class VacationInitializer:
             await channel.send(embed=embed, view=VacationPublicView())
             logger.info(f"✅ Создана панель отпусков в #{channel.name}")
         
-        # Обновляем embed со списком отпускников
         await update_vacation_embed(self.bot, channel_id)
     
     async def _init_settings_channel(self):
