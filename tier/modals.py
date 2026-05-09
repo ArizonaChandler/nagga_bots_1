@@ -38,10 +38,10 @@ class TierApplicationModal(discord.ui.Modal, title="🌟 ЗАЯВКА НА TIER"
     )
     
     async def on_submit(self, interaction: discord.Interaction):
-        # Определяем текущий тир пользователя (для информации, но не для ограничения)
+        from tier.views import TierModerationView
+
         current_tier = tier_manager.get_user_current_tier(str(interaction.user.id), interaction.guild)
-        
-        # Создаём заявку (без указания target_tier, модератор сам выберет)
+
         app_id, error = tier_manager.create_application(
             user_id=str(interaction.user.id),
             user_name=interaction.user.display_name,
@@ -49,30 +49,30 @@ class TierApplicationModal(discord.ui.Modal, title="🌟 ЗАЯВКА НА TIER"
             arena_link=self.arena_link.value,
             screenshots=self.screenshots.value,
             additional=self.additional.value or "Нет",
-            target_tier="pending"  # временное значение
+            target_tier="pending"
         )
-        
+
         if error:
             await interaction.response.send_message(error, ephemeral=True)
             return
-        
-        # Отправляем подтверждение
+
         embed = discord.Embed(
             title="✅ ЗАЯВКА ОТПРАВЛЕНА",
-            description=f"Ваша заявка принята и передана на рассмотрение.",
+            description="Ваша заявка принята и передана на рассмотрение.",
             color=0x00ff00
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
-        
-        # Отправляем заявку в канал модерации
+
         settings = tier_manager.get_settings()
         applications_channel_id = settings.get('tier_applications_channel')
-        
+
         if applications_channel_id:
             channel = interaction.client.get_channel(int(applications_channel_id))
             if channel:
-                from tier.views import TierModerationView
-                
+                # Получаем роль Tier Checker для упоминания
+                checker_role_id = settings.get('tier_checker_role')
+                mention = f"<@&{checker_role_id}>" if checker_role_id else ""
+
                 embed = discord.Embed(
                     title="🌟 НОВАЯ ЗАЯВКА НА TIER",
                     color=0xffa500,
@@ -84,15 +84,16 @@ class TierApplicationModal(discord.ui.Modal, title="🌟 ЗАЯВКА НА TIER"
                 embed.add_field(name="📸 Скриншоты", value=self.screenshots.value[:200], inline=False)
                 embed.add_field(name="📝 Дополнительно", value=self.additional.value or "Нет", inline=False)
                 embed.set_footer(text=f"Заявка ID: {app_id}")
-                
-                # Отправляем сообщение с кнопками (только ID заявки)
-                sent_message = await channel.send(embed=embed, view=TierModerationView(app_id))
-                
-                # Сохраняем ID сообщения для восстановления после перезапуска
+
+                sent_message = await channel.send(
+                    content=mention,
+                    embed=embed,
+                    view=TierModerationView(app_id)
+                )
+
                 tier_manager.save_application_message(
                     application_id=app_id,
                     channel_id=str(channel.id),
                     message_id=str(sent_message.id),
                     user_id=str(interaction.user.id)
                 )
-                print(f"✅ Заявка TIER отправлена и сохранена (message_id: {sent_message.id})")

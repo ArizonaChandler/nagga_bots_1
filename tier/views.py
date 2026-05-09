@@ -83,124 +83,124 @@ class TierSubmitView(PermanentView):
 
 
 class TierModerationView(discord.ui.View):
-    """Кнопки для модерации заявки на тир"""
-    
+    """Кнопки для модерации заявки на тир (только для роли Tier Checker)"""
+
     def __init__(self, application_id: int):
         super().__init__(timeout=None)
         self.application_id = application_id
-    
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Проверка: только пользователи с ролью Tier Checker могут нажимать кнопки"""
+        settings = tier_manager.get_settings()
+        checker_role_id = settings.get('tier_checker_role')
+
+        if not checker_role_id:
+            await interaction.response.send_message(
+                "❌ Роль `Tier Checker` не настроена. Обратитесь к администратору.",
+                ephemeral=True
+            )
+            return False
+
+        role = interaction.guild.get_role(int(checker_role_id))
+
+        if not role:
+            await interaction.response.send_message(
+                "❌ Роль `Tier Checker` не найдена на сервере.",
+                ephemeral=True
+            )
+            return False
+
+        if role not in interaction.user.roles:
+            await interaction.response.send_message(
+                "❌ Только пользователи с ролью **Tier Checker** могут управлять заявками.",
+                ephemeral=True
+            )
+            return False
+
+        return True
+
     @discord.ui.button(label="🟤 ВЫДАТЬ TIER 3", style=discord.ButtonStyle.secondary, row=0, emoji="🟤")
     async def approve_tier3(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Выдать Tier 3"""
         await self.process_approve(interaction, "tier3")
-    
+
     @discord.ui.button(label="⚪ ВЫДАТЬ TIER 2", style=discord.ButtonStyle.secondary, row=0, emoji="⚪")
     async def approve_tier2(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Выдать Tier 2"""
         await self.process_approve(interaction, "tier2")
-    
+
     @discord.ui.button(label="🔴 ВЫДАТЬ TIER 1", style=discord.ButtonStyle.secondary, row=0, emoji="🔴")
     async def approve_tier1(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Выдать Tier 1"""
         await self.process_approve(interaction, "tier1")
-    
+
     @discord.ui.button(label="❌ ОТКЛОНИТЬ", style=discord.ButtonStyle.danger, row=1, emoji="❌")
     async def reject_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Отклонить заявку"""
         await interaction.response.send_modal(TierRejectReasonModal(self.application_id))
-    
+
     async def process_approve(self, interaction: discord.Interaction, target_tier: str):
-        """Обработка одобрения заявки с выдачей конкретного тира"""
+        """Обработка одобрения заявки"""
         # Делаем кнопки неактивными
         for child in self.children:
             child.disabled = True
         await interaction.message.edit(view=self)
-        
+
         await interaction.response.defer(ephemeral=True)
-        
+
         app = tier_manager.get_application(self.application_id)
         if not app:
             await interaction.followup.send("❌ Заявка не найдена", ephemeral=True)
             return
-        
-        # Обновляем заявку в БД
-        success = tier_manager.approve_application(
-            self.application_id, 
-            str(interaction.user.id),
-            target_tier
-        )
-        
+
+        success = tier_manager.approve_application(self.application_id, str(interaction.user.id), target_tier)
+
         if not success:
             await interaction.followup.send("❌ Не удалось одобрить заявку", ephemeral=True)
             return
-        
-        # Получаем названия ролей для отображения
+
         tier_names = {
             "tier3": {"emoji": "🟤", "name": "Tier 3", "role_key": "tier3_role"},
             "tier2": {"emoji": "⚪", "name": "Tier 2", "role_key": "tier2_role"},
             "tier1": {"emoji": "🔴", "name": "Tier 1", "role_key": "tier1_role"}
         }
         tier_info = tier_names.get(target_tier, {"emoji": "🌟", "name": target_tier.upper(), "role_key": None})
-        
-        # Выдаём роль
+
         guild = interaction.guild
         member = guild.get_member(int(app['user_id']))
-        user_id = app['user_id']
-        
+
         new_role = None
         role_mention = tier_info['name']
-        
+
         if member:
             # Убираем все предыдущие роли тиров
             tier1_role_id = CONFIG.get('tier1_role')
             tier2_role_id = CONFIG.get('tier2_role')
             tier3_role_id = CONFIG.get('tier3_role')
-            
-            old_roles = [tier3_role_id, tier2_role_id, tier1_role_id]
-            for role_id in old_roles:
+
+            for role_id in [tier3_role_id, tier2_role_id, tier1_role_id]:
                 if role_id:
                     old_role = guild.get_role(int(role_id))
                     if old_role and old_role in member.roles:
                         await member.remove_roles(old_role)
-            
+
             # Выдаём новую роль
-            new_role_id = None
-            if target_tier == "tier3":
-                new_role_id = CONFIG.get('tier3_role')
-            elif target_tier == "tier2":
-                new_role_id = CONFIG.get('tier2_role')
-            elif target_tier == "tier1":
-                new_role_id = CONFIG.get('tier1_role')
-            
+            new_role_id = CONFIG.get(f'{target_tier}_role')
             if new_role_id:
                 new_role = guild.get_role(int(new_role_id))
                 if new_role:
                     await member.add_roles(new_role)
                     role_mention = new_role.mention
-                    await interaction.followup.send(f"✅ Заявка одобрена! Выдана роль {new_role.mention}", ephemeral=True)
-                else:
-                    await interaction.followup.send(f"✅ Заявка одобрена, но роль не найдена (ID: {new_role_id})", ephemeral=True)
-            else:
-                await interaction.followup.send(f"✅ Заявка одобрена, но роль для {tier_info['name']} не настроена!", ephemeral=True)
-        else:
-            await interaction.followup.send(f"✅ Заявка одобрена, но пользователь не найден на сервере", ephemeral=True)
-        
-        # Отправляем ЛС пользователю
+
+        # Отправляем ЛС
         try:
-            user = await interaction.client.fetch_user(int(user_id))
+            user = await interaction.client.fetch_user(int(app['user_id']))
             if user:
                 embed = discord.Embed(
                     title=f"{tier_info['emoji']} ПОЗДРАВЛЯЕМ!",
-                    description=f"Ваша заявка на **{tier_info['name']}** одобрена!\n\n"
-                                f"Вам выдана роль {role_mention}.\n\n"
-                                f"Поздравляем с повышением!",
+                    description=f"Ваша заявка на **{tier_info['name']}** одобрена!",
                     color=0x00ff00
                 )
                 await user.send(embed=embed)
-                print(f"✅ ЛС отправлено пользователю {user_id}")
-        except Exception as e:
-            print(f"❌ Ошибка при отправке ЛС: {e}")
-        
+        except:
+            pass
+
         # Логируем
         log_channel_id = CONFIG.get('tier_log_channel')
         if log_channel_id:
@@ -214,15 +214,15 @@ class TierModerationView(discord.ui.View):
                 )
                 embed.add_field(name="👤 Модератор", value=interaction.user.mention)
                 await log_channel.send(embed=embed)
-        
+
         # Обновляем сообщение
         embed = interaction.message.embeds[0]
         embed.color = 0x00ff00
-        embed.add_field(name="✅ Статус", value=f"Одобрена модератором {interaction.user.mention} na {tier_info['name']}", inline=False)
+        embed.add_field(name="✅ Статус", value=f"Одобрена модератором {interaction.user.mention} на {tier_info['name']}", inline=False)
         await interaction.message.edit(embed=embed, view=self)
-        
-        # Удаляем запись о сообщении
+
         tier_manager.delete_application_message(self.application_id)
+        await interaction.followup.send(f"✅ Заявка одобрена, выдана роль {role_mention}", ephemeral=True)
 
 
 class TierRejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА"):
