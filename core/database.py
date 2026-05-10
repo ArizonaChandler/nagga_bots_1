@@ -419,8 +419,8 @@ class Database:
                         ('vacation_max_days', '30'))
 
             # ========== ВЫЗОВ ТАБЛИЦ СИСТЕМ ИГР ========== 
-            # self.init_games_tables()
-            print("⚠️ Таблицы игр временно отключены")
+            self.init_games_tables()
+            # print("⚠️ Таблицы игр временно отключены")
 
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
     def add_user(self, discord_id: str, added_by: str):
