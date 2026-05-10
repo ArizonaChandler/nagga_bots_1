@@ -419,8 +419,7 @@ class Database:
                         ('vacation_max_days', '30'))
 
             # ========== ВЫЗОВ ТАБЛИЦ СИСТЕМ ИГР ========== 
-            # self.init_games_tables()
-            print("⚠️ Таблицы игр временно не созданы из-за блокировки БД")
+            self.init_games_tables()
 
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
     def add_user(self, discord_id: str, added_by: str):
