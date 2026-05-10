@@ -11,6 +11,7 @@ class GamesSettingsView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
+        # Кнопка настройки каналов
         channels_btn = discord.ui.Button(
             label="📡 Настройка каналов",
             style=discord.ButtonStyle.primary,
@@ -19,6 +20,7 @@ class GamesSettingsView(discord.ui.View):
         channels_btn.callback = self.channels_menu
         self.add_item(channels_btn)
 
+        # Кнопка включения/выключения морского боя
         battleship_enabled = db.get_game_enabled("battleship")
         toggle_btn = discord.ui.Button(
             label=f"{'🟢 ВКЛЮЧЁН' if battleship_enabled else '🔴 ВЫКЛЮЧЕН'}",
@@ -72,7 +74,7 @@ class GamesSettingsView(discord.ui.View):
 
 
 class GamesChannelsView(discord.ui.View):
-    """Меню выбора канала"""
+    """Меню выбора канала для настройки"""
 
     def __init__(self):
         super().__init__(timeout=60)
