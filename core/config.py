@@ -64,7 +64,7 @@ CONFIG = {
 }
 
 def load_config():
-    from core.database import db  # ← ИМПОРТ ВНУТРИ ФУНКЦИИ
+    from core.database import db  # ← ТОЛЬКО ТАК, НИКАК ИНАЧЕ
     settings = db.get_all_settings()
     for key, value in settings.items():
         if key in CONFIG:
@@ -93,10 +93,12 @@ def load_config():
     db.load_vacation_settings()
 
 def save_config(updated_by: str = None):
-    from core.database import db  # ← ИМПОРТ ВНУТРИ ФУНКЦИИ
+    from core.database import db  # ← ТОЛЬКО ТАК
     for key, value in CONFIG.items():
         if key not in ['user_token_1', 'user_token_2', 'super_admin_id']:
             if key in ['alarm_channels', 'announce_channels', 'reminder_roles', 'announce_roles']:
                 db.set_setting(key, json.dumps(value) if value else '[]', updated_by)
             else:
                 db.set_setting(key, str(value) if value is not None else 'null', updated_by)
+
+# ❌ НЕТ db = Database() ЗДЕСЬ! НЕТ НИКАКОГО ИМПОРТА database.py!
