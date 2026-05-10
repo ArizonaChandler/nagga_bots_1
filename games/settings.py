@@ -156,26 +156,14 @@ class SetChannelModal(discord.ui.Modal, title="📡 НАСТРОЙКА КАНА�
             from core.database import db
             from core.config import CONFIG, save_config
             
-            # Проверяем ID
+            # Просто проверяем, что введены цифры
             if not self.channel_id.value.isdigit():
                 await interaction.response.send_message("❌ ID должен содержать только цифры", ephemeral=True)
                 return
 
             channel_id = self.channel_id.value
             
-            # Проверяем существование (только для отображения, не критично)
-            if self.setting_key == "games_category_id":
-                category = interaction.guild.get_channel(int(channel_id))
-                if not category or not isinstance(category, discord.CategoryChannel):
-                    await interaction.response.send_message("❌ Категория не найдена", ephemeral=True)
-                    return
-            else:
-                channel = interaction.guild.get_channel(int(channel_id))
-                if not channel:
-                    await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
-                    return
-            
-            # Сохраняем
+            # Просто сохраняем
             db.set_setting(self.setting_key, channel_id, str(interaction.user.id))
             CONFIG[self.setting_key] = channel_id
             save_config(str(interaction.user.id))
