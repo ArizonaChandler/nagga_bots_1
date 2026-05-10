@@ -160,3 +160,5 @@ class SetChannelModal(discord.ui.Modal, title="📡 НАСТРОЙКА КАНА�
 
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
+__all__ = ['GamesSettingsView', 'GamesChannelsView', 'SetChannelModal']
