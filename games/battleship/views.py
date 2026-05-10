@@ -3,14 +3,6 @@ import discord
 import json
 from core.database import db
 from games.battleship.embeds import get_top_embed
-from games.manager import game_manager
-
-
-"""Кнопки для морского боя"""
-import discord
-import json
-from core.database import db
-from games.battleship.embeds import get_top_embed
 
 
 class GameLobbyView(discord.ui.View):
