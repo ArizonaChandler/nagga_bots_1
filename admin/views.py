@@ -95,17 +95,17 @@ class SettingsView(BaseMenuView):
             row=0
         )
         async def games_cb(i):
-        try:
-            from games.settings import GamesSettingsView
-            embed = discord.Embed(
-                title="🎮 **СИСТЕМА ИГР**",
-                description="Настройка игр Discord",
-                color=0x00ff00
-            )
-            view = GamesSettingsView()
-            await i.response.edit_message(embed=embed, view=view)
-        except Exception as e:
-            await i.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+            try:
+                from games.settings import GamesSettingsView
+                embed = discord.Embed(
+                    title="🎮 **СИСТЕМА ИГР**",
+                    description="Настройка игр Discord",
+                    color=0x00ff00
+                )
+                view = GamesSettingsView()
+                await i.response.edit_message(embed=embed, view=view)
+            except Exception as e:
+                await i.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
         
         # ✅ КНОПКА "НАЗАД"
         back_btn = discord.ui.Button(
