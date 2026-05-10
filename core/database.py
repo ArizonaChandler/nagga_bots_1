@@ -1878,41 +1878,49 @@ class Database:
     # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ИГР =====
 
     def init_games_tables(self):
-        """Создать таблицы для игр"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS active_games (
-                    game_id TEXT PRIMARY KEY,
-                    game_type TEXT NOT NULL,
-                    channel_id TEXT NOT NULL,
-                    player1_id TEXT NOT NULL,
-                    player2_id TEXT NOT NULL,
-                    game_data TEXT NOT NULL,
-                    current_turn TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS game_stats (
-                    user_id TEXT PRIMARY KEY,
-                    user_name TEXT NOT NULL,
-                    wins INTEGER DEFAULT 0,
-                    losses INTEGER DEFAULT 0,
-                    games_played INTEGER DEFAULT 0
-                )
-            ''')
-            
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS game_settings (
-                    game_type TEXT PRIMARY KEY,
-                    enabled INTEGER DEFAULT 1
-                )
-            ''')
-            
-            conn.commit()
+        """Создать таблицы для игр (в отдельном соединении)"""
+        try:
+            # СОЗДАЁМ НОВОЕ СОЕДИНЕНИЕ, НЕ ИСПОЛЬЗУЕМ existing
+            with sqlite3.connect(self.db_path, timeout=15) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS active_games (
+                        game_id TEXT PRIMARY KEY,
+                        game_type TEXT NOT NULL,
+                        channel_id TEXT NOT NULL,
+                        player1_id TEXT NOT NULL,
+                        player2_id TEXT NOT NULL,
+                        game_data TEXT NOT NULL,
+                        current_turn TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS game_stats (
+                        user_id TEXT PRIMARY KEY,
+                        user_name TEXT NOT NULL,
+                        wins INTEGER DEFAULT 0,
+                        losses INTEGER DEFAULT 0,
+                        games_played INTEGER DEFAULT 0
+                    )
+                ''')
+                
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS game_settings (
+                        game_type TEXT PRIMARY KEY,
+                        enabled INTEGER DEFAULT 1
+                    )
+                ''')
+                
+                conn.commit()
+                print("✅ Таблицы игр успешно созданы")
+        except sqlite3.OperationalError as e:
+            if "locked" in str(e):
+                print("⚠️ База данных заблокирована, таблицы игр будут созданы позже")
+            else:
+                raise
 
     def get_active_game(self, game_id: str):
         """Получить активную игру по ID"""
