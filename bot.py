@@ -55,6 +55,9 @@ from discord.ext import commands
 from dotenv import load_dotenv
 import os
 
+# База данных
+from core.config import load_config
+load_config()
 
 load_dotenv()
 BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')

@@ -9,7 +9,7 @@ class Database:
         self.init_db()
     
     def get_connection(self):
-        return sqlite3.connect(self.db_path)
+        return sqlite3.connect(self.db_path, timeout=15)
     
     def init_db(self):
         with self.get_connection() as conn:
@@ -418,7 +418,7 @@ class Database:
             cursor.execute('INSERT OR IGNORE INTO vacation_settings (key, value) VALUES (?, ?)', 
                         ('vacation_max_days', '30'))
 
-            # ========== ВЫЗОВ ТАБЛИЦ СИСТЕМ ИГР ========== #
+            # ========== ВЫЗОВ ТАБЛИЦ СИСТЕМ ИГР ========== 
             self.init_games_tables()
 
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
