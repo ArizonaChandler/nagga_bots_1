@@ -419,7 +419,7 @@ class Database:
                         ('vacation_max_days', '30'))
 
             # ========== ВЫЗОВ ТАБЛИЦ СИСТЕМ ИГР ========== 
-            self.init_games_tables()
+            # self.init_games_tables()
             # print("⚠️ Таблицы игр временно отключены")
 
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
@@ -2054,4 +2054,57 @@ class Database:
             ''', (game_type, 1 if enabled else 0))
             conn.commit()
 
+    def create_games_tables_if_not_exist(self):
+        """Создать таблицы игр вне транзакции init_db"""
+        import time
+        
+        for attempt in range(5):
+            try:
+                with sqlite3.connect(self.db_path, timeout=15) as conn:
+                    cursor = conn.cursor()
+                    
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS active_games (
+                            game_id TEXT PRIMARY KEY,
+                            game_type TEXT NOT NULL,
+                            channel_id TEXT NOT NULL,
+                            player1_id TEXT NOT NULL,
+                            player2_id TEXT NOT NULL,
+                            game_data TEXT NOT NULL,
+                            current_turn TEXT NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    ''')
+                    
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS game_stats (
+                            user_id TEXT PRIMARY KEY,
+                            user_name TEXT NOT NULL,
+                            wins INTEGER DEFAULT 0,
+                            losses INTEGER DEFAULT 0,
+                            games_played INTEGER DEFAULT 0
+                        )
+                    ''')
+                    
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS game_settings (
+                            game_type TEXT PRIMARY KEY,
+                            enabled INTEGER DEFAULT 1
+                        )
+                    ''')
+                    
+                    conn.commit()
+                    print("✅ Таблицы игр созданы")
+                    return True
+                    
+            except sqlite3.OperationalError as e:
+                if "locked" in str(e) and attempt < 4:
+                    print(f"⚠️ БД заблокирована, попытка {attempt + 1}/5...")
+                    time.sleep(1)
+                else:
+                    print(f"❌ Ошибка: {e}")
+                    return False
+        return False
+
 db = Database()
+db.create_games_tables_if_not_exist()
