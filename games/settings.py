@@ -153,32 +153,34 @@ class SetChannelModal(discord.ui.Modal, title="📡 НАСТРОЙКА КАНА�
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            # Проверяем, что ввели число
+            from core.database import db
+            from core.config import CONFIG, save_config
+            
+            # Проверяем ID
             if not self.channel_id.value.isdigit():
                 await interaction.response.send_message("❌ ID должен содержать только цифры", ephemeral=True)
                 return
 
-            # Проверяем существование канала/категории
+            channel_id = self.channel_id.value
+            
+            # Проверяем существование (только для отображения, не критично)
             if self.setting_key == "games_category_id":
-                category = interaction.guild.get_channel(int(self.channel_id.value))
+                category = interaction.guild.get_channel(int(channel_id))
                 if not category or not isinstance(category, discord.CategoryChannel):
                     await interaction.response.send_message("❌ Категория не найдена", ephemeral=True)
                     return
             else:
-                channel = interaction.guild.get_channel(int(self.channel_id.value))
+                channel = interaction.guild.get_channel(int(channel_id))
                 if not channel:
                     await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
                     return
-
-            # Сохраняем
-            from core.database import db
-            from core.config import CONFIG, save_config
             
-            db.set_setting(self.setting_key, self.channel_id.value, str(interaction.user.id))
-            CONFIG[self.setting_key] = self.channel_id.value
+            # Сохраняем
+            db.set_setting(self.setting_key, channel_id, str(interaction.user.id))
+            CONFIG[self.setting_key] = channel_id
             save_config(str(interaction.user.id))
-
-            await interaction.response.send_message(f"✅ {self.channel_id.label} настроен: <#{self.channel_id.value}>", ephemeral=True)
-
+            
+            await interaction.response.send_message(f"✅ Настройка сохранена! (ID: {channel_id})", ephemeral=True)
+            
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)

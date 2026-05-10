@@ -99,13 +99,6 @@ async def on_ready():
     print(f"🌐 Серверов: {len(bot.guilds)}")
     print(f"📁 Файловое хранилище: {file_manager.storage_path}")
     
-    # Принудительно загружаем все каналы
-    print("🔍 Загрузка каналов...")
-    for guild in bot.guilds:
-        print(f"  ├─ {guild.name} (ID: {guild.id})")
-        for channel in guild.channels:
-            print(f"  │  └─ #{channel.name} (ID: {channel.id})")
-    
     # Инициализация CAPT регистрации
     try:
         from capt_registration.manager import capt_reg_manager
