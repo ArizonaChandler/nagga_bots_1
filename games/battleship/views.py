@@ -6,6 +6,13 @@ from games.battleship.embeds import get_top_embed
 from games.manager import game_manager
 
 
+"""Кнопки для морского боя"""
+import discord
+import json
+from core.database import db
+from games.battleship.embeds import get_top_embed
+
+
 class GameLobbyView(discord.ui.View):
     """Постоянная панель лобби"""
 
@@ -25,10 +32,61 @@ class GameLobbyView(discord.ui.View):
         self.add_item(btn)
 
     async def toggle_queue(self, interaction: discord.Interaction):
-        from games.manager import game_manager
+        from games.manager import game_manager  # ← ЛОКАЛЬНЫЙ ИМПОРТ
         
-        # Простая проверка для теста
-        await interaction.response.send_message("✅ Тест: кнопка работает!", ephemeral=True)
+        if not db.get_game_enabled("battleship"):
+            await interaction.response.send_message("❌ Игра временно отключена администратором!", ephemeral=True)
+            return
+
+        if game_manager.get_player_game(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Вы уже участвуете в игре!", ephemeral=True)
+            return
+
+        try:
+            await interaction.user.send("✅ Бот может отправлять вам сообщения")
+        except:
+            await interaction.response.send_message(
+                "❌ Бот не может отправить вам личное сообщение.\nПожалуйста, откройте ЛС с ботом.",
+                ephemeral=True
+            )
+            return
+
+        waiting = game_manager.waiting_players.get("battleship", [])
+
+        if interaction.user in waiting:
+            waiting.remove(interaction.user)
+            await interaction.response.send_message("✅ Вы вышли из очереди!", ephemeral=True)
+            await game_manager.log(f"🚪 {interaction.user.display_name} вышел из очереди")
+        else:
+            waiting.append(interaction.user)
+            await interaction.response.send_message("✅ Вы добавлены в очередь!", ephemeral=True)
+            await game_manager.log(f"👤 {interaction.user.display_name} вошёл в очередь")
+
+        game_manager.waiting_players["battleship"] = waiting
+
+        # Проверяем, есть ли пара
+        if len(waiting) >= 2:
+            player1 = waiting.pop(0)
+            player2 = waiting.pop(0)
+            game_manager.waiting_players["battleship"] = waiting
+
+            success = await game_manager.create_game("battleship", player1, player2)
+            if success:
+                await player1.send("🎮 **Соперник найден!** Игра начинается...")
+                await player2.send("🎮 **Соперник найден!** Игра начинается...")
+            else:
+                await player1.send("❌ Не удалось создать игру.")
+                await player2.send("❌ Не удалось создать игру.")
+                waiting.append(player1)
+                waiting.append(player2)
+                game_manager.waiting_players["battleship"] = waiting
+
+        # Обновляем кнопку
+        self.add_join_button()
+        await interaction.message.edit(view=self)
+
+    async def interaction_check(self, interaction):
+        return True
 
 
 class BattleshipView(discord.ui.View):
@@ -84,13 +142,13 @@ class BattleshipView(discord.ui.View):
 
     def create_shot_callback(self, row, col):
         async def callback(interaction: discord.Interaction):
-            from games.manager import game_manager
+            from games.manager import game_manager  # ← ЛОКАЛЬНЫЙ ИМПОРТ
             await game_manager.make_move(self.player, self.game.game_id, {'row': row, 'col': col})
             await interaction.response.defer()
         return callback
 
     async def skip_turn(self, interaction: discord.Interaction):
-        from games.manager import game_manager
+        from games.manager import game_manager  # ← ЛОКАЛЬНЫЙ ИМПОРТ
 
         if self.game.current_turn.id != self.player.id:
             await interaction.response.send_message("❌ Сейчас не ваш ход!", ephemeral=True)
@@ -126,7 +184,7 @@ class BattleshipView(discord.ui.View):
 
     async def on_timeout(self):
         if not self.game.game_over:
-            from games.manager import game_manager
+            from games.manager import game_manager  # ← ЛОКАЛЬНЫЙ ИМПОРТ
             self.game.game_over = True
             self.game.winner = self.game.get_opponent(self.player)
             await game_manager.end_game(self.game.game_id, self.game.winner, self.player)
