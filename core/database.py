@@ -1878,49 +1878,57 @@ class Database:
     # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ИГР =====
 
     def init_games_tables(self):
-        """Создать таблицы для игр (в отдельном соединении)"""
-        try:
-            # СОЗДАЁМ НОВОЕ СОЕДИНЕНИЕ, НЕ ИСПОЛЬЗУЕМ existing
-            with sqlite3.connect(self.db_path, timeout=15) as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS active_games (
-                        game_id TEXT PRIMARY KEY,
-                        game_type TEXT NOT NULL,
-                        channel_id TEXT NOT NULL,
-                        player1_id TEXT NOT NULL,
-                        player2_id TEXT NOT NULL,
-                        game_data TEXT NOT NULL,
-                        current_turn TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS game_stats (
-                        user_id TEXT PRIMARY KEY,
-                        user_name TEXT NOT NULL,
-                        wins INTEGER DEFAULT 0,
-                        losses INTEGER DEFAULT 0,
-                        games_played INTEGER DEFAULT 0
-                    )
-                ''')
-                
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS game_settings (
-                        game_type TEXT PRIMARY KEY,
-                        enabled INTEGER DEFAULT 1
-                    )
-                ''')
-                
-                conn.commit()
-                print("✅ Таблицы игр успешно созданы")
-        except sqlite3.OperationalError as e:
-            if "locked" in str(e):
-                print("⚠️ База данных заблокирована, таблицы игр будут созданы позже")
-            else:
-                raise
+        """Создать таблицы для игр с повторными попытками"""
+        import time
+        
+        for attempt in range(5):  # 5 попыток
+            try:
+                with sqlite3.connect(self.db_path, timeout=15) as conn:
+                    cursor = conn.cursor()
+                    
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS active_games (
+                            game_id TEXT PRIMARY KEY,
+                            game_type TEXT NOT NULL,
+                            channel_id TEXT NOT NULL,
+                            player1_id TEXT NOT NULL,
+                            player2_id TEXT NOT NULL,
+                            game_data TEXT NOT NULL,
+                            current_turn TEXT NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    ''')
+                    
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS game_stats (
+                            user_id TEXT PRIMARY KEY,
+                            user_name TEXT NOT NULL,
+                            wins INTEGER DEFAULT 0,
+                            losses INTEGER DEFAULT 0,
+                            games_played INTEGER DEFAULT 0
+                        )
+                    ''')
+                    
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS game_settings (
+                            game_type TEXT PRIMARY KEY,
+                            enabled INTEGER DEFAULT 1
+                        )
+                    ''')
+                    
+                    conn.commit()
+                    print("✅ Таблицы игр успешно созданы")
+                    return True
+                    
+            except sqlite3.OperationalError as e:
+                if "locked" in str(e) and attempt < 4:
+                    print(f"⚠️ БД заблокирована, повторная попытка через 1 секунду... ({attempt + 1}/5)")
+                    time.sleep(1)
+                else:
+                    print(f"❌ Ошибка создания таблиц игр: {e}")
+                    raise
+        
+        return False
 
     def get_active_game(self, game_id: str):
         """Получить активную игру по ID"""
