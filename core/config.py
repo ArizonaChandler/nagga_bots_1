@@ -57,6 +57,11 @@ CONFIG = {
     'vacation_approve_roles': [],
     'vacation_role': None,
     'vacation_max_days': 30,
+    'games_rules_channel': None,
+    'games_lobby_channel': None,
+    'games_log_channel': None,
+    'games_settings_channel': None,
+    'games_category_id': None,
 }
 
 # Создаём экземпляр БД

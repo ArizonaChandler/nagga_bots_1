@@ -418,6 +418,9 @@ class Database:
             cursor.execute('INSERT OR IGNORE INTO vacation_settings (key, value) VALUES (?, ?)', 
                         ('vacation_max_days', '30'))
 
+            # ========== ВЫЗОВ ТАБЛИЦ СИСТЕМ ИГР ========== #
+            self.init_games_tables()
+
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
     def add_user(self, discord_id: str, added_by: str):
         with self.get_connection() as conn:
@@ -1870,5 +1873,168 @@ class Database:
             if result and result[0]:
                 return result[0].split(',')
             return []
+
+    # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ИГР =====
+
+    def init_games_tables(self):
+        """Создать таблицы для игр"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS active_games (
+                    game_id TEXT PRIMARY KEY,
+                    game_type TEXT NOT NULL,
+                    channel_id TEXT NOT NULL,
+                    player1_id TEXT NOT NULL,
+                    player2_id TEXT NOT NULL,
+                    game_data TEXT NOT NULL,
+                    current_turn TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS game_stats (
+                    user_id TEXT PRIMARY KEY,
+                    user_name TEXT NOT NULL,
+                    wins INTEGER DEFAULT 0,
+                    losses INTEGER DEFAULT 0,
+                    games_played INTEGER DEFAULT 0
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS game_settings (
+                    game_type TEXT PRIMARY KEY,
+                    enabled INTEGER DEFAULT 1
+                )
+            ''')
+            
+            conn.commit()
+
+    def get_active_game(self, game_id: str):
+        """Получить активную игру по ID"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM active_games WHERE game_id = ?', (game_id,))
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'game_id': row[0],
+                    'game_type': row[1],
+                    'channel_id': row[2],
+                    'player1_id': row[3],
+                    'player2_id': row[4],
+                    'game_data': row[5],
+                    'current_turn': row[6],
+                    'created_at': row[7]
+                }
+            return None
+
+    def get_all_active_games(self):
+        """Получить все активные игры"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM active_games')
+            rows = cursor.fetchall()
+            result = []
+            for row in rows:
+                result.append({
+                    'game_id': row[0],
+                    'game_type': row[1],
+                    'channel_id': row[2],
+                    'player1_id': row[3],
+                    'player2_id': row[4],
+                    'game_data': row[5],
+                    'current_turn': row[6],
+                    'created_at': row[7]
+                })
+            return result
+
+    def save_active_game(self, game_id: str, game_type: str, channel_id: str, 
+                        player1_id: str, player2_id: str, game_data: str, current_turn: str):
+        """Сохранить активную игру"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO active_games 
+                (game_id, game_type, channel_id, player1_id, player2_id, game_data, current_turn)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (game_id, game_type, channel_id, player1_id, player2_id, game_data, current_turn))
+            conn.commit()
+
+    def delete_active_game(self, game_id: str):
+        """Удалить активную игру"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM active_games WHERE game_id = ?', (game_id,))
+            conn.commit()
+
+    def get_game_stats(self, user_id: str):
+        """Получить статистику игрока"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT wins, losses, games_played FROM game_stats WHERE user_id = ?', (user_id,))
+            row = cursor.fetchone()
+            if row:
+                return {'wins': row[0], 'losses': row[1], 'games_played': row[2]}
+            return {'wins': 0, 'losses': 0, 'games_played': 0}
+
+    def update_game_stats(self, user_id: str, user_name: str, won: bool):
+        """Обновить статистику игрока"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if won:
+                cursor.execute('''
+                    INSERT INTO game_stats (user_id, user_name, wins, losses, games_played)
+                    VALUES (?, ?, 1, 0, 1)
+                    ON CONFLICT(user_id) DO UPDATE SET
+                        wins = wins + 1,
+                        games_played = games_played + 1,
+                        user_name = excluded.user_name
+                ''', (user_id, user_name))
+            else:
+                cursor.execute('''
+                    INSERT INTO game_stats (user_id, user_name, wins, losses, games_played)
+                    VALUES (?, ?, 0, 1, 1)
+                    ON CONFLICT(user_id) DO UPDATE SET
+                        losses = losses + 1,
+                        games_played = games_played + 1,
+                        user_name = excluded.user_name
+                ''', (user_id, user_name))
+            conn.commit()
+
+    def get_top_players(self, limit: int = 3):
+        """Получить топ игроков по победам"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT user_name, wins, losses, games_played 
+                FROM game_stats 
+                ORDER BY wins DESC 
+                LIMIT ?
+            ''', (limit,))
+            return cursor.fetchall()
+
+    def get_game_enabled(self, game_type: str) -> bool:
+        """Проверить, включена ли игра"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT enabled FROM game_settings WHERE game_type = ?', (game_type,))
+            row = cursor.fetchone()
+            if row:
+                return row[0] == 1
+            return True
+
+    def set_game_enabled(self, game_type: str, enabled: bool):
+        """Включить/выключить игру"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO game_settings (game_type, enabled)
+                VALUES (?, ?)
+            ''', (game_type, 1 if enabled else 0))
+            conn.commit()
 
 db = Database()

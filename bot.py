@@ -47,6 +47,9 @@ from server_stats.global_collector import set_collector, get_collector
 # Импорт системы отпусков
 from vacation import setup_vacation
 
+# Импорт системы игр
+from games.initializer import setup as setup_games
+
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -190,6 +193,14 @@ async def on_ready():
         await setup_vacation(bot)
     except Exception as e:
         print(f"❌ Ошибка инициализации отпусков: {e}")
+        traceback.print_exc()
+
+    # Инициализация системы игр
+    try:
+        print("🎮 Инициализация системы игр...")
+        await setup_games(bot)
+    except Exception as e:
+        print(f"❌ Ошибка инициализации игр: {e}")
         traceback.print_exc()
     
     await bot.change_presence(activity=discord.Activity(
