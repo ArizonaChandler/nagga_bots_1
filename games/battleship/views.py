@@ -1,8 +1,11 @@
 """Кнопки для морского боя"""
 import discord
 import json
+import logging
 from core.database import db
 from games.battleship.embeds import get_top_embed
+
+logger = logging.getLogger(__name__)
 
 
 class GameLobbyView(discord.ui.View):
@@ -10,6 +13,7 @@ class GameLobbyView(discord.ui.View):
 
     def __init__(self):
         super().__init__(timeout=None)
+        logger.info("🎮 GameLobbyView создан")
         self.add_join_button()
 
     def add_join_button(self):
@@ -22,60 +26,80 @@ class GameLobbyView(discord.ui.View):
         )
         btn.callback = self.toggle_queue
         self.add_item(btn)
+        logger.debug("Кнопка добавлена")
 
     async def toggle_queue(self, interaction: discord.Interaction):
-        from games.manager import game_manager  # ← ЛОКАЛЬНЫЙ ИМПОРТ
+        logger.info(f"🔘 Нажата кнопка 'ВОЙТИ В ОЧЕРЕДЬ' от {interaction.user.name} (ID: {interaction.user.id})")
         
-        if not db.get_game_enabled("battleship"):
-            await interaction.response.send_message("❌ Игра временно отключена администратором!", ephemeral=True)
-            return
-
-        if game_manager.get_player_game(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Вы уже участвуете в игре!", ephemeral=True)
-            return
-
         try:
-            await interaction.user.send("✅ Бот может отправлять вам сообщения")
-        except:
-            await interaction.response.send_message(
-                "❌ Бот не может отправить вам личное сообщение.\nПожалуйста, откройте ЛС с ботом.",
-                ephemeral=True
-            )
-            return
+            from games.manager import game_manager
+            logger.debug("game_manager импортирован")
+            
+            if not db.get_game_enabled("battleship"):
+                logger.warning("Игра отключена администратором")
+                await interaction.response.send_message("❌ Игра временно отключена администратором!", ephemeral=True)
+                return
 
-        waiting = game_manager.waiting_players.get("battleship", [])
+            if game_manager.get_player_game(str(interaction.user.id)):
+                logger.warning(f"Игрок {interaction.user.name} уже в игре")
+                await interaction.response.send_message("❌ Вы уже участвуете в игре!", ephemeral=True)
+                return
 
-        if interaction.user in waiting:
-            waiting.remove(interaction.user)
-            await interaction.response.send_message("✅ Вы вышли из очереди!", ephemeral=True)
-            await game_manager.log(f"🚪 {interaction.user.display_name} вышел из очереди")
-        else:
-            waiting.append(interaction.user)
-            await interaction.response.send_message("✅ Вы добавлены в очередь!", ephemeral=True)
-            await game_manager.log(f"👤 {interaction.user.display_name} вошёл в очередь")
+            logger.debug("Проверка ЛС...")
+            try:
+                await interaction.user.send("✅ Бот может отправлять вам сообщения")
+                logger.debug("ЛС работает")
+            except Exception as e:
+                logger.error(f"Не могу отправить ЛС: {e}")
+                await interaction.response.send_message(
+                    "❌ Бот не может отправить вам личное сообщение.\nПожалуйста, откройте ЛС с ботом.",
+                    ephemeral=True
+                )
+                return
 
-        game_manager.waiting_players["battleship"] = waiting
+            waiting = game_manager.waiting_players.get("battleship", [])
+            logger.debug(f"Текущая очередь: {[u.name for u in waiting]}")
 
-        # Проверяем, есть ли пара
-        if len(waiting) >= 2:
-            player1 = waiting.pop(0)
-            player2 = waiting.pop(0)
+            if interaction.user in waiting:
+                waiting.remove(interaction.user)
+                await interaction.response.send_message("✅ Вы вышли из очереди!", ephemeral=True)
+                await game_manager.log(f"🚪 {interaction.user.display_name} вышел из очереди")
+                logger.info(f"Игрок {interaction.user.name} вышел из очереди")
+            else:
+                waiting.append(interaction.user)
+                await interaction.response.send_message("✅ Вы добавлены в очередь!", ephemeral=True)
+                await game_manager.log(f"👤 {interaction.user.display_name} вошёл в очередь")
+                logger.info(f"Игрок {interaction.user.name} вошёл в очередь")
+
             game_manager.waiting_players["battleship"] = waiting
 
-            success = await game_manager.create_game("battleship", player1, player2)
-            if success:
-                await player1.send("🎮 **Соперник найден!** Игра начинается...")
-                await player2.send("🎮 **Соперник найден!** Игра начинается...")
-            else:
-                await player1.send("❌ Не удалось создать игру.")
-                await player2.send("❌ Не удалось создать игру.")
-                waiting.append(player1)
-                waiting.append(player2)
+            # Проверяем, есть ли пара
+            if len(waiting) >= 2:
+                player1 = waiting.pop(0)
+                player2 = waiting.pop(0)
                 game_manager.waiting_players["battleship"] = waiting
+                logger.info(f"Пара найдена: {player1.name} vs {player2.name}")
 
-        # Обновляем кнопку
-        self.add_join_button()
-        await interaction.message.edit(view=self)
+                success = await game_manager.create_game("battleship", player1, player2)
+                if success:
+                    await player1.send("🎮 **Соперник найден!** Игра начинается...")
+                    await player2.send("🎮 **Соперник найден!** Игра начинается...")
+                    logger.info(f"Игра создана: {player1.name} vs {player2.name}")
+                else:
+                    await player1.send("❌ Не удалось создать игру.")
+                    await player2.send("❌ Не удалось создать игру.")
+                    logger.error(f"Не удалось создать игру для {player1.name} и {player2.name}")
+                    waiting.append(player1)
+                    waiting.append(player2)
+                    game_manager.waiting_players["battleship"] = waiting
+
+            # Обновляем кнопку
+            self.add_join_button()
+            await interaction.message.edit(view=self)
+            
+        except Exception as e:
+            logger.error(f"ОШИБКА в toggle_queue: {e}", exc_info=True)
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
     async def interaction_check(self, interaction):
         return True

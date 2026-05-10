@@ -61,13 +61,16 @@ class GameManager:
     async def create_game(self, game_type: str, player1: discord.Member, player2: discord.Member) -> bool:
         """Создать новую игру"""
         logger.info(f"🎮 Создание игры между {player1.display_name} и {player2.display_name}")
+        print(f"🎮 [Games] create_game вызван: {player1.name} vs {player2.name}")
 
         if str(player1.id) in self.player_games or str(player2.id) in self.player_games:
+            logger.warning(f"Один из игроков уже в игре: {player1.name} или {player2.name}")
             return False
 
         guild = player1.guild
         category_id = db.get_setting('games_category_id')
         category = guild.get_channel(int(category_id)) if category_id else None
+        logger.debug(f"Категория: {category.name if category else 'None'}")
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
@@ -77,12 +80,18 @@ class GameManager:
         }
 
         channel_name = f"🎮-{player1.display_name[:8]}-{player2.display_name[:8]}"
-        channel = await guild.create_text_channel(
-            channel_name,
-            category=category,
-            overwrites=overwrites,
-            topic=f"Игра: {game_type}"
-        )
+        
+        try:
+            channel = await guild.create_text_channel(
+                channel_name,
+                category=category,
+                overwrites=overwrites,
+                topic=f"Игра: {game_type}"
+            )
+            logger.info(f"✅ Канал создан: #{channel.name}")
+        except Exception as e:
+            logger.error(f"❌ Ошибка создания канала: {e}")
+            return False
 
         game_id = uuid.uuid4().hex
         game = BattleshipGame(game_id, player1, player2, channel)
@@ -100,12 +109,13 @@ class GameManager:
             game_data=json.dumps(game.get_state()),
             current_turn=str(game.current_turn.id)
         )
+        logger.info(f"💾 Игра сохранена в БД: {game_id}")
 
         embed = discord.Embed(
             title=f"🎮 МОРСКОЙ БОЙ",
             description=f"Игра между {player1.mention} и {player2.mention}\n\n"
-                       f"**Управление через личные сообщения с ботом**\n"
-                       f"Канал будет удалён через 1 минуту после завершения игры.",
+                    f"**Управление через личные сообщения с ботом**\n"
+                    f"Канал будет удалён через 1 минуту после завершения игры.",
             color=0x00ff00
         )
         await channel.send(embed=embed)
