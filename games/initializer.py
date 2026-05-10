@@ -20,7 +20,7 @@ class GamesInitializer:
         logger.info("🔄 Инициализация системы игр...")
         print("🎮 [Games] Инициализация системы игр...")
 
-        # Загружаем настройки
+        # Загружаем настройки ИЗ БД напрямую
         self.rules_channel_id = db.get_setting('games_rules_channel')
         self.lobby_channel_id = db.get_setting('games_lobby_channel')
         self.log_channel_id = db.get_setting('games_log_channel')
@@ -30,7 +30,7 @@ class GamesInitializer:
         # 1. Канал с правилами
         await self._init_rules_channel()
 
-        # 2. Канал лобби (очередь + топ)
+        # 2. Канал лобби
         await self._init_lobby_channel()
 
         # 3. Канал логов
@@ -44,13 +44,18 @@ class GamesInitializer:
 
     async def _init_rules_channel(self):
         """Канал с правилами игры"""
-        if not self.rules_channel_id:
+        # Получаем ID из БД напрямую, а не из self
+        rules_channel_id = db.get_setting('games_rules_channel')
+        
+        if not rules_channel_id:
             logger.warning("⚠️ Канал правил игр не настроен")
+            print("⚠️ [Games] Канал правил игр не настроен")
             return
 
-        channel = self.bot.get_channel(int(self.rules_channel_id))
+        channel = self.bot.get_channel(int(rules_channel_id))
         if not channel:
-            logger.error(f"❌ Канал правил игр {self.rules_channel_id} не найден")
+            logger.error(f"❌ Канал правил игр {rules_channel_id} не найден")
+            print(f"❌ [Games] Канал правил игр {rules_channel_id} не найден")
             return
 
         async for msg in channel.history(limit=50):
@@ -65,13 +70,16 @@ class GamesInitializer:
 
     async def _init_lobby_channel(self):
         """Канал лобби (очередь + топ игроков)"""
-        if not self.lobby_channel_id:
+        lobby_channel_id = db.get_setting('games_lobby_channel')
+        
+        if not lobby_channel_id:
             logger.warning("⚠️ Канал лобби игр не настроен")
+            print("⚠️ [Games] Канал лобби игр не настроен")
             return
 
-        channel = self.bot.get_channel(int(self.lobby_channel_id))
+        channel = self.bot.get_channel(int(lobby_channel_id))
         if not channel:
-            logger.error(f"❌ Канал лобби игр {self.lobby_channel_id} не найден")
+            logger.error(f"❌ Канал лобби игр {lobby_channel_id} не найден")
             return
 
         async for msg in channel.history(limit=50):
