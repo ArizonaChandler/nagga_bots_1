@@ -3,6 +3,7 @@ import discord
 import json
 from core.database import db
 from games.battleship.embeds import get_top_embed
+from games.manager import game_manager
 
 
 class GameLobbyView(discord.ui.View):
@@ -25,59 +26,9 @@ class GameLobbyView(discord.ui.View):
 
     async def toggle_queue(self, interaction: discord.Interaction):
         from games.manager import game_manager
-
-        if not db.get_game_enabled("battleship"):
-            await interaction.response.send_message("❌ Игра временно отключена администратором!", ephemeral=True)
-            return
-
-        if game_manager.get_player_game(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Вы уже участвуете в игре!", ephemeral=True)
-            return
-
-        try:
-            await interaction.user.send("✅ Бот может отправлять вам сообщения")
-        except:
-            await interaction.response.send_message(
-                "❌ Бот не может отправить вам личное сообщение.\nПожалуйста, откройте ЛС с ботом.",
-                ephemeral=True
-            )
-            return
-
-        waiting = game_manager.waiting_players.get("battleship", [])
-
-        if interaction.user in waiting:
-            waiting.remove(interaction.user)
-            await interaction.response.send_message("✅ Вы вышли из очереди!", ephemeral=True)
-            await game_manager.log(f"🚪 {interaction.user.display_name} вышел из очереди")
-        else:
-            waiting.append(interaction.user)
-            await interaction.response.send_message("✅ Вы добавлены в очередь!", ephemeral=True)
-            await game_manager.log(f"👤 {interaction.user.display_name} вошёл в очередь")
-
-        game_manager.waiting_players["battleship"] = waiting
-
-        if len(waiting) >= 2:
-            player1 = waiting.pop(0)
-            player2 = waiting.pop(0)
-            game_manager.waiting_players["battleship"] = waiting
-
-            success = await game_manager.create_game("battleship", player1, player2)
-            if success:
-                await player1.send("🎮 **Соперник найден!** Игра начинается...")
-                await player2.send("🎮 **Соперник найден!** Игра начинается...")
-            else:
-                await player1.send("❌ Не удалось создать игру.")
-                await player2.send("❌ Не удалось создать игру.")
-                waiting.append(player1)
-                waiting.append(player2)
-                game_manager.waiting_players["battleship"] = waiting
-
-        # Обновляем кнопку
-        self.add_join_button()
-        await interaction.message.edit(view=self)
-
-    async def interaction_check(self, interaction):
-        return True
+        
+        # Простая проверка для теста
+        await interaction.response.send_message("✅ Тест: кнопка работает!", ephemeral=True)
 
 
 class BattleshipView(discord.ui.View):
