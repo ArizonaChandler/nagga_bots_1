@@ -195,6 +195,7 @@ async def on_ready():
 
     # Инициализация системы игр
     try:
+        from games.initializer import setup as setup_games
         print("🎮 Инициализация системы игр...")
         await setup_games(bot)
     except Exception as e:

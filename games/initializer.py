@@ -141,8 +141,9 @@ class GamesInitializer:
 initializer = None
 
 async def setup(bot):
-    """Функция для вызова из bot.py (как у других систем)"""
     global initializer
+    from games.manager import setup as setup_manager
     initializer = GamesInitializer(bot)
     await initializer.initialize_all()
+    await setup_manager(bot)
     return initializer
