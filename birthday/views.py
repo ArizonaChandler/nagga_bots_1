@@ -65,13 +65,13 @@ class BirthdayPublicView(PermanentView):
         custom_id="birthday_set"
     )
     async def set_birthday(self, interaction: discord.Interaction, button: discord.ui.Button):
-        print(f"🔍 [BIRTHDAY] Кнопка нажата пользователем {interaction.user.name}")
+        print(f"🔍 [BIRTHDAY] Кнопка НАЖАТА! {interaction.user.name}")
         try:
             await interaction.response.send_modal(BirthdayModal())
-            print(f"✅ [BIRTHDAY] Модалка отправлена")
+            print(f"✅ Модалка открыта")
         except Exception as e:
-            print(f"❌ [BIRTHDAY] Ошибка: {e}")
-            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+            print(f"❌ Ошибка: {e}")
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
     @discord.ui.button(
         label="🗑️ УДАЛИТЬ ДЕНЬ РОЖДЕНИЯ",
