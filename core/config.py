@@ -65,6 +65,10 @@ CONFIG = {
     'birthday_greeting_channel': None,
     'birthday_settings_channel': None,
     'birthday_enabled': '1',
+    'mcl_reg_main_channel': None,
+    'mcl_reg_reserve_channel': None,
+    'mcl_error_channel': None,
+    'mcl_role_id': None,
 }
 
 def load_config():

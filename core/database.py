@@ -442,6 +442,37 @@ class Database:
                 )
             ''')
 
+            # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ MCL =====
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS mcl_registrations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL UNIQUE,
+                    user_name TEXT NOT NULL,
+                    list_type TEXT NOT NULL CHECK(list_type IN ('main', 'reserve')),
+                    registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_active BOOLEAN DEFAULT 1
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS mcl_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    is_active BOOLEAN DEFAULT 0,
+                    started_by TEXT,
+                    started_at TIMESTAMP,
+                    ended_by TEXT,
+                    ended_at TIMESTAMP,
+                    main_message_id TEXT,
+                    reserve_message_id TEXT,
+                    main_channel_id TEXT,
+                    reserve_channel_id TEXT,
+                    event_name TEXT,
+                    event_time TEXT,
+                    additional_info TEXT
+                )
+            ''')
+
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
     def add_user(self, discord_id: str, added_by: str):
         with self.get_connection() as conn:
@@ -2224,6 +2255,84 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('SELECT COUNT(*) FROM birthdays')
             return cursor.fetchone()[0]
+
+    # ===== МЕТОДЫ ДЛЯ MCL =====
+
+    def mcl_add_registration(self, user_id: str, user_name: str, list_type: str) -> bool:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO mcl_registrations (user_id, user_name, list_type, is_active)
+                VALUES (?, ?, ?, 1)
+            ''', (user_id, user_name, list_type))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def mcl_remove_registration(self, user_id: str) -> bool:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM mcl_registrations WHERE user_id = ?', (user_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def mcl_get_registrations(self, list_type: str = None):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if list_type:
+                cursor.execute('''
+                    SELECT id, user_id, user_name FROM mcl_registrations 
+                    WHERE is_active = 1 AND list_type = ? ORDER BY registered_at
+                ''', (list_type,))
+            else:
+                cursor.execute('''
+                    SELECT id, user_id, user_name, list_type FROM mcl_registrations 
+                    WHERE is_active = 1 ORDER BY list_type, registered_at
+                ''')
+            return cursor.fetchall()
+
+    def mcl_clear_all(self):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM mcl_registrations')
+            conn.commit()
+
+    def mcl_create_session(self, started_by: str, main_channel_id: str, reserve_channel_id: str, event_name: str, event_time: str, additional_info: str = None) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO mcl_sessions (is_active, started_by, started_at, main_channel_id, reserve_channel_id, event_name, event_time, additional_info)
+                VALUES (1, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?)
+            ''', (started_by, main_channel_id, reserve_channel_id, event_name, event_time, additional_info))
+            conn.commit()
+            return cursor.lastrowid
+
+    def mcl_end_session(self, session_id: int, ended_by: str):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE mcl_sessions SET is_active = 0, ended_by = ?, ended_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (ended_by, session_id))
+            conn.commit()
+
+    def mcl_get_active_session(self):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM mcl_sessions WHERE is_active = 1 ORDER BY started_at DESC LIMIT 1')
+            row = cursor.fetchone()
+            if row:
+                columns = [description[0] for description in cursor.description]
+                return dict(zip(columns, row))
+            return None
+
+    def mcl_update_session_messages(self, session_id: int, main_message_id: str, reserve_message_id: str):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE mcl_sessions SET main_message_id = ?, reserve_message_id = ?
+                WHERE id = ?
+            ''', (main_message_id, reserve_message_id, session_id))
+            conn.commit()
 
 db = Database()
 db.create_games_tables_if_not_exist()

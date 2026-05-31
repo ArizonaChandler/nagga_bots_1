@@ -294,6 +294,17 @@ class GlobalSettingsView(BaseMenuView):
             await i.response.send_modal(SetCaptSettingsChannelModal(self.guild))
         capt_settings_channel_btn.callback = capt_settings_channel_cb
         self.add_item(capt_settings_channel_btn)
+
+        mcl_settings_btn = discord.ui.Button(
+            label="🎯 Канал настроек MCL",
+            style=discord.ButtonStyle.secondary,
+            emoji="🎯",
+            row=2
+        )
+        async def mcl_settings_cb(i):
+            await i.response.send_modal(SetMCLSettingsChannelModal())
+        mcl_settings_btn.callback = mcl_settings_cb
+        self.add_item(mcl_settings_btn)
         
         ad_settings_channel_btn = discord.ui.Button(
             label="📢 Канал настроек авто-рекламы",

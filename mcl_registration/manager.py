@@ -1,0 +1,235 @@
+"""Менеджер регистрации на MCL"""
+import discord
+import logging
+from datetime import datetime
+from core.database import db
+from core.config import CONFIG, save_config
+
+logger = logging.getLogger(__name__)
+
+
+class MCLRegistrationManager:
+    def __init__(self):
+        self.active_session = None
+        self.session_info = None
+        self.main_channel_id = None
+        self.reserve_channel_id = None
+        self.main_message_id = None
+        self.reserve_message_id = None
+        self._load_config()
+        logger.info("✅ MCLRegistrationManager инициализирован")
+    
+    def _load_config(self):
+        self.main_channel_id = CONFIG.get('mcl_reg_main_channel')
+        self.reserve_channel_id = CONFIG.get('mcl_reg_reserve_channel')
+        self.error_channel_id = CONFIG.get('mcl_error_channel')
+        self.role_id = CONFIG.get('mcl_role_id')
+    
+    def set_channels(self, main_channel_id: str, reserve_channel_id: str, updated_by: str):
+        CONFIG['mcl_reg_main_channel'] = main_channel_id
+        CONFIG['mcl_reg_reserve_channel'] = reserve_channel_id
+        save_config(updated_by)
+        self.main_channel_id = main_channel_id
+        self.reserve_channel_id = reserve_channel_id
+        return True
+    
+    async def initialize_buttons(self, bot):
+        """Инициализация постоянных кнопок при старте бота"""
+        logger.info("🔄 Инициализация кнопок MCL регистрации")
+        
+        if not self.main_channel_id or not self.reserve_channel_id:
+            logger.warning("❌ Каналы MCL не настроены")
+            return False
+        
+        main_channel = bot.get_channel(int(self.main_channel_id))
+        reserve_channel = bot.get_channel(int(self.reserve_channel_id))
+        
+        if not main_channel or not reserve_channel:
+            logger.error("❌ Каналы MCL не найдены")
+            return False
+        
+        # Очищаем старые сообщения
+        async for msg in main_channel.history(limit=50):
+            if msg.author == bot.user:
+                await msg.delete()
+        async for msg in reserve_channel.history(limit=50):
+            if msg.author == bot.user:
+                await msg.delete()
+        
+        # Проверяем активную сессию
+        session = db.mcl_get_active_session()
+        
+        from mcl_registration.embeds import create_registration_embed
+        from mcl_registration.views import ModerationView, PublicView
+        
+        main_list = db.mcl_get_registrations('main')
+        reserve_list = db.mcl_get_registrations('reserve')
+        
+        if session:
+            self.active_session = session['id']
+            self.session_info = {
+                'event_name': session.get('event_name'),
+                'event_time': session.get('event_time'),
+                'additional_info': session.get('additional_info'),
+                'started_by_name': f"<@{session['started_by']}>"
+            }
+        
+        embed = create_registration_embed(main_list, reserve_list, self.session_info)
+        
+        main_msg = await main_channel.send(embed=embed, view=ModerationView())
+        reserve_msg = await reserve_channel.send(embed=embed, view=PublicView())
+        
+        self.main_message_id = str(main_msg.id)
+        self.reserve_message_id = str(reserve_msg.id)
+        
+        if session:
+            db.mcl_update_session_messages(session['id'], self.main_message_id, self.reserve_message_id)
+        
+        return True
+    
+    def get_lists(self):
+        main_list = db.mcl_get_registrations('main')
+        reserve_list = db.mcl_get_registrations('reserve')
+        return main_list, reserve_list
+    
+    def is_active(self) -> bool:
+        return self.active_session is not None
+    
+    async def start_registration(self, user_id: str, user_name: str, event_name: str, event_time: str, additional_info: str = None):
+        """Начать регистрацию"""
+        # Завершаем предыдущую сессию
+        if self.active_session:
+            db.mcl_end_session(self.active_session, user_id)
+        
+        # Создаём новую сессию
+        session_id = db.mcl_create_session(
+            user_id, self.main_channel_id, self.reserve_channel_id,
+            event_name, event_time, additional_info
+        )
+        
+        self.active_session = session_id
+        self.session_info = {
+            'event_name': event_name,
+            'event_time': event_time,
+            'additional_info': additional_info,
+            'started_by_name': f"<@{user_id}>"
+        }
+        
+        # Очищаем старые регистрации
+        db.mcl_clear_all()
+        
+        # Обновляем кнопки
+        await self._update_views(active=True)
+        
+        db.log_action(user_id, "MCL_REG_START", f"Session {session_id}")
+        return True
+    
+    async def end_registration(self, user_id: str):
+        """Завершить регистрацию"""
+        if self.active_session:
+            db.mcl_end_session(self.active_session, user_id)
+        
+        self.active_session = None
+        self.session_info = None
+        
+        # Очищаем списки
+        db.mcl_clear_all()
+        
+        await self._update_views(active=False)
+        db.log_action(user_id, "MCL_REG_END")
+        return True
+    
+    async def add_participant(self, user_id: str, user_name: str):
+        """Добавить участника (всегда в резерв)"""
+        if not self.active_session:
+            return False, "❌ Регистрация не активна"
+        
+        if db.mcl_add_registration(user_id, user_name, 'reserve'):
+            return True, "✅ Вы добавлены в резерв"
+        return False, "❌ Вы уже зарегистрированы"
+    
+    async def remove_participant(self, user_id: str):
+        """Удалить участника"""
+        if db.mcl_remove_registration(user_id):
+            return True, "✅ Вы удалены из регистрации"
+        return False, "❌ Вы не были зарегистрированы"
+    
+    async def move_to_main(self, reg_id: int):
+        """Перевести в основной список по ID записи"""
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE mcl_registrations SET list_type = 'main', registered_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND list_type = 'reserve'
+            ''', (reg_id,))
+            moved = cursor.rowcount > 0
+            conn.commit()
+        
+        if moved:
+            return True, "✅ Участник перемещён в основной список"
+        return False, "❌ Не найден или уже в основном"
+    
+    async def move_to_reserve(self, reg_id: int):
+        """Перевести в резерв по ID записи"""
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE mcl_registrations SET list_type = 'reserve', registered_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND list_type = 'main'
+            ''', (reg_id,))
+            moved = cursor.rowcount > 0
+            conn.commit()
+        
+        if moved:
+            return True, "✅ Участник переведён в резерв"
+        return False, "❌ Не найден или уже в резерве"
+    
+    async def move_all_to_main(self):
+        """Переместить всех из резерва в основной список"""
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE mcl_registrations SET list_type = 'main', registered_at = CURRENT_TIMESTAMP
+                WHERE list_type = 'reserve'
+            ''')
+            moved = cursor.rowcount
+            conn.commit()
+        
+        if moved > 0:
+            return True, f"✅ {moved} участников перемещено в основной список"
+        return False, "❌ В резерве нет участников"
+    
+    async def _update_views(self, active: bool):
+        """Обновить состояние кнопок"""
+        from mcl_registration.embeds import create_registration_embed
+        from mcl_registration.views import ModerationView, PublicView
+        
+        main_list, reserve_list = self.get_lists()
+        embed = create_registration_embed(main_list, reserve_list, self.session_info if active else None)
+        
+        # Обновляем канал модерации
+        if self.main_channel_id and self.main_message_id:
+            channel = self.bot.get_channel(int(self.main_channel_id))
+            if channel:
+                try:
+                    msg = await channel.fetch_message(int(self.main_message_id))
+                    view = ModerationView()
+                    view.update_buttons(active)
+                    await msg.edit(embed=embed, view=view)
+                except:
+                    pass
+        
+        # Обновляем публичный канал
+        if self.reserve_channel_id and self.reserve_message_id:
+            channel = self.bot.get_channel(int(self.reserve_channel_id))
+            if channel:
+                try:
+                    msg = await channel.fetch_message(int(self.reserve_message_id))
+                    view = PublicView()
+                    view.set_active(active)
+                    await msg.edit(embed=embed, view=view)
+                except:
+                    pass
+
+
+mcl_manager = MCLRegistrationManager()

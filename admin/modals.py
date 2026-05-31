@@ -1596,3 +1596,21 @@ class SetBirthdaySettingsChannelModal(discord.ui.Modal, title="🎂 КАНАЛ �
             f"✅ Канал настроек дней рождения установлен: <#{self.channel_id.value}>",
             ephemeral=True
         )
+
+# ===== МОДАЛКИ ДЛЯ СИСТЕМЫ MCL =====
+
+class SetMCLSettingsChannelModal(discord.ui.Modal, title="🎯 КАНАЛ НАСТРОЕК MCL"):
+    channel_id = discord.ui.TextInput(label="ID канала", placeholder="123456789012345678", max_length=20)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        from core.config import CONFIG, save_config
+        from core.database import db
+        
+        CONFIG['mcl_settings_channel'] = self.channel_id.value
+        db.set_setting('mcl_settings_channel', self.channel_id.value, str(interaction.user.id))
+        save_config(str(interaction.user.id))
+        
+        await interaction.response.send_message(
+            f"✅ Канал настроек MCL установлен: <#{self.channel_id.value}>",
+            ephemeral=True
+        )

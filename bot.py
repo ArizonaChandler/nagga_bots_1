@@ -53,6 +53,9 @@ from games.initializer import setup as setup_games
 # Импорт системы дней рождения
 from birthday.initializer import setup as setup_birthday
 
+# Импорт регистрации MCL
+from mcl_registration.manager import mcl_manager
+
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
