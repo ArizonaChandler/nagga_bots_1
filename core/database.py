@@ -432,6 +432,16 @@ class Database:
             # self.init_games_tables()
             # print("⚠️ Таблицы игр временно отключены")
 
+            # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ ДНЕЙ РОЖДЕНИЯ =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS birthdays (
+                    user_id TEXT PRIMARY KEY,
+                    user_name TEXT NOT NULL,
+                    birthday_date TEXT NOT NULL,  -- формат DD.MM
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
     def add_user(self, discord_id: str, added_by: str):
         with self.get_connection() as conn:
@@ -2137,6 +2147,68 @@ class Database:
                     print(f"❌ Ошибка: {e}")
                     return False
         return False
+
+    # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ДНЕЙ РОЖДЕНИЯ =====
+
+    def set_birthday(self, user_id: str, user_name: str, birthday_date: str) -> bool:
+        """Сохранить день рождения"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO birthdays (user_id, user_name, birthday_date)
+                VALUES (?, ?, ?)
+            ''', (user_id, user_name, birthday_date))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def get_birthday(self, user_id: str):
+        """Получить день рождения пользователя"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT user_id, user_name, birthday_date FROM birthdays WHERE user_id = ?', (user_id,))
+            row = cursor.fetchone()
+            if row:
+                return {'user_id': row[0], 'user_name': row[1], 'birthday_date': row[2]}
+            return None
+
+    def get_all_birthdays(self):
+        """Получить всех пользователей с днями рождения"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT user_id, user_name, birthday_date FROM birthdays ORDER BY birthday_date')
+            rows = cursor.fetchall()
+            return [{'user_id': row[0], 'user_name': row[1], 'birthday_date': row[2]} for row in rows]
+
+    def get_birthdays_by_month(self, month: str):
+        """Получить именинников по месяцу (MM)"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT user_id, user_name, birthday_date 
+                FROM birthdays 
+                WHERE substr(birthday_date, 4, 2) = ?
+                ORDER BY substr(birthday_date, 1, 2)
+            ''', (month,))
+            rows = cursor.fetchall()
+            return [{'user_id': row[0], 'user_name': row[1], 'birthday_date': row[2]} for row in rows]
+
+    def get_today_birthdays(self):
+        """Получить именинников сегодня (формат DD.MM)"""
+        from datetime import datetime
+        today = datetime.now().strftime("%d.%m")
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT user_id, user_name, birthday_date FROM birthdays WHERE birthday_date = ?', (today,))
+            rows = cursor.fetchall()
+            return [{'user_id': row[0], 'user_name': row[1], 'birthday_date': row[2]} for row in rows]
+
+    def remove_birthday(self, user_id: str):
+        """Удалить день рождения"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM birthdays WHERE user_id = ?', (user_id,))
+            conn.commit()
+            return cursor.rowcount > 0
 
 db = Database()
 db.create_games_tables_if_not_exist()

@@ -50,6 +50,9 @@ from vacation import setup_vacation
 # Импорт системы игр
 from games.initializer import setup as setup_games
 
+# Импорт системы дней рождения
+from birthday.initializer import setup as setup_birthday
+
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -200,6 +203,14 @@ async def on_ready():
         await setup_games(bot)
     except Exception as e:
         print(f"❌ Ошибка инициализации игр: {e}")
+        traceback.print_exc()
+
+    # Инициализация системы дней рождения
+    try:
+        print("🎂 Инициализация системы дней рождения...")
+        await setup_birthday(bot)
+    except Exception as e:
+        print(f"❌ Ошибка инициализации дней рождения: {e}")
         traceback.print_exc()
     
     await bot.change_presence(activity=discord.Activity(
