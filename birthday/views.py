@@ -51,6 +51,7 @@ class RemoveBirthdayModal(discord.ui.Modal, title="🗑️ УДАЛИТЬ ДЕН
                 from birthday.views import update_birthday_embed
                 await update_birthday_embed(interaction.client, channel_id)
 
+
 class BirthdayPublicView(PermanentView):
     """Постоянные кнопки в публичном канале"""
 
@@ -64,13 +65,7 @@ class BirthdayPublicView(PermanentView):
         custom_id="birthday_set"
     )
     async def set_birthday(self, interaction: discord.Interaction, button: discord.ui.Button):
-        print(f"🔍 [BIRTHDAY] Кнопка НАЖАТА! {interaction.user.name}")
-        try:
-            await interaction.response.send_modal(BirthdayModal())
-            print(f"✅ Модалка открыта")
-        except Exception as e:
-            print(f"❌ Ошибка: {e}")
-            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+        await interaction.response.send_modal(BirthdayModal())
 
     @discord.ui.button(
         label="🗑️ УДАЛИТЬ ДЕНЬ РОЖДЕНИЯ",
@@ -161,10 +156,12 @@ async def update_birthday_embed(bot, channel_id: str):
     
     embed.set_footer(text="Нажмите кнопку, чтобы указать свой день рождения")
     
+    # Ищем существующее сообщение бота
     async for msg in channel.history(limit=50):
         if msg.author == bot.user and msg.embeds:
             if msg.embeds and "ДНИ РОЖДЕНИЯ" in msg.embeds[0].title:
                 await msg.edit(embed=embed)
                 return
     
+    # Если не нашли — создаём новое
     await channel.send(embed=embed, view=BirthdayPublicView())
