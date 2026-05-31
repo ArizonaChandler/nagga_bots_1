@@ -385,6 +385,23 @@ async def on_member_remove(member):
         
         print("🔚 Обработка завершена")
 
+@bot.command(name='refresh_birthday')
+async def refresh_birthday(ctx):
+    """Обновить кнопки дней рождения (только супер-админ)"""
+    from core.database import db
+    from birthday.views import update_birthday_embed
+    
+    if str(ctx.author.id) != '287670691707355147':
+        await ctx.send("❌ Нет прав")
+        return
+    
+    channel_id = db.get_setting('birthday_channel')
+    if channel_id:
+        await update_birthday_embed(bot, channel_id)
+        await ctx.send("✅ Кнопки дней рождения обновлены")
+    else:
+        await ctx.send("❌ Публичный канал не настроен")
+
 async def main():
     async with bot:
         # Запускаем планировщик мероприятий
