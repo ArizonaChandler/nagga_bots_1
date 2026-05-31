@@ -234,5 +234,9 @@ class VacationManager:
         """Удалить запись о сообщении"""
         return db.delete_vacation_application_message(application_id)
 
+    def remove_user_from_vacation(self, user_id: str) -> bool:
+        """Удалить пользователя из отпуска (при выходе с сервера)"""
+        return db.remove_user_from_vacation(user_id)
+
 
 vacation_manager = VacationManager()

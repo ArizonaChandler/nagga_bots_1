@@ -352,6 +352,31 @@ async def on_member_remove(member):
                         await channel.delete()
                         print(f"✅ Удалён профиль {member.name}")
                         break
+
+    # ===== НОВЫЙ БЛОК: УДАЛЕНИЕ ИЗ СИСТЕМЫ ОТПУСКОВ =====
+    print("🔍 Шаг 5: Проверка системы отпусков...")
+    try:
+        from vacation.manager import vacation_manager
+        
+        vacation = vacation_manager.get_user_vacation(str(member.id))
+        if vacation:
+            vacation_manager.remove_user_from_vacation(str(member.id))
+            print(f"✅ {member.name} удалён из системы отпусков")
+            
+            # Логируем в канал логов
+            log_channel_id = db.get_setting('vacation_log_channel')
+            if log_channel_id:
+                log_channel = bot.get_channel(int(log_channel_id))
+                if log_channel:
+                    embed = discord.Embed(
+                        title="👋 УДАЛЁН ИЗ ОТПУСКА",
+                        description=f"Пользователь **{member.name}** покинул сервер и удалён из системы отпусков",
+                        color=0x808080,
+                        timestamp=datetime.now()
+                    )
+                    await log_channel.send(embed=embed)
+    except Exception as e:
+        print(f"❌ Ошибка удаления из отпуска: {e}")
         
         print("🔚 Обработка завершена")
         

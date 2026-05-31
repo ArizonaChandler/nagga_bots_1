@@ -1917,6 +1917,14 @@ class Database:
                 return result[0].split(',')
             return []
 
+    def remove_user_from_vacation(self, user_id: str) -> bool:
+        """Удалить пользователя из отпуска (при выходе с сервера)"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM vacation_active WHERE user_id = ?', (user_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
     # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ИГР =====
 
     def init_games_tables(self):
