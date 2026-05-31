@@ -305,6 +305,16 @@ class Database:
                 )
             ''')
 
+            # Таблица для ролей, выдаваемых при принятии заявки
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS application_reward_roles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    role_id TEXT NOT NULL,
+                    added_by TEXT,
+                    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
             # Добавляем настройки по умолчанию
             cursor.execute('INSERT OR IGNORE INTO tier_settings (key, value) VALUES (?, ?)', 
                         ('tier_submit_channel', 'null'))
@@ -1816,6 +1826,28 @@ class Database:
                         CONFIG[key] = value.split(',') if value else []
                 else:
                     CONFIG[key] = value
+
+    def add_reward_role(self, role_id: str, added_by: str):
+        """Добавить роль для автоматической выдачи"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('INSERT OR IGNORE INTO application_reward_roles (role_id, added_by) VALUES (?, ?)', 
+                        (role_id, added_by))
+            conn.commit()
+
+    def remove_reward_role(self, role_id: str):
+        """Удалить роль из списка"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM application_reward_roles WHERE role_id = ?', (role_id,))
+            conn.commit()
+
+    def get_reward_roles(self):
+        """Получить все роли для выдачи"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT role_id FROM application_reward_roles')
+            return [row[0] for row in cursor.fetchall()]
 
         # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ОТПУСКОВ (ДОПОЛНИТЕЛЬНЫЕ) =====
     
