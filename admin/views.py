@@ -389,23 +389,28 @@ class GlobalSettingsView(BaseMenuView):
         vacation_settings_channel_btn.callback = vacation_settings_channel_cb
         self.add_item(vacation_settings_channel_btn)
 
-        # 🎂 Дни рождения
-        birthday_btn = discord.ui.Button(
-            label="🎂 Дни рождения",
+        # РЯД 4: НАСТРОЙКИ ДНЕЙ РОЖДЕНИЯ
+        birthday_channel_btn = discord.ui.Button(
+            label="🎂 Канал дней рождения",
             style=discord.ButtonStyle.secondary,
             emoji="🎂",
             row=4
         )
-        async def birthday_cb(i):
-            from birthday.settings import BirthdaySettingsView
-            embed = discord.Embed(
-                title="🎂 **СИСТЕМА ДНЕЙ РОЖДЕНИЯ**",
-                description="Настройка дней рождения",
-                color=0xffa500
-            )
-            await i.response.edit_message(embed=embed, view=BirthdaySettingsView())
-        birthday_btn.callback = birthday_cb
-        self.add_item(birthday_btn)
+        async def birthday_channel_cb(i):
+            await i.response.send_modal(SetBirthdayChannelModal())
+        birthday_channel_btn.callback = birthday_channel_cb
+        self.add_item(birthday_channel_btn)
+
+        birthday_settings_channel_btn = discord.ui.Button(
+            label="⚙️ Канал настроек дней рождения",
+            style=discord.ButtonStyle.secondary,
+            emoji="⚙️",
+            row=4
+        )
+        async def birthday_settings_channel_cb(i):
+            await i.response.send_modal(SetBirthdaySettingsChannelModal())
+        birthday_settings_channel_btn.callback = birthday_settings_channel_cb
+        self.add_item(birthday_settings_channel_btn)
 
         # РЯД 4: НАЗАД
         self.add_back_button(row=4)
