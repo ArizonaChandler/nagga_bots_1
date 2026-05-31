@@ -61,6 +61,10 @@ CONFIG = {
     'games_log_channel': None,
     'games_settings_channel': None,
     'games_category_id': None,
+    'birthday_channel': None,
+    'birthday_greeting_channel': None,
+    'birthday_settings_channel': None,
+    'birthday_enabled': '1',
 }
 
 def load_config():
