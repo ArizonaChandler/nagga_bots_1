@@ -165,3 +165,5 @@ async def update_birthday_embed(bot, channel_id: str):
     
     # Если не нашли — создаём новое
     await channel.send(embed=embed, view=BirthdayPublicView())
+
+    
