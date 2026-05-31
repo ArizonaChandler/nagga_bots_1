@@ -213,7 +213,7 @@ class ApplicationsCombinedPanel(PermanentView):
         label="📊 Текущие настройки",
         style=discord.ButtonStyle.secondary,
         emoji="📊",
-        row=5,
+        row=4,
         custom_id="apps_settings_show"
     )
     async def show_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
