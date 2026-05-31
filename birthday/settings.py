@@ -83,15 +83,21 @@ class SetChannelModal(discord.ui.Modal, title="📡 НАСТРОЙКА КАНА�
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            channel = interaction.guild.get_channel(int(self.channel_id.value))
-            if not channel:
-                await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
+            # Проверяем, что введены цифры
+            if not self.channel_id.value.isdigit():
+                await interaction.response.send_message("❌ ID должен содержать только цифры", ephemeral=True)
                 return
 
-            db.set_setting(self.setting_key, self.channel_id.value, str(interaction.user.id))
-            CONFIG[self.setting_key] = self.channel_id.value
-
-            await interaction.response.send_message(f"✅ Настройка сохранена: {channel.mention}", ephemeral=True)
-
+            channel_id = self.channel_id.value
+            
+            # ❌ НЕ ПРОВЕРЯЕМ СУЩЕСТВОВАНИЕ КАНАЛА (мы в ЛС)
+            # Просто сохраняем
+            
+            db.set_setting(self.setting_key, channel_id, str(interaction.user.id))
+            CONFIG[self.setting_key] = channel_id
+            save_config(str(interaction.user.id))
+            
+            await interaction.response.send_message(f"✅ Настройка сохранена! (ID: {channel_id})", ephemeral=True)
+            
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
