@@ -26,7 +26,14 @@ class BattleshipGame(BaseGame):
             for x, y in ship:
                 self.board2[x][y] = 1
 
+        # Хранилище ID сообщений для обновления (чтобы не флудить)
+        self.player_messages = {
+            str(player1.id): {"my_board": None, "enemy_board": None},
+            str(player2.id): {"my_board": None, "enemy_board": None}
+        }
+
     def _place_ships(self):
+        """Разместить корабли на поле"""
         ships = [4, 3, 3, 2, 2, 2, 1, 1, 1, 1]
         placed = []
 
@@ -72,6 +79,7 @@ class BattleshipGame(BaseGame):
         return placed
 
     async def make_move(self, user: discord.Member, data: dict) -> tuple:
+        """Сделать ход. Возвращает (success, message, update_for_opponent)"""
         row, col = data['row'], data['col']
 
         if self.game_over:
@@ -122,6 +130,7 @@ class BattleshipGame(BaseGame):
         return False, "Ошибка!", ""
 
     def get_state(self) -> dict:
+        """Получить состояние игры для сохранения"""
         return {
             'board1': self.board1,
             'board2': self.board2,
@@ -132,11 +141,13 @@ class BattleshipGame(BaseGame):
             'player1_id': str(self.player1.id),
             'player2_id': str(self.player2.id),
             'game_over': self.game_over,
-            'winner_id': str(self.winner.id) if self.winner else None
+            'winner_id': str(self.winner.id) if self.winner else None,
+            'player_messages': self.player_messages  # ← сохраняем ID сообщений
         }
 
     @classmethod
     def from_state(cls, game_data: dict, bot):
+        """Восстановить игру из сохранённого состояния"""
         data = json.loads(game_data['game_data'])
 
         player1 = bot.get_user(int(data['player1_id']))
@@ -153,6 +164,10 @@ class BattleshipGame(BaseGame):
         game.ships2 = data['ships2']
         game.passes = data['passes']
         game.game_over = data['game_over']
+        
+        # Восстанавливаем ID сообщений
+        if 'player_messages' in data:
+            game.player_messages = data['player_messages']
 
         for p in [player1, player2]:
             if str(p.id) == data['current_turn_id']:
@@ -168,6 +183,7 @@ class BattleshipGame(BaseGame):
         return game
 
     async def get_display(self, player: discord.Member) -> tuple:
+        """Получить embed и файлы для отображения игроку"""
         is_player1 = player == self.player1
 
         my_board = self.board1 if is_player1 else self.board2
@@ -187,4 +203,5 @@ class BattleshipGame(BaseGame):
         return embed, [discord.File(img_my, "my_board.png"), discord.File(img_enemy, "enemy_board.png")]
 
     def get_view(self, player: discord.Member):
+        """Получить View для управления игрой"""
         return BattleshipView(self, player)

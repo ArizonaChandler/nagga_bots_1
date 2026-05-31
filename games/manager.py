@@ -126,17 +126,46 @@ class GameManager:
         await self.log(f"🎮 Новая игра между {player1.display_name} и {player2.display_name}")
         return True
 
-    async def send_game_interface(self, player: discord.Member, game):
-        """Отправить игроку интерфейс игры в ЛС"""
+    async def send_game_interface(self, player: discord.Member, game, is_update: bool = False):
+        """Отправить или обновить интерфейс игры в ЛС"""
         embed, files = await game.get_display(player)
-
+        
+        player_id = str(player.id)
+        messages = game.player_messages.get(player_id, {})
+        
         try:
-            for file in files:
-                await player.send(file=file)
-            await player.send(embed=embed, view=game.get_view(player))
+            if is_update and messages.get("my_board") and messages.get("enemy_board"):
+                # Обновляем существующие сообщения
+                try:
+                    my_msg = await player.fetch_message(messages["my_board"])
+                    await my_msg.edit(attachments=[files[0]] if files else [])
+                except:
+                    pass
+                
+                try:
+                    enemy_msg = await player.fetch_message(messages["enemy_board"])
+                    await enemy_msg.edit(attachments=[files[1]] if len(files) > 1 else [])
+                except:
+                    pass
+                
+                # Обновляем embed с кнопками
+                await player.send(embed=embed, view=game.get_view(player))
+            else:
+                # Отправляем новые сообщения
+                if files:
+                    my_msg = await player.send(file=files[0])
+                    enemy_msg = await player.send(file=files[1])
+                    
+                    game.player_messages[player_id]["my_board"] = my_msg.id
+                    game.player_messages[player_id]["enemy_board"] = enemy_msg.id
+                
+                await player.send(embed=embed, view=game.get_view(player))
+                
         except discord.Forbidden:
             await self.log(f"❌ Не могу отправить ЛС {player.display_name}")
             await self.end_game(game.game_id, None, None, force_end=True)
+        except Exception as e:
+            await self.log(f"❌ Ошибка отправки ЛС {player.display_name}: {e}")
 
     async def make_move(self, user: discord.Member, game_id: str, move_data: dict):
         """Обработать ход игрока"""

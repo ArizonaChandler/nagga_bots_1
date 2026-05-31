@@ -240,8 +240,11 @@ class ApplicationModerationView(discord.ui.View):
     
     async def process_interview(self, interaction: discord.Interaction):
         """Обработка вызова на обзвон"""
+        print(f"🔍 [ОБЗВОН] Начало для заявки {self.application_id}")
+        
         # Отмечаем как обзвон в БД
         success = app_manager.set_interviewing(self.application_id, str(interaction.user.id))
+        print(f"🔍 [ОБЗВОН] set_interviewing вернул: {success}")
         
         if not success:
             await interaction.response.send_message("❌ Не удалось назначить обзвон", ephemeral=True)
@@ -278,14 +281,13 @@ class ApplicationModerationView(discord.ui.View):
         if recruit_role:
             overwrites[recruit_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
         
-        # ===== ВАЖНО: Добавляем user_id в topic для последующего поиска =====
         interview_channel = await guild.create_text_channel(
             channel_name,
             category=category,
             overwrites=overwrites,
             topic=f"Обзвон заявки #{self.application_id} | User: {app['user_id']}"
         )
-        print(f"✅ Создан канал {channel_name} с topic: {interview_channel.topic}")
+        print(f"✅ Создан канал {channel_name}")
         
         # Отправляем ЛС
         try:
@@ -298,7 +300,6 @@ class ApplicationModerationView(discord.ui.View):
                 )
                 embed.add_field(name="📝 Канал", value=interview_channel.mention)
                 await user.send(embed=embed)
-                print(f"✅ ЛС отправлено пользователю {app['user_id']}")
         except Exception as e:
             print(f"❌ Ошибка при отправке ЛС: {e}")
         
@@ -313,9 +314,44 @@ class ApplicationModerationView(discord.ui.View):
         embed.add_field(name="🎮 Ник", value=app['nickname'])
         embed.add_field(name="🎯 Статик", value=app['static'])
         await interview_channel.send(content=f"{member.mention} {interaction.user.mention}", embed=embed)
-        print(f"✅ Сообщение отправлено в канал {interview_channel.name}")
         
-        # Логируем в канал логов
+        # ⭐⭐⭐ ОБНОВЛЯЕМ ПЕРВОНАЧАЛЬНЫЙ EMBED В КАНАЛЕ ЗАЯВОК ⭐⭐⭐
+        message = interaction.message
+        old_embed = message.embeds[0]
+        
+        # Создаём новый embed с информацией об обзвоне
+        new_embed = discord.Embed(
+            title=old_embed.title,
+            color=0xffa500,
+            timestamp=datetime.now()
+        )
+        
+        # Копируем все поля из старого embed
+        for field in old_embed.fields:
+            new_embed.add_field(name=field.name, value=field.value, inline=field.inline)
+        
+        # Добавляем информацию об обзвоне
+        new_embed.add_field(
+            name="📞 СТАТУС", 
+            value=f"**Вызван на обзвон** модератором {interaction.user.mention}\nКанал: {interview_channel.mention}", 
+            inline=False
+        )
+        
+        # СОЗДАЁМ НОВЫЙ VIEW С ОТКЛЮЧЁННОЙ КНОПКОЙ "ВЫЗВАТЬ"
+        from applications.views import ApplicationModerationView
+        new_view = ApplicationModerationView(self.application_id, self.user_id)
+        
+        # Отключаем кнопку "ВЫЗВАТЬ НА ОБЗВОН"
+        for child in new_view.children:
+            if child.label == "📞 ВЫЗВАТЬ НА ОБЗВОН":
+                child.disabled = True
+                child.label = "📞 ОБЗВОН НАЗНАЧЕН"
+                break
+        
+        await message.edit(embed=new_embed, view=new_view)
+        print(f"✅ Embed обновлён, кнопка 'Вызвать' отключена")
+        
+        # Логируем
         await self.log_action(interaction, "ВЫЗОВ НА ОБЗВОН", app, interview_channel.mention)
         
         await interaction.response.send_message(
