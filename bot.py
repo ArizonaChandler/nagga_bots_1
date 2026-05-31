@@ -352,6 +352,11 @@ async def on_member_remove(member):
                         await channel.delete()
                         print(f"✅ Удалён профиль {member.name}")
                         break
+        
+    except Exception as e:
+        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
+        import traceback
+        traceback.print_exc()
 
     # ===== НОВЫЙ БЛОК: УДАЛЕНИЕ ИЗ СИСТЕМЫ ОТПУСКОВ =====
     print("🔍 Шаг 5: Проверка системы отпусков...")
@@ -379,11 +384,6 @@ async def on_member_remove(member):
         print(f"❌ Ошибка удаления из отпуска: {e}")
         
         print("🔚 Обработка завершена")
-        
-    except Exception as e:
-        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
-        import traceback
-        traceback.print_exc()
 
 async def main():
     async with bot:
