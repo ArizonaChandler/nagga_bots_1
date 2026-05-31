@@ -9,5 +9,4 @@ class PermanentView(discord.ui.View):
         super().__init__(timeout=None)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Разрешаем всем нажимать кнопки"""
         return True

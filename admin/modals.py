@@ -1579,76 +1579,18 @@ class SetVacationSettingsChannelModal(discord.ui.Modal, title="🏖️ КАНА�
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
-class SetBirthdayChannelModal(discord.ui.Modal, title="🎂 КАНАЛ ДНЕЙ РОЖДЕНИЯ"):
-    channel_id = discord.ui.TextInput(
-        label="ID канала",
-        placeholder="123456789012345678",
-        max_length=20,
-        required=True
-    )
+# ===== МОДАЛКИ ДЛЯ СИСТЕМЫ ДНЕЙ РОЖДЕНИЯ =====
+
+class SetBirthdaySettingsChannelModal(discord.ui.Modal, title="🎂 КАНАЛ НАСТРОЕК ДНЕЙ РОЖДЕНИЯ"):
+    channel_id = discord.ui.TextInput(label="ID канала", placeholder="123456789012345678", max_length=20)
     
     async def on_submit(self, interaction: discord.Interaction):
         from core.config import CONFIG, save_config
         from core.database import db
-        
-        # Проверяем существование канала
-        guild = interaction.client.get_guild(int(CONFIG.get('server_id')))
-        if guild:
-            channel = guild.get_channel(int(self.channel_id.value))
-            if not channel:
-                await interaction.response.send_message("❌ Канал не найден на сервере", ephemeral=True)
-                return
-        
-        CONFIG['birthday_channel'] = self.channel_id.value
-        db.set_setting('birthday_channel', self.channel_id.value, str(interaction.user.id))
-        save_config(str(interaction.user.id))
-        
-        await interaction.response.send_message(
-            f"✅ Канал дней рождения установлен: <#{self.channel_id.value}>",
-            ephemeral=True
-        )
-
-
-class SetBirthdaySettingsChannelModal(discord.ui.Modal, title="⚙️ КАНАЛ НАСТРОЕК ДНЕЙ РОЖДЕНИЯ"):
-    channel_id = discord.ui.TextInput(
-        label="ID канала",
-        placeholder="123456789012345678",
-        max_length=20,
-        required=True
-    )
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        from core.config import CONFIG, save_config
-        from core.database import db
-        from birthday.settings import BirthdaySettingsView
-        
-        # Проверяем существование канала
-        guild = interaction.client.get_guild(int(CONFIG.get('server_id')))
-        if guild:
-            channel = guild.get_channel(int(self.channel_id.value))
-            if not channel:
-                await interaction.response.send_message("❌ Канал не найден на сервере", ephemeral=True)
-                return
         
         CONFIG['birthday_settings_channel'] = self.channel_id.value
         db.set_setting('birthday_settings_channel', self.channel_id.value, str(interaction.user.id))
         save_config(str(interaction.user.id))
-        
-        # Очищаем старые сообщения бота в канале
-        if guild:
-            channel = guild.get_channel(int(self.channel_id.value))
-            if channel:
-                async for msg in channel.history(limit=10):
-                    if msg.author == interaction.client.user:
-                        await msg.delete()
-                
-                # Отправляем панель настроек
-                embed = discord.Embed(
-                    title="⚙️ **НАСТРОЙКИ ДНЕЙ РОЖДЕНИЯ**",
-                    description="Настройка системы дней рождения",
-                    color=0x00ff00
-                )
-                await channel.send(embed=embed, view=BirthdaySettingsView())
         
         await interaction.response.send_message(
             f"✅ Канал настроек дней рождения установлен: <#{self.channel_id.value}>",

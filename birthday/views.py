@@ -1,13 +1,12 @@
 """Кнопки для системы дней рождения"""
 import discord
 from datetime import datetime
+from core.database import db
 from birthday.manager import birthday_manager
 from birthday.base import PermanentView
 
 
 class BirthdayModal(discord.ui.Modal, title="🎂 УКАЗАТЬ ДЕНЬ РОЖДЕНИЯ"):
-    """Модалка для ввода даты рождения"""
-    
     date = discord.ui.TextInput(
         label="Дата рождения",
         placeholder="ДД.ММ (например 15.05)",
@@ -24,15 +23,13 @@ class BirthdayModal(discord.ui.Modal, title="🎂 УКАЗАТЬ ДЕНЬ РОЖ
         await interaction.response.send_message(msg, ephemeral=True)
         
         if success:
-            # Обновляем embed в канале
             channel_id = db.get_setting('birthday_channel')
             if channel_id:
+                from birthday.views import update_birthday_embed
                 await update_birthday_embed(interaction.client, channel_id)
 
 
 class RemoveBirthdayModal(discord.ui.Modal, title="🗑️ УДАЛИТЬ ДЕНЬ РОЖДЕНИЯ"):
-    """Подтверждение удаления"""
-    
     confirm = discord.ui.TextInput(
         label="Введите 'УДАЛИТЬ' для подтверждения",
         placeholder="УДАЛИТЬ",
@@ -51,11 +48,12 @@ class RemoveBirthdayModal(discord.ui.Modal, title="🗑️ УДАЛИТЬ ДЕН
         if success:
             channel_id = db.get_setting('birthday_channel')
             if channel_id:
+                from birthday.views import update_birthday_embed
                 await update_birthday_embed(interaction.client, channel_id)
 
 
 class BirthdayPublicView(PermanentView):
-    """Постоянные кнопки для системы дней рождения"""
+    """Постоянные кнопки в публичном канале"""
 
     def __init__(self):
         super().__init__()
@@ -67,7 +65,6 @@ class BirthdayPublicView(PermanentView):
         custom_id="birthday_set"
     )
     async def set_birthday(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Открыть модалку для ввода даты"""
         await interaction.response.send_modal(BirthdayModal())
 
     @discord.ui.button(
@@ -77,7 +74,6 @@ class BirthdayPublicView(PermanentView):
         custom_id="birthday_remove"
     )
     async def remove_birthday(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Удалить день рождения"""
         await interaction.response.send_modal(RemoveBirthdayModal())
 
     @discord.ui.button(
@@ -87,14 +83,12 @@ class BirthdayPublicView(PermanentView):
         custom_id="birthday_list"
     )
     async def list_birthdays(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Показать список всех дней рождения"""
         birthdays = birthday_manager.get_all_birthdays()
         
         if not birthdays:
             await interaction.response.send_message("📭 Никто ещё не указал день рождения", ephemeral=True)
             return
         
-        # Группируем по месяцам
         months = {
             '01': 'Январь', '02': 'Февраль', '03': 'Март', '04': 'Апрель',
             '05': 'Май', '06': 'Июнь', '07': 'Июль', '08': 'Август',
@@ -102,7 +96,6 @@ class BirthdayPublicView(PermanentView):
         }
         
         grouped = {month: [] for month in months}
-        
         for bd in birthdays:
             month = bd['birthday_date'][3:5]
             grouped[month].append(bd)
@@ -133,17 +126,13 @@ async def update_birthday_embed(bot, channel_id: str):
     now = datetime.now()
     current_month = now.strftime("%m")
     
-    # Именинники этого месяца
     birthdays = birthday_manager.get_birthdays_by_month(current_month)
-    
-    # Сортируем по дню
     birthdays.sort(key=lambda x: int(x['birthday_date'][:2]))
     
-    # Название месяца
     months = {
         '01': 'Январе', '02': 'Феврале', '03': 'Марте', '04': 'Апреле',
         '05': 'Мае', '06': 'Июне', '07': 'Июле', '08': 'Августе',
-        '09': 'Сентябре', '10': 'Октябре', '11': 'Ноembre', '12': 'Декабре'
+        '09': 'Сентябре', '10': 'Октябре', '11': 'Ноябре', '12': 'Декабре'
     }
     
     embed = discord.Embed(
@@ -157,7 +146,6 @@ async def update_birthday_embed(bot, channel_id: str):
         text = ""
         for bd in birthdays:
             day = bd['birthday_date'][:2]
-            # Подсвечиваем сегодняшних
             if bd['birthday_date'] == now.strftime("%d.%m"):
                 text += f"🎉 **<@{bd['user_id']}> — {day} числа (СЕГОДНЯ!)** 🎉\n"
             else:
@@ -168,7 +156,6 @@ async def update_birthday_embed(bot, channel_id: str):
     
     embed.set_footer(text="Нажмите кнопку, чтобы указать свой день рождения")
     
-    # Ищем существующее сообщение
     async for msg in channel.history(limit=50):
         if msg.author == bot.user and msg.embeds:
             if msg.embeds and "ДНИ РОЖДЕНИЯ" in msg.embeds[0].title:

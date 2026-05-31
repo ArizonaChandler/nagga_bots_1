@@ -390,27 +390,16 @@ class GlobalSettingsView(BaseMenuView):
         self.add_item(vacation_settings_channel_btn)
 
         # РЯД 4: НАСТРОЙКИ ДНЕЙ РОЖДЕНИЯ
-        birthday_channel_btn = discord.ui.Button(
-            label="🎂 Канал дней рождения",
+        birthday_settings_btn = discord.ui.Button(
+            label="🎂 Канал настроек дней рождения",
             style=discord.ButtonStyle.secondary,
             emoji="🎂",
             row=4
         )
-        async def birthday_channel_cb(i):
-            await i.response.send_modal(SetBirthdayChannelModal())
-        birthday_channel_btn.callback = birthday_channel_cb
-        self.add_item(birthday_channel_btn)
-
-        birthday_settings_channel_btn = discord.ui.Button(
-            label="⚙️ Канал настроек дней рождения",
-            style=discord.ButtonStyle.secondary,
-            emoji="⚙️",
-            row=4
-        )
-        async def birthday_settings_channel_cb(i):
+        async def birthday_settings_cb(i):
             await i.response.send_modal(SetBirthdaySettingsChannelModal())
-        birthday_settings_channel_btn.callback = birthday_settings_channel_cb
-        self.add_item(birthday_settings_channel_btn)
+        birthday_settings_btn.callback = birthday_settings_cb
+        self.add_item(birthday_settings_btn)
 
         # РЯД 4: НАЗАД
         self.add_back_button(row=4)

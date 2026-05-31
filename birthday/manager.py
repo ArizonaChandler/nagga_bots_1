@@ -1,4 +1,4 @@
-"""Менеджер для работы с днями рождения"""
+"""Менеджер для работы с днями рождения (обёртка над database.py)"""
 from core.database import db
 
 
@@ -6,8 +6,6 @@ class BirthdayManager:
     """Менеджер дней рождения"""
 
     def set_birthday(self, user_id: str, user_name: str, birthday_date: str) -> tuple:
-        """Сохранить день рождения"""
-        # Проверяем формат DD.MM
         try:
             day, month = birthday_date.split('.')
             day = int(day)
@@ -24,26 +22,31 @@ class BirthdayManager:
         return False, "❌ Ошибка сохранения"
 
     def remove_birthday(self, user_id: str) -> tuple:
-        """Удалить день рождения"""
         if db.remove_birthday(user_id):
             return True, "✅ День рождения удалён"
         return False, "❌ День рождения не найден"
 
     def get_birthday(self, user_id: str):
-        """Получить день рождения пользователя"""
         return db.get_birthday(user_id)
 
     def get_today_birthdays(self):
-        """Получить сегодняшних именинников"""
         return db.get_today_birthdays()
 
     def get_birthdays_by_month(self, month: str):
-        """Получить именинников по месяцу"""
         return db.get_birthdays_by_month(month)
 
     def get_all_birthdays(self):
-        """Получить всех с днями рождения"""
         return db.get_all_birthdays()
+
+    def clear_all(self) -> tuple:
+        count = db.clear_all_birthdays()
+        return True, f"✅ Удалено {count} записей"
+
+    def get_stats(self) -> dict:
+        return {
+            'total': db.get_birthday_count(),
+            'today': len(db.get_today_birthdays())
+        }
 
 
 birthday_manager = BirthdayManager()
