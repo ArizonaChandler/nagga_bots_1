@@ -51,7 +51,6 @@ class RemoveBirthdayModal(discord.ui.Modal, title="🗑️ УДАЛИТЬ ДЕН
                 from birthday.views import update_birthday_embed
                 await update_birthday_embed(interaction.client, channel_id)
 
-
 class BirthdayPublicView(PermanentView):
     """Постоянные кнопки в публичном канале"""
 
