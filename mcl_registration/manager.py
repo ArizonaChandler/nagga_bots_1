@@ -16,6 +16,8 @@ class MCLRegistrationManager:
         self.reserve_channel_id = None
         self.main_message_id = None
         self.reserve_message_id = None
+        self.error_channel_id = None
+        self.role_id = None
         self._load_config()
         logger.info("✅ MCLRegistrationManager инициализирован")
     
@@ -27,6 +29,16 @@ class MCLRegistrationManager:
         self.reserve_channel_id = CONFIG.get('mcl_reg_reserve_channel')
         self.error_channel_id = CONFIG.get('mcl_error_channel')
         self.role_id = CONFIG.get('mcl_role_id')
+        
+        # Преобразуем 'null' в None
+        if self.main_channel_id == 'null' or self.main_channel_id is None:
+            self.main_channel_id = None
+        if self.reserve_channel_id == 'null' or self.reserve_channel_id is None:
+            self.reserve_channel_id = None
+        if self.error_channel_id == 'null' or self.error_channel_id is None:
+            self.error_channel_id = None
+        if self.role_id == 'null' or self.role_id is None:
+            self.role_id = None
     
     def set_channels(self, main_channel_id: str, reserve_channel_id: str, updated_by: str):
         CONFIG['mcl_reg_main_channel'] = main_channel_id
@@ -41,15 +53,24 @@ class MCLRegistrationManager:
         self.bot = bot
         logger.info("🔄 Инициализация кнопок MCL регистрации")
         
+        # Перезагружаем настройки
+        self._load_config()
+        
         if not self.main_channel_id or not self.reserve_channel_id:
             logger.warning("❌ Каналы MCL не настроены")
+            print("🎯 [MCL] Каналы MCL не настроены")
             return False
         
-        main_channel = bot.get_channel(int(self.main_channel_id))
-        reserve_channel = bot.get_channel(int(self.reserve_channel_id))
+        try:
+            main_channel = bot.get_channel(int(self.main_channel_id))
+            reserve_channel = bot.get_channel(int(self.reserve_channel_id))
+        except (ValueError, TypeError) as e:
+            print(f"🎯 [MCL] Ошибка конвертации ID канала: {e}")
+            return False
         
         if not main_channel or not reserve_channel:
             logger.error("❌ Каналы MCL не найдены")
+            print(f"🎯 [MCL] main_channel: {main_channel}, reserve_channel: {reserve_channel}")
             return False
         
         # Очищаем старые сообщения бота
@@ -84,8 +105,8 @@ class MCLRegistrationManager:
         self.main_message_id = str(main_msg.id)
         self.reserve_message_id = str(reserve_msg.id)
         
-        print(f"✅ [MCL] main_message_id = {self.main_message_id}")
-        print(f"✅ [MCL] reserve_message_id = {self.reserve_message_id}")
+        print(f"🎯 [MCL] main_message_id = {self.main_message_id}")
+        print(f"🎯 [MCL] reserve_message_id = {self.reserve_message_id}")
         
         if session:
             db.mcl_update_session_messages(session['id'], self.main_message_id, self.reserve_message_id)
@@ -101,6 +122,11 @@ class MCLRegistrationManager:
     async def start_registration(self, user_id: str, user_name: str, event_name: str, event_time: str, additional_info: str = None):
         """Начать регистрацию"""
         print(f"🎯 [MCL] start_registration вызван")
+        
+        # Перезагружаем настройки
+        self._load_config()
+        print(f"🎯 [MCL] main_channel_id = {self.main_channel_id}")
+        print(f"🎯 [MCL] reserve_channel_id = {self.reserve_channel_id}")
         
         # Завершаем предыдущую сессию
         if self.active_session:
@@ -127,10 +153,13 @@ class MCLRegistrationManager:
         await self._update_views(active=True)
         
         db.log_action(user_id, "MCL_REG_START", f"Session {session_id}")
+        print(f"🎯 [MCL] Регистрация начата, session_id={session_id}")
         return True
     
     async def end_registration(self, user_id: str):
         """Завершить регистрацию"""
+        print(f"🎯 [MCL] end_registration вызван")
+        
         if self.active_session:
             db.mcl_end_session(self.active_session, user_id)
         
@@ -139,6 +168,7 @@ class MCLRegistrationManager:
         
         db.mcl_clear_all()
         await self._update_views(active=False)
+        
         db.log_action(user_id, "MCL_REG_END")
         return True
     
@@ -176,6 +206,11 @@ class MCLRegistrationManager:
             return True, f"✅ {moved} участников перемещено в основной список"
         return False, "❌ В резерве нет участников"
     
+    async def send_bulk(self, interaction, members, event_name, event_time, message):
+        """Отправить массовую рассылку"""
+        from mcl_registration.mcl_core import mcl_core
+        await mcl_core.send_bulk(interaction, members, event_name, event_time, message)
+    
     async def _update_views(self, active: bool):
         """Обновить состояние кнопок во всех каналах"""
         from mcl_registration.embeds import create_registration_embed
@@ -194,37 +229,37 @@ class MCLRegistrationManager:
         
         # Обновляем канал модерации
         if self.main_channel_id and self.main_message_id:
-            channel = self.bot.get_channel(int(self.main_channel_id))
-            if channel:
-                try:
+            try:
+                channel = self.bot.get_channel(int(self.main_channel_id))
+                if channel:
                     msg = await channel.fetch_message(int(self.main_message_id))
                     view = ModerationView()
                     view.update_buttons(active)
                     await msg.edit(embed=embed, view=view)
                     print(f"✅ [MCL] Канал модерации обновлён")
-                except Exception as e:
-                    print(f"❌ [MCL] Ошибка канала модерации: {e}")
-            else:
-                print(f"❌ [MCL] Канал {self.main_channel_id} не найден")
+                else:
+                    print(f"❌ [MCL] Канал {self.main_channel_id} не найден")
+            except Exception as e:
+                print(f"❌ [MCL] Ошибка канала модерации: {e}")
         else:
-            print(f"⚠️ [MCL] Пропускаем канал модерации: main_channel_id={self.main_channel_id}, main_message_id={self.main_message_id}")
+            print(f"⚠️ [MCL] Пропускаем канал модерации")
         
         # Обновляем публичный канал
         if self.reserve_channel_id and self.reserve_message_id:
-            channel = self.bot.get_channel(int(self.reserve_channel_id))
-            if channel:
-                try:
+            try:
+                channel = self.bot.get_channel(int(self.reserve_channel_id))
+                if channel:
                     msg = await channel.fetch_message(int(self.reserve_message_id))
                     view = PublicView()
                     view.set_active(active)
                     await msg.edit(embed=embed, view=view)
                     print(f"✅ [MCL] Публичный канал обновлён")
-                except Exception as e:
-                    print(f"❌ [MCL] Ошибка публичного канала: {e}")
-            else:
-                print(f"❌ [MCL] Канал {self.reserve_channel_id} не найден")
+                else:
+                    print(f"❌ [MCL] Канал {self.reserve_channel_id} не найден")
+            except Exception as e:
+                print(f"❌ [MCL] Ошибка публичного канала: {e}")
         else:
-            print(f"⚠️ [MCL] Пропускаем публичный канал: reserve_channel_id={self.reserve_channel_id}, reserve_message_id={self.reserve_message_id}")
+            print(f"⚠️ [MCL] Пропускаем публичный канал")
 
 
 mcl_manager = MCLRegistrationManager()
