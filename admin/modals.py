@@ -1606,11 +1606,17 @@ class SetMCLSettingsChannelModal(discord.ui.Modal, title="🎯 КАНАЛ НАС
         from core.config import CONFIG, save_config
         from core.database import db
         
+        channel = interaction.guild.get_channel(int(self.channel_id.value))
+        if not channel:
+            await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
+            return
+        
         CONFIG['mcl_settings_channel'] = self.channel_id.value
         db.set_setting('mcl_settings_channel', self.channel_id.value, str(interaction.user.id))
         save_config(str(interaction.user.id))
         
         await interaction.response.send_message(
-            f"✅ Канал настроек MCL установлен: <#{self.channel_id.value}>",
+            f"✅ Канал настроек MCL установлен: {channel.mention}\n"
+            f"🔄 Перезапустите бота для активации панели.",
             ephemeral=True
         )

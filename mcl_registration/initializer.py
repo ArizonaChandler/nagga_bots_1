@@ -29,12 +29,16 @@ class MCLInitializer:
         self.reserve_channel_id = db.get_setting('mcl_reg_reserve_channel')
         self.settings_channel_id = db.get_setting('mcl_settings_channel')
 
+        print(f"🎯 [MCL] settings_channel_id = {self.settings_channel_id}")
+
         # 1. Канал настроек (панель управления)
         await self._init_settings_channel()
 
         # 2. Каналы регистрации (если настроены)
         if self.main_channel_id and self.reserve_channel_id:
             await self._init_registration_channels()
+        else:
+            print("🎯 [MCL] Каналы регистрации не настроены, пропускаем")
 
         logger.info("✅ Инициализация системы MCL завершена")
         print("🎯 [MCL] Инициализация системы MCL/ВЗМ завершена")
@@ -51,19 +55,27 @@ class MCLInitializer:
             logger.error(f"❌ Канал настроек MCL {self.settings_channel_id} не найден")
             return
 
-        # Удаляем старые сообщения бота
-        async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user:
-                await msg.delete()
+        print(f"🎯 [MCL] Настраиваю канал: #{channel.name}")
 
-        # Создаём новое сообщение с панелью управления
-        embed = discord.Embed(
-            title="⚙️ **УПРАВЛЕНИЕ СИСТЕМОЙ MCL**",
-            description="Настройка системы MCL/ВЗМ",
-            color=0x00ff00
-        )
-        await channel.send(embed=embed, view=MCLSettingsView())
-        print(f"🎯 [MCL] Создана панель управления в #{channel.name}")
+        # Ищем существующую панель управления
+        found = False
+        async for msg in channel.history(limit=100):
+            if msg.author == self.bot.user and msg.embeds:
+                if msg.embeds and "УПРАВЛЕНИЕ СИСТЕМОЙ MCL" in msg.embeds[0].title:
+                    await msg.edit(view=MCLSettingsView())
+                    found = True
+                    print(f"🎯 [MCL] Найдена существующая панель, обновлена")
+                    break
+
+        # Если не нашли — создаём новую
+        if not found:
+            embed = discord.Embed(
+                title="⚙️ **УПРАВЛЕНИЕ СИСТЕМОЙ MCL**",
+                description="Настройка системы MCL/ВЗМ",
+                color=0x00ff00
+            )
+            await channel.send(embed=embed, view=MCLSettingsView())
+            print(f"🎯 [MCL] Создана новая панель управления в #{channel.name}")
 
     async def _init_registration_channels(self):
         """Инициализация каналов регистрации"""

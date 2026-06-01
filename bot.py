@@ -218,10 +218,12 @@ async def on_ready():
 
     # Инициализация системы регистрации MCL
     try:
-        print("🔄 Инициализация MCL регистрации...")
-        await mcl_manager.initialize_buttons(bot)
+        from mcl_registration.initializer import setup as setup_mcl
+        print("🎯 Инициализация MCL...")
+        await setup_mcl(bot)
     except Exception as e:
         print(f"❌ Ошибка MCL: {e}")
+        traceback.print_exc()
     
     await bot.change_presence(activity=discord.Activity(
         type=discord.ActivityType.watching,
