@@ -29,12 +29,22 @@ class MCLInitializer:
         self.reserve_channel_id = db.get_setting('mcl_reg_reserve_channel')
         self.settings_channel_id = db.get_setting('mcl_settings_channel')
 
+        # Преобразуем 'null' в None
+        if self.main_channel_id == 'null' or self.main_channel_id is None:
+            self.main_channel_id = None
+        if self.reserve_channel_id == 'null' or self.reserve_channel_id is None:
+            self.reserve_channel_id = None
+        if self.settings_channel_id == 'null' or self.settings_channel_id is None:
+            self.settings_channel_id = None
+
+        print(f"🎯 [MCL] main_channel_id = {self.main_channel_id}")
+        print(f"🎯 [MCL] reserve_channel_id = {self.reserve_channel_id}")
         print(f"🎯 [MCL] settings_channel_id = {self.settings_channel_id}")
 
         # 1. Канал настроек (панель управления)
         await self._init_settings_channel()
 
-        # 2. Каналы регистрации (если настроены)
+        # 2. Каналы регистрации (только если оба настроены)
         if self.main_channel_id and self.reserve_channel_id:
             await self._init_registration_channels()
         else:
@@ -79,11 +89,16 @@ class MCLInitializer:
 
     async def _init_registration_channels(self):
         """Инициализация каналов регистрации"""
-        main_channel = self.bot.get_channel(int(self.main_channel_id))
-        reserve_channel = self.bot.get_channel(int(self.reserve_channel_id))
+        try:
+            main_channel = self.bot.get_channel(int(self.main_channel_id))
+            reserve_channel = self.bot.get_channel(int(self.reserve_channel_id))
+        except (ValueError, TypeError) as e:
+            print(f"🎯 [MCL] Ошибка конвертации ID канала: {e}")
+            return
 
         if not main_channel or not reserve_channel:
             logger.error("❌ Каналы MCL не найдены")
+            print(f"🎯 [MCL] main_channel: {main_channel}, reserve_channel: {reserve_channel}")
             return
 
         # Очищаем старые сообщения бота
