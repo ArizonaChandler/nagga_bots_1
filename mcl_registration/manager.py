@@ -118,7 +118,7 @@ class MCLRegistrationManager:
         # Очищаем старые регистрации
         db.mcl_clear_all()
         
-        # Обновляем кнопки
+        # ОБНОВЛЯЕМ КНОПКИ (активируем)
         await self._update_views(active=True)
         
         db.log_action(user_id, "MCL_REG_START", f"Session {session_id}")
@@ -135,7 +135,9 @@ class MCLRegistrationManager:
         # Очищаем списки
         db.mcl_clear_all()
         
+        # ОБНОВЛЯЕМ КНОПКИ (деактивируем)
         await self._update_views(active=False)
+        
         db.log_action(user_id, "MCL_REG_END")
         return True
     
@@ -200,7 +202,7 @@ class MCLRegistrationManager:
         return False, "❌ В резерве нет участников"
     
     async def _update_views(self, active: bool):
-        """Обновить состояние кнопок"""
+        """Обновить состояние кнопок во всех каналах"""
         from mcl_registration.embeds import create_registration_embed
         from mcl_registration.views import ModerationView, PublicView
         
@@ -216,8 +218,9 @@ class MCLRegistrationManager:
                     view = ModerationView()
                     view.update_buttons(active)
                     await msg.edit(embed=embed, view=view)
-                except:
-                    pass
+                    print(f"🎯 [MCL] Обновлён канал модерации, active={active}")
+                except Exception as e:
+                    print(f"🎯 [MCL] Ошибка обновления канала модерации: {e}")
         
         # Обновляем публичный канал
         if self.reserve_channel_id and self.reserve_message_id:
@@ -228,8 +231,9 @@ class MCLRegistrationManager:
                     view = PublicView()
                     view.set_active(active)
                     await msg.edit(embed=embed, view=view)
-                except:
-                    pass
+                    print(f"🎯 [MCL] Обновлён публичный канал, active={active}")
+                except Exception as e:
+                    print(f"🎯 [MCL] Ошибка обновления публичного канала: {e}")
 
 
 mcl_manager = MCLRegistrationManager()
