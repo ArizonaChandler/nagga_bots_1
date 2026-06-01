@@ -31,7 +31,7 @@ class MCLSettingsView(PermanentView):
             label="🎭 Роль для рассылки",
             style=discord.ButtonStyle.primary,
             emoji="🎭",
-            row=0
+            row=1
         )
         role_btn.callback = self.set_role
         self.add_item(role_btn)
@@ -45,6 +45,16 @@ class MCLSettingsView(PermanentView):
         )
         error_btn.callback = self.set_error_channel
         self.add_item(error_btn)
+        
+        # Настройка канала оповещений @everyone
+        announcement_btn = discord.ui.Button(
+            label="📢 Канал оповещений",
+            style=discord.ButtonStyle.primary,
+            emoji="📢",
+            row=2
+        )
+        announcement_btn.callback = self.set_announcement_channel
+        self.add_item(announcement_btn)
 
     async def channels_menu(self, interaction: discord.Interaction):
         if not await is_admin(str(interaction.user.id)):
@@ -70,6 +80,12 @@ class MCLSettingsView(PermanentView):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
             return
         await interaction.response.send_modal(SetMCLErrorChannelModal())
+
+    async def set_announcement_channel(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        await interaction.response.send_modal(SetMCLAnnouncementChannelModal())
 
 
 class MCLChannelsView(discord.ui.View):
@@ -165,3 +181,19 @@ class SetMCLErrorChannelModal(discord.ui.Modal, title="💬 КАНАЛ ОШИБ�
         save_config(str(interaction.user.id))
 
         await interaction.response.send_message(f"✅ Канал ошибок MCL настроен: {channel.mention}", ephemeral=True)
+
+
+class SetMCLAnnouncementChannelModal(discord.ui.Modal, title="📢 КАНАЛ ОПОВЕЩЕНИЙ MCL"):
+    channel_id = discord.ui.TextInput(label="ID канала", placeholder="123456789012345678", max_length=20, required=True)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        channel = interaction.guild.get_channel(int(self.channel_id.value))
+        if not channel:
+            await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
+            return
+
+        db.set_setting('mcl_announcement_channel', self.channel_id.value, str(interaction.user.id))
+        CONFIG['mcl_announcement_channel'] = self.channel_id.value
+        save_config(str(interaction.user.id))
+
+        await interaction.response.send_message(f"✅ Канал оповещений MCL настроен: {channel.mention}", ephemeral=True)
