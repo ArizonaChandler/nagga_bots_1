@@ -165,7 +165,7 @@ class ApplicationsCombinedPanel(PermanentView):
         label="➕ Добавить поле",
         style=discord.ButtonStyle.success,
         emoji="➕",
-        row=5,
+        row=3,
         custom_id="add_field"
     )
     async def add_field(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -175,7 +175,7 @@ class ApplicationsCombinedPanel(PermanentView):
         label="➖ Удалить поле",
         style=discord.ButtonStyle.danger,
         emoji="➖",
-        row=5,
+        row=3,
         custom_id="remove_field"
     )
     async def remove_field(self, interaction: discord.Interaction, button: discord.ui.Button):
