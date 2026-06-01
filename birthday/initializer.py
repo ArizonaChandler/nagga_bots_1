@@ -42,7 +42,7 @@ class BirthdayInitializer:
         print("🎂 [Birthday] Инициализация системы дней рождения завершена")
 
     async def _init_public_channel(self):
-        """Публичный канал с кнопками и embed именинников месяца — ПРИНУДИТЕЛЬНОЕ СОЗДАНИЕ"""
+        """Публичный канал — ИЩЕМ EMBED, НЕ УДАЛЯЕМ"""
         if not self.channel_id:
             logger.warning("⚠️ Публичный канал дней рождения не настроен")
             print("⚠️ [Birthday] Публичный канал дней рождения не настроен")
@@ -53,54 +53,24 @@ class BirthdayInitializer:
             logger.error(f"❌ Публичный канал {self.channel_id} не найден")
             return
 
-        # УДАЛЯЕМ ВСЕ СТАРЫЕ СООБЩЕНИЯ БОТА В ЭТОМ КАНАЛЕ
-        deleted_count = 0
+        # Ищем существующий embed с кнопками
+        found = False
         async for msg in channel.history(limit=100):
-            if msg.author == self.bot.user:
-                try:
-                    await msg.delete()
-                    deleted_count += 1
-                except:
-                    pass
-        print(f"🎂 [Birthday] Удалено старых сообщений: {deleted_count}")
+            if msg.author == self.bot.user and msg.embeds:
+                if msg.embeds and "ДНИ РОЖДЕНИЯ" in msg.embeds[0].title:
+                    # Обновляем существующий embed
+                    await update_birthday_embed(self.bot, self.channel_id)
+                    found = True
+                    print(f"🎂 [Birthday] Найден существующий embed, обновлён")
+                    break
 
-        # СОЗДАЁМ НОВЫЙ EMBED С КНОПКАМИ
-        now = datetime.now()
-        months = {
-            '01': 'Январе', '02': 'Феврале', '03': 'Марте', '04': 'Апреле',
-            '05': 'Мае', '06': 'Июне', '07': 'Июле', '08': 'Августе',
-            '09': 'Сентябре', '10': 'Октябре', '11': 'Ноябре', '12': 'Декабре'
-        }
-        current_month = now.strftime("%m")
-        birthdays = birthday_manager.get_birthdays_by_month(current_month)
-        birthdays.sort(key=lambda x: int(x['birthday_date'][:2]))
-
-        embed = discord.Embed(
-            title="🎂 **ДНИ РОЖДЕНИЯ**",
-            description=f"Именинники в **{months.get(current_month, 'этом месяце')}**:",
-            color=0xffa500,
-            timestamp=now
-        )
-
-        if birthdays:
-            text = ""
-            for bd in birthdays:
-                day = bd['birthday_date'][:2]
-                if bd['birthday_date'] == now.strftime("%d.%m"):
-                    text += f"🎉 **<@{bd['user_id']}> — {day} числа (СЕГОДНЯ!)** 🎉\n"
-                else:
-                    text += f"• <@{bd['user_id']}> — {day} числа\n"
-            embed.description += f"\n\n{text}"
-        else:
-            embed.description += "\n\n✨ В этом месяце пока нет именинников"
-
-        embed.set_footer(text="Нажмите кнопку, чтобы указать свой день рождения")
-
-        await channel.send(embed=embed, view=BirthdayPublicView())
-        print(f"🎂 [Birthday] Создан новый embed с кнопками в #{channel.name}")
+        # Если не нашли — создаём новый
+        if not found:
+            await update_birthday_embed(self.bot, self.channel_id)
+            print(f"🎂 [Birthday] Создан новый embed в #{channel.name}")
 
     async def _init_settings_channel(self):
-        """Канал настроек (панель управления системой)"""
+        """Канал настроек — ИЩЕМ ПАНЕЛЬ, НЕ УДАЛЯЕМ"""
         if not self.settings_channel_id:
             logger.warning("⚠️ Канал настроек дней рождения не настроен")
             print("⚠️ [Birthday] Канал настроек дней рождения не настроен")
@@ -111,19 +81,25 @@ class BirthdayInitializer:
             logger.error(f"❌ Канал настроек {self.settings_channel_id} не найден")
             return
 
-        # Удаляем старые сообщения бота
-        async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user:
-                await msg.delete()
+        # Ищем существующую панель управления
+        found = False
+        async for msg in channel.history(limit=100):
+            if msg.author == self.bot.user and msg.embeds:
+                if msg.embeds and "УПРАВЛЕНИЕ СИСТЕМОЙ" in msg.embeds[0].title:
+                    await msg.edit(view=BirthdaySettingsView())
+                    found = True
+                    print(f"🎂 [Birthday] Найдена существующая панель, обновлена")
+                    break
 
-        # Создаём новое сообщение с панелью управления
-        embed = discord.Embed(
-            title="⚙️ **УПРАВЛЕНИЕ СИСТЕМОЙ ДНЕЙ РОЖДЕНИЯ**",
-            description="Настройка и управление системой",
-            color=0x00ff00
-        )
-        await channel.send(embed=embed, view=BirthdaySettingsView())
-        print(f"🎂 [Birthday] Создана панель управления в #{channel.name}")
+        # Если не нашли — создаём новую
+        if not found:
+            embed = discord.Embed(
+                title="⚙️ **УПРАВЛЕНИЕ СИСТЕМОЙ ДНЕЙ РОЖДЕНИЯ**",
+                description="Настройка и управление системой",
+                color=0x00ff00
+            )
+            await channel.send(embed=embed, view=BirthdaySettingsView())
+            print(f"🎂 [Birthday] Создана новая панель управления в #{channel.name}")
 
     async def start_birthday_checker(self):
         """Запустить проверку дней рождений в 00:00"""

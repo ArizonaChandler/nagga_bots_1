@@ -215,6 +215,13 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Ошибка инициализации дней рождения: {e}")
         traceback.print_exc()
+
+    # Инициализация системы регистрации MCL
+    try:
+        print("🔄 Инициализация MCL регистрации...")
+        await mcl_manager.initialize_buttons(bot)
+    except Exception as e:
+        print(f"❌ Ошибка MCL: {e}")
     
     await bot.change_presence(activity=discord.Activity(
         type=discord.ActivityType.watching,
