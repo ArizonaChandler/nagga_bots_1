@@ -29,7 +29,6 @@ class MCLRegistrationManager:
         self.role_id = CONFIG.get('mcl_role_id')
         self.announcement_channel_id = CONFIG.get('mcl_announcement_channel')
         
-        # Преобразуем 'null' в None
         for attr in ['main_channel_id', 'reserve_channel_id', 'error_channel_id', 'role_id', 'announcement_channel_id']:
             value = getattr(self, attr)
             if value == 'null' or value is None:
@@ -141,11 +140,38 @@ class MCLRegistrationManager:
         
         db.mcl_clear_all()
         
-        if not self.main_message_id or not self.reserve_message_id:
-            await self.initialize_buttons(self.bot)
-        else:
-            await self._update_views(active=True)
+        # Принудительно пересоздаём сообщения с кнопками
+        if self.main_channel_id and self.reserve_channel_id:
+            try:
+                main_channel = self.bot.get_channel(int(self.main_channel_id))
+                reserve_channel = self.bot.get_channel(int(self.reserve_channel_id))
+                
+                if main_channel and reserve_channel:
+                    # Удаляем старые сообщения
+                    for channel in [main_channel, reserve_channel]:
+                        async for msg in channel.history(limit=50):
+                            if msg.author == self.bot.user:
+                                await msg.delete()
+                    
+                    # Создаём новые
+                    from mcl_registration.embeds import create_registration_embed
+                    from mcl_registration.views import ModerationView, PublicView
+                    
+                    main_list, reserve_list = self.get_lists()
+                    embed = create_registration_embed(main_list, reserve_list, self.session_info)
+                    
+                    main_msg = await main_channel.send(embed=embed, view=ModerationView())
+                    reserve_msg = await reserve_channel.send(embed=embed, view=PublicView())
+                    
+                    self.main_message_id = str(main_msg.id)
+                    self.reserve_message_id = str(reserve_msg.id)
+                    
+                    # Обновляем в БД
+                    db.mcl_update_session_messages(self.active_session, self.main_message_id, self.reserve_message_id)
+            except Exception as e:
+                print(f"Ошибка создания сообщений MCL: {e}")
         
+        await self._update_views(active=True)
         await self._send_announcement(event_name, event_time, additional_info)
         
         db.log_action(user_id, "MCL_REG_START", f"Session {session_id}")
