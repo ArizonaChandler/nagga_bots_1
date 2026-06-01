@@ -185,7 +185,7 @@ class ApplicationsCombinedPanel(PermanentView):
         label="📋 Список полей",
         style=discord.ButtonStyle.secondary,
         emoji="📋",
-        row=5,
+        row=3,
         custom_id="list_fields"
     )
     async def list_fields(self, interaction: discord.Interaction, button: discord.ui.Button):
