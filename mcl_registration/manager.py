@@ -61,6 +61,7 @@ class MCLRegistrationManager:
         return True
 
     async def initialize_buttons(self, bot):
+        """Инициализация постоянных кнопок при старте бота (ТОЛЬКО ПРИ ЗАПУСКЕ)"""
         self.bot = bot
         self._load_config()
         
@@ -129,35 +130,8 @@ class MCLRegistrationManager:
         
         db.mcl_clear_all()
         
-        # Загружаем ID сообщений
-        self._load_message_ids()
-        
-        # Если нет сохранённых ID — создаём новые сообщения
-        if not self.main_message_id or not self.reserve_message_id:
-            if self.main_channel_id and self.reserve_channel_id:
-                try:
-                    main_channel = self.bot.get_channel(int(self.main_channel_id))
-                    reserve_channel = self.bot.get_channel(int(self.reserve_channel_id))
-                    
-                    if main_channel and reserve_channel:
-                        from mcl_registration.embeds import create_registration_embed
-                        from mcl_registration.views import ModerationView, PublicView
-                        
-                        main_list, reserve_list = self.get_lists()
-                        embed = create_registration_embed(main_list, reserve_list, self.session_info)
-                        
-                        main_msg = await main_channel.send(embed=embed, view=ModerationView())
-                        reserve_msg = await reserve_channel.send(embed=embed, view=PublicView())
-                        
-                        self.main_message_id = str(main_msg.id)
-                        self.reserve_message_id = str(reserve_msg.id)
-                        
-                        db.mcl_update_session_messages(self.active_session, self.main_message_id, self.reserve_message_id)
-                except Exception:
-                    pass
-        else:
-            # Просто обновляем существующие
-            await self._update_views(active=True)
+        # НЕ СОЗДАЁМ НОВЫЕ СООБЩЕНИЯ, А ОБНОВЛЯЕМ СУЩЕСТВУЮЩИЕ
+        await self._update_views(active=True)
         
         await self._send_announcement(event_name, event_time, additional_info)
         
@@ -248,6 +222,7 @@ class MCLRegistrationManager:
         main_list, reserve_list = self.get_lists()
         embed = create_registration_embed(main_list, reserve_list, self.session_info if active else None)
         
+        # Обновляем канал модерации
         if self.main_channel_id and self.main_message_id:
             try:
                 channel = self.bot.get_channel(int(self.main_channel_id))
@@ -256,9 +231,11 @@ class MCLRegistrationManager:
                     view = ModerationView()
                     view.update_buttons(active)
                     await msg.edit(embed=embed, view=view)
-            except:
-                pass
+                    print(f"🎯 [MCL] Канал модерации обновлён, active={active}")
+            except Exception as e:
+                print(f"🎯 [MCL] Ошибка канала модерации: {e}")
         
+        # Обновляем публичный канал
         if self.reserve_channel_id and self.reserve_message_id:
             try:
                 channel = self.bot.get_channel(int(self.reserve_channel_id))
@@ -267,8 +244,9 @@ class MCLRegistrationManager:
                     view = PublicView()
                     view.set_active(active)
                     await msg.edit(embed=embed, view=view)
-            except:
-                pass
+                    print(f"🎯 [MCL] Публичный канал обновлён, active={active}")
+            except Exception as e:
+                print(f"🎯 [MCL] Ошибка публичного канала: {e}")
 
 
 mcl_manager = MCLRegistrationManager()
