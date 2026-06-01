@@ -248,5 +248,4 @@ class MCLRegistrationManager:
             except Exception as e:
                 print(f"🎯 [MCL] Ошибка публичного канала: {e}")
 
-
 mcl_manager = MCLRegistrationManager()
