@@ -230,6 +230,7 @@ async def on_ready():
 
     print("="*60 + "\n")
 
+
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):

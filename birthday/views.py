@@ -156,14 +156,12 @@ async def update_birthday_embed(bot, channel_id: str):
     
     embed.set_footer(text="Нажмите кнопку, чтобы указать свой день рождения")
     
-    # Ищем существующее сообщение бота
+    # Ищем сообщение и обновляем embed И view
     async for msg in channel.history(limit=50):
         if msg.author == bot.user and msg.embeds:
             if msg.embeds and "ДНИ РОЖДЕНИЯ" in msg.embeds[0].title:
-                await msg.edit(embed=embed)
+                await msg.edit(embed=embed, view=BirthdayPublicView())
                 return
     
     # Если не нашли — создаём новое
     await channel.send(embed=embed, view=BirthdayPublicView())
-
-    

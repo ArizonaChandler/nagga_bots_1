@@ -42,7 +42,7 @@ class BirthdayInitializer:
         print("🎂 [Birthday] Инициализация системы дней рождения завершена")
 
     async def _init_public_channel(self):
-        """Публичный канал — ИЩЕМ EMBED, НЕ УДАЛЯЕМ"""
+        """Публичный канал — ищем embed, обновляем или создаём"""
         if not self.channel_id:
             logger.warning("⚠️ Публичный канал дней рождения не настроен")
             print("⚠️ [Birthday] Публичный канал дней рождения не настроен")
@@ -58,19 +58,21 @@ class BirthdayInitializer:
         async for msg in channel.history(limit=100):
             if msg.author == self.bot.user and msg.embeds:
                 if msg.embeds and "ДНИ РОЖДЕНИЯ" in msg.embeds[0].title:
-                    # Обновляем существующий embed
+                    # Обновляем embed и ПРИНУДИТЕЛЬНО ПРИВЯЗЫВАЕМ view
                     await update_birthday_embed(self.bot, self.channel_id)
+                    # Дополнительно обновляем view у сообщения
+                    await msg.edit(view=BirthdayPublicView())
                     found = True
-                    print(f"🎂 [Birthday] Найден существующий embed, обновлён")
+                    print(f"🎂 [Birthday] Найден существующий embed, кнопки перепривязаны")
                     break
 
-        # Если не нашли — создаём новый
+        # Если не нашли — создаём новый embed с кнопками
         if not found:
             await update_birthday_embed(self.bot, self.channel_id)
             print(f"🎂 [Birthday] Создан новый embed в #{channel.name}")
 
     async def _init_settings_channel(self):
-        """Канал настроек — ИЩЕМ ПАНЕЛЬ, НЕ УДАЛЯЕМ"""
+        """Канал настроек — ищем панель, обновляем или создаём"""
         if not self.settings_channel_id:
             logger.warning("⚠️ Канал настроек дней рождения не настроен")
             print("⚠️ [Birthday] Канал настроек дней рождения не настроен")
