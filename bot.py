@@ -55,6 +55,7 @@ from birthday.initializer import setup as setup_birthday
 
 # Импорт регистрации MCL
 from mcl_registration.manager import mcl_manager
+from mcl_registration.initializer import setup as setup_mcl
 
 import discord
 from discord.ext import commands
@@ -218,7 +219,7 @@ async def on_ready():
 
     # Инициализация системы регистрации MCL
     try:
-        from mcl_registration.initializer import setup as setup_mcl
+        mcl_manager.set_bot(bot)
         print("🎯 Инициализация MCL...")
         await setup_mcl(bot)
     except Exception as e:

@@ -2256,7 +2256,7 @@ class Database:
             cursor.execute('SELECT COUNT(*) FROM birthdays')
             return cursor.fetchone()[0]
 
-    # ===== МЕТОДЫ ДЛЯ MCL =====
+        # ===== МЕТОДЫ ДЛЯ MCL СИСТЕМЫ =====
 
     def mcl_add_registration(self, user_id: str, user_name: str, list_type: str) -> bool:
         with self.get_connection() as conn:
@@ -2296,7 +2296,8 @@ class Database:
             cursor.execute('DELETE FROM mcl_registrations')
             conn.commit()
 
-    def mcl_create_session(self, started_by: str, main_channel_id: str, reserve_channel_id: str, event_name: str, event_time: str, additional_info: str = None) -> int:
+    def mcl_create_session(self, started_by: str, main_channel_id: str, reserve_channel_id: str, 
+                           event_name: str, event_time: str, additional_info: str = None) -> int:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -2335,14 +2336,14 @@ class Database:
             conn.commit()
 
     def mcl_move_to_main(self, reg_id: int) -> bool:
-    with self.get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE mcl_registrations SET list_type = 'main', registered_at = CURRENT_TIMESTAMP
-            WHERE id = ? AND list_type = 'reserve'
-        ''', (reg_id,))
-        conn.commit()
-        return cursor.rowcount > 0
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE mcl_registrations SET list_type = 'main', registered_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND list_type = 'reserve'
+            ''', (reg_id,))
+            conn.commit()
+            return cursor.rowcount > 0
 
     def mcl_move_to_reserve(self, reg_id: int) -> bool:
         with self.get_connection() as conn:
@@ -2363,12 +2364,6 @@ class Database:
             ''')
             conn.commit()
             return cursor.rowcount
-
-    def mcl_clear_all(self):
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM mcl_registrations')
-            conn.commit()
 
 db = Database()
 db.create_games_tables_if_not_exist()
