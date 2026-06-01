@@ -27,6 +27,7 @@ CONFIG = {
     'ad_settings_channel': None,
     'events_settings_channel': None,
     'applications_settings_channel': None,
+    'application_custom_fields': [],
     'submit_text': "Нажмите кнопку ниже, чтобы подать заявку",
     'submit_image': None,
     'welcome_message': None,

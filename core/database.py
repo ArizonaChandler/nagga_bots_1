@@ -230,6 +230,20 @@ class Database:
                 )
             ''')
 
+            # ===== ТАБЛИЦА ДЛЯ НАСТРОЙКИ ПОЛЕЙ ЗАЯВКИ =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS application_fields (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    field_name TEXT NOT NULL,
+                    field_description TEXT,
+                    placeholder TEXT,
+                    required BOOLEAN DEFAULT 1,
+                    field_order INTEGER DEFAULT 0,
+                    is_active BOOLEAN DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
             # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ AFK =====
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS afk_users (
@@ -1128,6 +1142,62 @@ class Database:
         for key, value in settings.items():
             if value and value.lower() != 'null':
                 CONFIG[key] = value
+
+    # ===== МЕТОДЫ ДЛЯ ГИБКИХ ПОЛЕЙ ЗАЯВКИ =====
+
+    def get_application_fields(self):
+        """Получить все активные поля заявки"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, field_name, field_description, placeholder, required, field_order
+                FROM application_fields 
+                WHERE is_active = 1 
+                ORDER BY field_order
+            ''')
+            rows = cursor.fetchall()
+            return [{'id': row[0], 'name': row[1], 'description': row[2], 
+                    'placeholder': row[3], 'required': row[4], 'order': row[5]} for row in rows]
+
+    def add_application_field(self, field_name: str, field_description: str, placeholder: str, required: bool, order: int, added_by: str):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO application_fields (field_name, field_description, placeholder, required, field_order)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (field_name, field_description, placeholder, 1 if required else 0, order))
+            conn.commit()
+            self.log_action(added_by, "ADD_APP_FIELD", f"{field_name}")
+
+    def remove_application_field(self, field_id: int, removed_by: str):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE application_fields SET is_active = 0 WHERE id = ?', (field_id,))
+            conn.commit()
+            self.log_action(removed_by, "REMOVE_APP_FIELD", f"ID {field_id}")
+
+    def update_field_order(self, field_id: int, new_order: int):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE application_fields SET field_order = ? WHERE id = ?', (new_order, field_id))
+            conn.commit()
+
+    def create_application_dynamic(self, user_id: str, user_name: str, answers_json: str) -> tuple:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Проверяем активную заявку
+            cursor.execute('SELECT id FROM applications WHERE user_id = ? AND status IN ("pending", "interviewing")', (user_id,))
+            if cursor.fetchone():
+                return None, "❌ У вас уже есть активная заявка"
+            
+            cursor.execute('''
+                INSERT INTO applications (user_id, user_name, answers, status)
+                VALUES (?, ?, ?, 'pending')
+            ''', (user_id, user_name, answers_json))
+            
+            conn.commit()
+            return cursor.lastrowid, None
 
         # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ЗАЯВОК (сообщения) =====
     

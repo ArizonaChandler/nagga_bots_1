@@ -101,6 +101,11 @@ class ApplicationManager:
             print(f"❌ Ошибка при удалении канала: {e}")
             return False
     
+    def create_application_dynamic(self, user_id: str, user_name: str, answers: dict) -> tuple:
+        """Создать заявку с динамическими полями"""
+        import json
+        return db.create_application_dynamic(user_id, user_name, json.dumps(answers))
+    
     # ===== НОВЫЕ МЕТОДЫ ДЛЯ ЛИЧНЫХ ПРОФИЛЕЙ =====
     
     async def get_next_category(self, guild, base_name="📁 PROFILES"):

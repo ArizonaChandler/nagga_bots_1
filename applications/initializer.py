@@ -34,11 +34,10 @@ async def update_submit_channel(bot):
     if submit_image:
         embed.set_image(url=submit_image)
     
-    # Ищем существующее сообщение бота (по автору и наличию кнопки)
+    # Ищем существующее сообщение бота
     target_message = None
     async for msg in channel.history(limit=50):
         if msg.author == bot.user:
-            # Проверяем, есть ли в сообщении наша кнопка
             if msg.components and len(msg.components) > 0:
                 for component in msg.components:
                     for button in component.children:
@@ -77,6 +76,7 @@ class ApplicationsInitializer:
     async def initialize_all(self):
         """Инициализировать все каналы системы заявок"""
         logger.info("🔄 Инициализация системы заявок...")
+        print("🔄 Инициализация системы заявок...")
         
         settings = app_manager.get_settings()
         
@@ -96,6 +96,7 @@ class ApplicationsInitializer:
         await self._restore_application_buttons()
         
         logger.info("✅ Инициализация системы заявок завершена")
+        print("✅ Инициализация системы заявок завершена")
     
     async def _init_submit_channel(self, settings):
         """Инициализация канала с кнопкой подачи заявок"""
@@ -109,7 +110,6 @@ class ApplicationsInitializer:
             logger.error(f"❌ Канал подачи заявок {channel_id} не найден")
             return
         
-        # Обновляем или создаём сообщение
         await update_submit_channel(self.bot)
     
     async def _init_applications_channel(self, settings):

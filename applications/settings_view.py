@@ -160,6 +160,47 @@ class ApplicationsCombinedPanel(PermanentView):
 
         embed = discord.Embed(title="📋 Роли для автоматической выдачи", description=text, color=0x00ff00)
         await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @discord.ui.button(
+        label="➕ Добавить поле",
+        style=discord.ButtonStyle.success,
+        emoji="➕",
+        row=5,
+        custom_id="add_field"
+    )
+    async def add_field(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(AddFieldModal())
+
+    @discord.ui.button(
+        label="➖ Удалить поле",
+        style=discord.ButtonStyle.danger,
+        emoji="➖",
+        row=5,
+        custom_id="remove_field"
+    )
+    async def remove_field(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(RemoveFieldModal())
+
+    @discord.ui.button(
+        label="📋 Список полей",
+        style=discord.ButtonStyle.secondary,
+        emoji="📋",
+        row=5,
+        custom_id="list_fields"
+    )
+    async def list_fields(self, interaction: discord.Interaction, button: discord.ui.Button):
+        fields = db.get_application_fields()
+        if not fields:
+            await interaction.response.send_message("📭 Нет дополнительных полей", ephemeral=True)
+            return
+        
+        text = ""
+        for f in fields:
+            req = "✅" if f['required'] else "❌"
+            text += f"`{f['id']}` {req} **{f['name']}** — {f['description']}\n"
+        
+        embed = discord.Embed(title="📋 Поля заявки", description=text, color=0x00ff00)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # ===== РЯД 4: МОДЕРАЦИЯ =====
     @discord.ui.button(
@@ -420,3 +461,32 @@ class RemoveRewardRoleModal(discord.ui.Modal, title="➖ УДАЛИТЬ РОЛЬ
     async def on_submit(self, interaction: discord.Interaction):
         db.remove_reward_role(self.role_id.value)
         await interaction.response.send_message(f"✅ Роль ID {self.role_id.value} удалена из списка", ephemeral=True)
+
+class AddFieldModal(discord.ui.Modal, title="➕ ДОБАВИТЬ ПОЛЕ"):
+    field_name = discord.ui.TextInput(label="Название поля", placeholder="например: arena_link", max_length=50)
+    field_description = discord.ui.TextInput(label="Описание", placeholder="Ссылка на откат с арены", max_length=100)
+    placeholder = discord.ui.TextInput(label="Placeholder", placeholder="https://...", max_length=200, required=False)
+    required = discord.ui.TextInput(label="Обязательное (да/нет)", placeholder="да", max_length=3)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        required = self.required.value.lower() == 'да'
+        fields = db.get_application_fields()
+        order = len(fields) + 1
+        
+        db.add_application_field(
+            self.field_name.value, 
+            self.field_description.value, 
+            self.placeholder.value or "", 
+            required, 
+            order,
+            str(interaction.user.id)
+        )
+        
+        await interaction.response.send_message(f"✅ Поле `{self.field_name.value}` добавлено!", ephemeral=True)
+
+class RemoveFieldModal(discord.ui.Modal, title="➖ УДАЛИТЬ ПОЛЕ"):
+    field_id = discord.ui.TextInput(label="ID поля", placeholder="1", max_length=5)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        db.remove_application_field(int(self.field_id.value), str(interaction.user.id))
+        await interaction.response.send_message(f"✅ Поле ID {self.field_id.value} удалено!", ephemeral=True)
