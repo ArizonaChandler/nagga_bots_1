@@ -2334,5 +2334,41 @@ class Database:
             ''', (main_message_id, reserve_message_id, session_id))
             conn.commit()
 
+    def mcl_move_to_main(self, reg_id: int) -> bool:
+    with self.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE mcl_registrations SET list_type = 'main', registered_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND list_type = 'reserve'
+        ''', (reg_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+    def mcl_move_to_reserve(self, reg_id: int) -> bool:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE mcl_registrations SET list_type = 'reserve', registered_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND list_type = 'main'
+            ''', (reg_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def mcl_move_all_to_main(self) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE mcl_registrations SET list_type = 'main', registered_at = CURRENT_TIMESTAMP
+                WHERE list_type = 'reserve'
+            ''')
+            conn.commit()
+            return cursor.rowcount
+
+    def mcl_clear_all(self):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM mcl_registrations')
+            conn.commit()
+
 db = Database()
 db.create_games_tables_if_not_exist()
