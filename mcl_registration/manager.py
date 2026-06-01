@@ -40,6 +40,26 @@ class MCLRegistrationManager:
         if self.role_id == 'null' or self.role_id is None:
             self.role_id = None
     
+    def _load_message_ids(self):
+        """Загрузить ID сообщений из активной сессии"""
+        session = db.mcl_get_active_session()
+        if session:
+            self.main_message_id = session.get('main_message_id')
+            self.reserve_message_id = session.get('reserve_message_id')
+            self.active_session = session['id']
+            self.session_info = {
+                'event_name': session.get('event_name'),
+                'event_time': session.get('event_time'),
+                'additional_info': session.get('additional_info'),
+                'started_by_name': f"<@{session['started_by']}>"
+            }
+            print(f"🔍 [MCL] Загружены message_id: main={self.main_message_id}, reserve={self.reserve_message_id}")
+        else:
+            self.main_message_id = None
+            self.reserve_message_id = None
+            self.active_session = None
+            self.session_info = None
+    
     def set_channels(self, main_channel_id: str, reserve_channel_id: str, updated_by: str):
         CONFIG['mcl_reg_main_channel'] = main_channel_id
         CONFIG['mcl_reg_reserve_channel'] = reserve_channel_id
@@ -79,8 +99,8 @@ class MCLRegistrationManager:
                 if msg.author == bot.user:
                     await msg.delete()
         
-        # Получаем активную сессию через db
-        session = db.mcl_get_active_session()
+        # Загружаем активную сессию
+        self._load_message_ids()
         
         from mcl_registration.embeds import create_registration_embed
         from mcl_registration.views import ModerationView, PublicView
@@ -88,28 +108,41 @@ class MCLRegistrationManager:
         main_list = db.mcl_get_registrations('main')
         reserve_list = db.mcl_get_registrations('reserve')
         
-        if session:
-            self.active_session = session['id']
-            self.session_info = {
-                'event_name': session.get('event_name'),
-                'event_time': session.get('event_time'),
-                'additional_info': session.get('additional_info'),
-                'started_by_name': f"<@{session['started_by']}>"
-            }
-        
         embed = create_registration_embed(main_list, reserve_list, self.session_info)
         
-        main_msg = await main_channel.send(embed=embed, view=ModerationView())
-        reserve_msg = await reserve_channel.send(embed=embed, view=PublicView())
-        
-        self.main_message_id = str(main_msg.id)
-        self.reserve_message_id = str(reserve_msg.id)
-        
-        print(f"🎯 [MCL] main_message_id = {self.main_message_id}")
-        print(f"🎯 [MCL] reserve_message_id = {self.reserve_message_id}")
-        
-        if session:
-            db.mcl_update_session_messages(session['id'], self.main_message_id, self.reserve_message_id)
+        # Если нет сохранённых ID сообщений — создаём новые
+        if not self.main_message_id or not self.reserve_message_id:
+            main_msg = await main_channel.send(embed=embed, view=ModerationView())
+            reserve_msg = await reserve_channel.send(embed=embed, view=PublicView())
+            
+            self.main_message_id = str(main_msg.id)
+            self.reserve_message_id = str(reserve_msg.id)
+            
+            print(f"🎯 [MCL] Созданы новые сообщения: main={self.main_message_id}, reserve={self.reserve_message_id}")
+            
+            if self.active_session:
+                db.mcl_update_session_messages(self.active_session, self.main_message_id, self.reserve_message_id)
+        else:
+            # Обновляем существующие сообщения
+            try:
+                main_msg = await main_channel.fetch_message(int(self.main_message_id))
+                reserve_msg = await reserve_channel.fetch_message(int(self.reserve_message_id))
+                
+                await main_msg.edit(embed=embed, view=ModerationView())
+                await reserve_msg.edit(embed=embed, view=PublicView())
+                print(f"🎯 [MCL] Обновлены существующие сообщения")
+            except Exception as e:
+                print(f"🎯 [MCL] Ошибка обновления сообщений: {e}")
+                # Если не удалось — создаём новые
+                main_msg = await main_channel.send(embed=embed, view=ModerationView())
+                reserve_msg = await reserve_channel.send(embed=embed, view=PublicView())
+                
+                self.main_message_id = str(main_msg.id)
+                self.reserve_message_id = str(reserve_msg.id)
+                
+                if self.active_session:
+                    db.mcl_update_session_messages(self.active_session, self.main_message_id, self.reserve_message_id)
+                print(f"🎯 [MCL] Созданы новые сообщения (fallback)")
         
         return True
     
@@ -149,8 +182,12 @@ class MCLRegistrationManager:
         # Очищаем старые регистрации
         db.mcl_clear_all()
         
-        # Обновляем кнопки
-        await self._update_views(active=True)
+        # Убеждаемся, что кнопки инициализированы и ID сообщений загружены
+        if not self.main_message_id or not self.reserve_message_id:
+            await self.initialize_buttons(self.bot)
+        else:
+            # Обновляем embed и кнопки
+            await self._update_views(active=True)
         
         db.log_action(user_id, "MCL_REG_START", f"Session {session_id}")
         print(f"🎯 [MCL] Регистрация начата, session_id={session_id}")
