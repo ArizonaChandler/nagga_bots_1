@@ -244,6 +244,25 @@ class Database:
                 )
             ''')
 
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS applications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                user_name TEXT NOT NULL,
+                nickname TEXT NOT NULL,
+                static TEXT NOT NULL,
+                previous_families TEXT,
+                prime_time TEXT NOT NULL,
+                hours_per_day TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                reviewed_by TEXT,
+                reviewed_at TIMESTAMP,
+                reject_reason TEXT,
+                answers TEXT
+            )
+        ''')
+
             # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ AFK =====
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS afk_users (
@@ -1350,6 +1369,23 @@ class Database:
                     return [{'channel_id': result[0], 'message_id': result[1], 'type': 'by_application'}]
             
             return []
+
+    def create_application_dynamic(self, user_id: str, user_name: str, answers_json: str) -> tuple:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Проверяем активную заявку
+            cursor.execute('SELECT id FROM applications WHERE user_id = ? AND status IN ("pending", "interviewing")', (user_id,))
+            if cursor.fetchone():
+                return None, "❌ У вас уже есть активная заявка"
+            
+            cursor.execute('''
+                INSERT INTO applications (user_id, user_name, answers, status)
+                VALUES (?, ?, ?, 'pending')
+            ''', (user_id, user_name, answers_json))
+            
+            conn.commit()
+            return cursor.lastrowid, None
 
     # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ AFK =====
     

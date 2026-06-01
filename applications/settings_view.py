@@ -118,29 +118,45 @@ class AddFieldModal(discord.ui.Modal, title="➕ ДОБАВИТЬ ПОЛЕ"):
         fields = db.get_application_fields()
         order = len(fields) + 1
         db.add_application_field(self.field_name.value, self.field_description.value, self.placeholder.value or "", req, order, str(interaction.user.id))
-        await interaction.response.send_message(f"✅ Поле `{self.field_name.value}` добавлено!", ephemeral=True)
+        # Обновляем меню
+        embed = discord.Embed(
+            title="📝 **УПРАВЛЕНИЕ ПОЛЯМИ ЗАЯВКИ**",
+            description="Добавление, удаление и просмотр полей формы подачи заявки",
+            color=0x00ff00
+        )
+        await interaction.response.edit_message(embed=embed, view=ApplicationFieldsView())
 
 
 class RemoveFieldModal(discord.ui.Modal, title="➖ УДАЛИТЬ ПОЛЕ"):
     field_id = discord.ui.TextInput(label="ID поля", placeholder="1", max_length=5, required=True)
     async def on_submit(self, interaction: discord.Interaction):
         db.remove_application_field(int(self.field_id.value), str(interaction.user.id))
-        await interaction.response.send_message(f"✅ Поле ID {self.field_id.value} удалено!", ephemeral=True)
+        # Обновляем меню
+        embed = discord.Embed(
+            title="📝 **УПРАВЛЕНИЕ ПОЛЯМИ ЗАЯВКИ**",
+            description="Добавление, удаление и просмотр полей формы подачи заявки",
+            color=0x00ff00
+        )
+        await interaction.response.edit_message(embed=embed, view=ApplicationFieldsView())
 
 
-class ApplicationFieldsView(discord.ui.View):
+class ApplicationFieldsView(PermanentView):
     def __init__(self):
-        super().__init__(timeout=60)
-        add_btn = discord.ui.Button(label="➕ Добавить поле", style=discord.ButtonStyle.success, row=0)
+        super().__init__()
+        self._add_buttons()
+
+    def _add_buttons(self):
+        self.clear_items()
+        add_btn = discord.ui.Button(label="➕ Добавить поле", style=discord.ButtonStyle.success, row=0, custom_id="add_field")
         add_btn.callback = self.add_field
         self.add_item(add_btn)
-        remove_btn = discord.ui.Button(label="➖ Удалить поле", style=discord.ButtonStyle.danger, row=0)
+        remove_btn = discord.ui.Button(label="➖ Удалить поле", style=discord.ButtonStyle.danger, row=0, custom_id="remove_field")
         remove_btn.callback = self.remove_field
         self.add_item(remove_btn)
-        list_btn = discord.ui.Button(label="📋 Список полей", style=discord.ButtonStyle.secondary, row=0)
+        list_btn = discord.ui.Button(label="📋 Список полей", style=discord.ButtonStyle.secondary, row=0, custom_id="list_fields")
         list_btn.callback = self.list_fields
         self.add_item(list_btn)
-        back_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary, row=1)
+        back_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary, row=1, custom_id="back_fields")
         back_btn.callback = self.back
         self.add_item(back_btn)
 
@@ -195,7 +211,7 @@ class ApplicationsCombinedPanel(PermanentView):
         self.add_item(discord.ui.Button(label="➖ Удалить роль", style=discord.ButtonStyle.danger, row=3, custom_id="remove_role"))
         self.add_item(discord.ui.Button(label="📋 Список ролей", style=discord.ButtonStyle.secondary, row=3, custom_id="list_roles"))
 
-        # Ряд 4: модерация и поля (4 кнопки — влезает)
+        # Ряд 4: модерация и поля (4 кнопки)
         self.add_item(discord.ui.Button(label="📋 Ожидающие заявки", style=discord.ButtonStyle.success, row=4, custom_id="pending"))
         self.add_item(discord.ui.Button(label="🔄 Сбросить пользователя", style=discord.ButtonStyle.secondary, row=4, custom_id="reset"))
         self.add_item(discord.ui.Button(label="📝 Управление полями", style=discord.ButtonStyle.secondary, row=4, custom_id="fields"))
