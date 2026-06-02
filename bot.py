@@ -8,66 +8,45 @@ import sys
 import traceback
 from pathlib import Path
 from datetime import datetime
- 
+
 sys.path.insert(0, str(Path(__file__).parent))
-
-from core.database import db
-from core.config import CONFIG, load_config
-from core.utils import format_mention, is_admin
-
-from commands.info import setup as setup_info
-from commands.settings import setup as setup_settings
-from commands.log import setup as setup_log
-from commands.stats import setup as setup_stats
-
-# ВНИМАНИЕ: Импорт capt.core УДАЛЕН! CAPT перенесена в capt_registration
-from files.core import file_manager
-
-# Импорт планировщика мероприятий
-from events.scheduler import setup as setup_scheduler
-
-# Импорт авто-рекламы
-from advertising.core import setup as setup_advertising
-from advertising.commands import setup as setup_ad_commands
-
-# Импорт систем заявок
-from applications.manager import app_manager
-from applications.views import ApplicationPublicView
-from applications.admin_views import ApplicationsModerationPanel
-
-# Импорт системы AFK
-from afk import setup_afk
-
-# Импорт системы TIER 
-from tier import setup_tier
-
-# Импорт системы статистики
-from server_stats.global_collector import set_collector, get_collector
-
-# Импорт системы отпусков
-from vacation import setup_vacation
-
-# Импорт системы игр
-from games.initializer import setup as setup_games
-
-# Импорт системы дней рождения
-from birthday.initializer import setup as setup_birthday
-
-# Импорт регистрации MCL
-from mcl_registration.manager import mcl_manager
-from mcl_registration.initializer import setup as setup_mcl
 
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 import os
 
-# База данных
-from core.config import load_config
+from core.database import db
+from core.config import CONFIG, load_config
+from core.utils import format_mention, is_admin
+
+# ========== КОМАНДЫ ==========
+from commands.info import setup as setup_info
+from commands.settings import setup as setup_settings
+from commands.log import setup as setup_log
+
+# ========== МОДУЛИ ==========
+from files.core import file_manager
+from events.scheduler import setup as setup_scheduler
+from advertising.core import setup as setup_advertising
+from advertising.commands import setup as setup_ad_commands
+from applications import setup_applications
+from afk import setup_afk
+from tier import setup_tier
+from vacation import setup_vacation
+from games.initializer import setup as setup_games
+from birthday.initializer import setup as setup_birthday
+from mcl_registration.manager import mcl_manager
+from mcl_registration.initializer import setup as setup_mcl
+
+# ========== СТАТИСТИКА ==========
+from server_stats.global_collector import set_collector, get_collector
+from server_stats.initializer import setup as setup_stats_panel
+
+# ========== НАСТРОЙКА ==========
+load_dotenv()
 load_config()
 
-
-load_dotenv()
 BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 
 if not BOT_TOKEN:
@@ -84,140 +63,96 @@ bot = commands.Bot(
     help_command=None
 )
 
-# Настройка команд
+# ========== РЕГИСТРАЦИЯ КОМАНД ==========
 setup_info(bot)
 setup_settings(bot)
 setup_log(bot)
-#setup_stats(bot)
-
-# Настройка команд авто-рекламы
 setup_ad_commands(bot)
 
-# Запуск планировщика мероприятий
-setup_scheduler(bot)
 
+# ========== ФУНКЦИИ ИНИЦИАЛИЗАЦИИ МОДУЛЕЙ ==========
+async def init_capt():
+    from capt_registration.manager import capt_reg_manager
+    await capt_reg_manager.initialize_buttons(bot)
+
+
+async def init_advertising():
+    from advertising.core import advertiser
+    if advertiser:
+        await advertiser.initialize_settings_channel(bot)
+
+
+async def init_events():
+    from events.scheduler import scheduler
+    if scheduler:
+        await scheduler.initialize_settings_channel(bot)
+
+
+async def init_stats():
+    set_collector(bot)
+    collector = get_collector()
+    if collector:
+        await collector.start()
+
+
+async def cleanup_vacation_on_leave(member):
+    from vacation.manager import vacation_manager
+    
+    vacation = vacation_manager.get_user_vacation(str(member.id))
+    if vacation:
+        vacation_manager.remove_user_from_vacation(str(member.id))
+        print(f"✅ {member.name} удалён из системы отпусков")
+        
+        log_channel_id = db.get_setting('vacation_log_channel')
+        if log_channel_id:
+            log_channel = bot.get_channel(int(log_channel_id))
+            if log_channel:
+                embed = discord.Embed(
+                    title="👋 УДАЛЁН ИЗ ОТПУСКА",
+                    description=f"Пользователь **{member.name}** покинул сервер",
+                    color=0x808080,
+                    timestamp=datetime.now()
+                )
+                await log_channel.send(embed=embed)
+
+
+# ========== СОБЫТИЯ ==========
 @bot.event
 async def on_ready():
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("✅ **MAJESTIC BOT by Nagga**")
-    print("="*60)
+    print("=" * 60)
     print(f"🤖 Бот: {bot.user.name}")
     print(f"🆔 ID: {bot.user.id}")
     print(f"🌐 Серверов: {len(bot.guilds)}")
     print(f"📁 Файловое хранилище: {file_manager.storage_path}")
-    
-    # Инициализация CAPT регистрации
-    try:
-        from capt_registration.manager import capt_reg_manager
-        print("🔄 Инициализация CAPT регистрации...")
-        await capt_reg_manager.initialize_buttons(bot)
-    except Exception as e:
-        print(f"❌ Ошибка инициализации CAPT регистрации: {e}")
-        traceback.print_exc()
-    
-    # Инициализация канала авто-рекламы
-    try:
-        from advertising.core import advertiser
-        print("🔄 Инициализация канала авто-рекламы...")
-        if advertiser:
-            await advertiser.initialize_settings_channel(bot)
-    except Exception as e:
-        print(f"❌ Ошибка инициализации авто-рекламы: {e}")
-        traceback.print_exc()
-    
-    # Инициализация канала мероприятий
-    try:
-        from events.scheduler import scheduler
-        print("🔄 Инициализация канала мероприятий...")
-        if scheduler:
-            await scheduler.initialize_settings_channel(bot)
-    except Exception as e:
-        print(f"❌ Ошибка инициализации мероприятий: {e}")
-        traceback.print_exc()
 
-    # Инициализация системы заявок
-    try:
-        from applications import setup_applications
-        print("🔄 Инициализация системы заявок...")
-        await setup_applications(bot)
-    except Exception as e:
-        print(f"❌ Ошибка инициализации системы заявок: {e}")
-        traceback.print_exc()
-    
-    # Инициализация системы TIER
-    try:
-        from tier import setup_tier
-        print("🔄 Инициализация системы TIER...")
-        await setup_tier(bot)
-    except Exception as e:
-        print(f"❌ Ошибка инициализации TIER: {e}")
-        traceback.print_exc()
-    
-    # Инициализация системы AFK
-    try:
-        from afk import setup_afk
-        print("🔄 Инициализация системы AFK...")
-        await setup_afk(bot)
-    except Exception as e:
-        print(f"❌ Ошибка инициализации AFK: {e}")
-        traceback.print_exc()
-    
-    # Инициализация системы статистики
-    try:
-        from server_stats.global_collector import set_collector, get_collector
-        
-        # Инициализация панели настроек статистики
+    # Инициализация всех систем
+    modules = [
+        ("CAPT регистрации", init_capt),
+        ("авто-рекламы", init_advertising),
+        ("мероприятий", init_events),
+        ("заявок", setup_applications, bot),
+        ("TIER", setup_tier, bot),
+        ("AFK", setup_afk, bot),
+        ("статистики", init_stats),
+        ("отпусков", setup_vacation, bot),
+        ("игр", setup_games, bot),
+        ("дней рождения", setup_birthday, bot),
+    ]
+
+    for name, func, *args in modules:
         try:
-            print("📊 Инициализация панели настроек статистики...")
-            from server_stats.initializer import setup as setup_stats_panel
-            await setup_stats_panel(bot)
-        except Exception as e:
-            print(f"❌ Ошибка инициализации панели статистики: {e}")
-            traceback.print_exc()
-        
-        # Инициализация сборщика статистики
-        try:
-            print("📊 Инициализация сборщика статистики...")
-            set_collector(bot)
-            collector = get_collector()
-            if collector:
-                await collector.start()
+            print(f"🔄 Инициализация системы {name}...")
+            if args:
+                await func(args[0])
             else:
-                print("❌ collector не инициализирован")
+                await func()
         except Exception as e:
-            print(f"❌ Ошибка инициализации сборщика статистики: {e}")
+            print(f"❌ Ошибка инициализации {name}: {e}")
             traceback.print_exc()
-            
-    except Exception as e:
-        print(f"❌ Общая ошибка статистики: {e}")
-        traceback.print_exc()
 
-    # Инициализация системы отпусков
-    try:
-        print("🏖️ Инициализация системы отпусков...")
-        await setup_vacation(bot)
-    except Exception as e:
-        print(f"❌ Ошибка инициализации отпусков: {e}")
-        traceback.print_exc()
-
-    # Инициализация системы игр
-    try:
-        from games.initializer import setup as setup_games
-        print("🎮 Инициализация системы игр...")
-        await setup_games(bot)
-    except Exception as e:
-        print(f"❌ Ошибка инициализации игр: {e}")
-        traceback.print_exc()
-
-    # Инициализация системы дней рождения
-    try:
-        print("🎂 Инициализация системы дней рождения...")
-        await setup_birthday(bot)
-    except Exception as e:
-        print(f"❌ Ошибка инициализации дней рождения: {e}")
-        traceback.print_exc()
-
-    # Инициализация системы регистрации MCL
+    # MCL отдельно (требует set_bot)
     try:
         mcl_manager.set_bot(bot)
         print("🎯 Инициализация MCL...")
@@ -225,13 +160,14 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Ошибка MCL: {e}")
         traceback.print_exc()
-    
+
     await bot.change_presence(activity=discord.Activity(
         type=discord.ActivityType.watching,
         name=f"{CONFIG.get('family_name', 'Семья')} | !info"
     ))
 
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
+
 
 @bot.event
 async def on_command_error(ctx, error):
@@ -239,125 +175,82 @@ async def on_command_error(ctx, error):
         return
     print(f"❌ Ошибка: {error}")
 
+
 @bot.event
 async def on_member_join(member):
-    """Приветствие нового участника"""
-    # В систему статистики
-    from server_stats.global_collector import get_collector
     collector = get_collector()
     if collector:
         collector.increment_new_members()
 
     try:
         from applications.manager import app_manager
-        from core.config import CONFIG
         
         settings = app_manager.get_settings()
         welcome_message = settings.get('welcome_message')
-        
         if not welcome_message:
             return
-        
-        # Используем отдельный канал для приветствий
+
         welcome_channel_id = settings.get('welcome_channel')
         if not welcome_channel_id:
-            # Если канал не настроен, не отправляем
             return
-        
+
         welcome_channel = member.guild.get_channel(int(welcome_channel_id))
         if not welcome_channel:
             return
-        
-        # Получаем канал подачи заявок для ссылки
+
         submit_channel_id = settings.get('submit_channel')
         submit_channel_mention = f"<#{submit_channel_id}>" if submit_channel_id else "канал подачи заявок"
-        
-        # Заменяем переменные в сообщении
+
         welcome_text = welcome_message.format(
             user=member.mention,
             channel=submit_channel_mention,
             server=member.guild.name
         )
-        
-        # Получаем картинку
+
         welcome_image = settings.get('welcome_image')
-        
+
         embed = discord.Embed(
             title="👋 ДОБРО ПОЖАЛОВАТЬ!",
             description=welcome_text,
             color=0x00ff00,
             timestamp=datetime.now()
         )
-        
         if welcome_image:
             embed.set_image(url=welcome_image)
-        
         embed.set_footer(text=member.guild.name)
-        
-        # Отправляем в канал приветствий
+
         await welcome_channel.send(content=member.mention, embed=embed)
         print(f"✅ Приветствие отправлено для {member.name} в #{welcome_channel.name}")
-        
+
     except Exception as e:
         print(f"❌ Ошибка при приветствии {member.name}: {e}")
 
+
 @bot.event
 async def on_member_remove(member):
-    print(f"🔴🔴🔴 СОБЫТИЕ on_member_remove ВЫЗВАНО для {member.name} (ID: {member.id}) 🔴🔴🔴")
-    
-    # В систему статистики
-    from server_stats.global_collector import get_collector
+    print(f"🔴 {member.name} (ID: {member.id}) покинул сервер")
+
     collector = get_collector()
     if collector:
         collector.increment_left_members()
 
     try:
-        from applications.manager import app_manager
-        from core.database import db
-        
-        print("🔍 Шаг 1: Поиск активной заявки...")
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT id FROM applications 
-                WHERE user_id = ? AND status IN ('pending', 'interviewing')
-            ''', (str(member.id),))
-            app_result = cursor.fetchone()
-            application_id = app_result[0] if app_result else None
-        print(f"📊 Заявка ID: {application_id}")
+        # Закрытие заявок
+        application_id = db.get_active_application_id(str(member.id))
         
         if application_id:
-            print(f"🔍 Шаг 2: Закрываем заявку...")
-            with db.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE applications 
-                    SET status = 'rejected', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, 
-                        reject_reason = ?
-                    WHERE id = ?
-                ''', ('system', 'Пользователь покинул сервер', application_id))
-                conn.commit()
+            db.close_application_on_leave(application_id)
             print(f"✅ Заявка #{application_id} закрыта")
-        
-        print("🔍 Шаг 3: Поиск категории '📞 ОБЗВОНЫ'...")
+
+        # Удаление каналов обзвона
         for category in member.guild.categories:
-            print(f"   Категория: {category.name}")
             if category.name == "📞 ОБЗВОНЫ":
-                print(f"   ✅ НАЙДЕНА КАТЕГОРИЯ!")
                 for channel in category.text_channels:
-                    print(f"      Канал: {channel.name}")
-                    print(f"      Topic: {channel.topic}")
-                    if application_id and channel.topic and f"#{application_id}" in channel.topic:
-                        print(f"      ✅ УДАЛЯЕМ по ID заявки")
+                    if channel.topic and (f"#{application_id}" in channel.topic or str(member.id) in channel.topic):
                         await channel.delete()
-                    elif channel.topic and str(member.id) in channel.topic:
-                        print(f"      ✅ УДАЛЯЕМ по user_id")
-                        await channel.delete()
-                    elif member.name.lower() in channel.name.lower():
-                        print(f"      ✅ УДАЛЯЕМ по имени")
-                        await channel.delete()
-        
-        print("🔍 Шаг 4: Поиск профиля...")
+                        print(f"✅ Удалён канал обзвона {channel.name}")
+
+        # Удаление профиля
         for category in member.guild.categories:
             if category.name.startswith("📁 PROFILES"):
                 for channel in category.text_channels:
@@ -365,65 +258,29 @@ async def on_member_remove(member):
                         await channel.delete()
                         print(f"✅ Удалён профиль {member.name}")
                         break
-        
+
+        # Очистка отпусков
+        await cleanup_vacation_on_leave(member)
+
+        # Очистка дней рождения
+        db.remove_birthday_on_leave(str(member.id))
+        print(f"🗑️ [Birthday] {member.name} удалён из системы дней рождения")
+
     except Exception as e:
-        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
-        import traceback
+        print(f"❌ Ошибка: {e}")
         traceback.print_exc()
 
-    # ===== НОВЫЙ БЛОК: УДАЛЕНИЕ ИЗ СИСТЕМЫ ОТПУСКОВ =====
-    print("🔍 Шаг 5: Проверка системы отпусков...")
-    try:
-        from vacation.manager import vacation_manager
-        
-        vacation = vacation_manager.get_user_vacation(str(member.id))
-        if vacation:
-            vacation_manager.remove_user_from_vacation(str(member.id))
-            print(f"✅ {member.name} удалён из системы отпусков")
-            
-            # Логируем в канал логов
-            log_channel_id = db.get_setting('vacation_log_channel')
-            if log_channel_id:
-                log_channel = bot.get_channel(int(log_channel_id))
-                if log_channel:
-                    embed = discord.Embed(
-                        title="👋 УДАЛЁН ИЗ ОТПУСКА",
-                        description=f"Пользователь **{member.name}** покинул сервер и удалён из системы отпусков",
-                        color=0x808080,
-                        timestamp=datetime.now()
-                    )
-                    await log_channel.send(embed=embed)
-    except Exception as e:
-        print(f"❌ Ошибка удаления из отпуска: {e}")
-        
-        print("🔚 Обработка завершена")
 
-@bot.command(name='refresh_birthday')
-async def refresh_birthday(ctx):
-    """Обновить кнопки дней рождения (только супер-админ)"""
-    from core.database import db
-    from birthday.views import update_birthday_embed
-    
-    if str(ctx.author.id) != '287670691707355147':
-        await ctx.send("❌ Нет прав")
-        return
-    
-    channel_id = db.get_setting('birthday_channel')
-    if channel_id:
-        await update_birthday_embed(bot, channel_id)
-        await ctx.send("✅ Кнопки дней рождения обновлены")
-    else:
-        await ctx.send("❌ Публичный канал не настроен")
+# ========== АДМИНИСТРАТИВНЫЕ КОМАНДЫ @bot.command ==========
 
+
+# ========== ЗАПУСК ==========
 async def main():
     async with bot:
-        # Запускаем планировщик мероприятий
         await setup_scheduler(bot)
-        
-        # Запускаем авто-рекламу
         await setup_advertising(bot)
-        
         await bot.start(BOT_TOKEN)
+
 
 if __name__ == '__main__':
     try:

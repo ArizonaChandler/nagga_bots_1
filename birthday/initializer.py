@@ -38,6 +38,9 @@ class BirthdayInitializer:
         # 3. Запускаем проверку дней рождений в 00:00
         await self.start_birthday_checker()
 
+        # 4. Очистка ушедших пользователей
+        await self._cleanup_left_users()
+
         logger.info("✅ Инициализация системы дней рождения завершена")
         print("🎂 [Birthday] Инициализация системы дней рождения завершена")
 
@@ -154,6 +157,45 @@ class BirthdayInitializer:
 
         if today_birthdays and self.channel_id:
             await update_birthday_embed(self.bot, self.channel_id)
+
+    async def _cleanup_left_users(self):
+        """Удалить из БД пользователей дней рождения, которых нет на сервере"""
+        try:
+            # Получаем всех пользователей с днями рождения
+            all_birthdays = db.get_all_birthdays()
+            
+            if not all_birthdays:
+                return
+            
+            # Получаем сервер
+            server_id = CONFIG.get('server_id')
+            if not server_id:
+                return
+            
+            guild = self.bot.get_guild(int(server_id))
+            if not guild:
+                return
+            
+            removed_count = 0
+            for bd in all_birthdays:
+                user_id = bd['user_id']
+                member = guild.get_member(int(user_id))
+                
+                # Если пользователя нет на сервере — удаляем его день рождения
+                if not member:
+                    db.remove_birthday(user_id)
+                    removed_count += 1
+                    print(f"🗑️ [Birthday] Удалён день рождения пользователя {bd['user_name']} (ID: {user_id}) — покинул сервер")
+            
+            if removed_count > 0:
+                print(f"✅ [Birthday] Очищено {removed_count} записей о днях рождения покинувших участников")
+                # Обновляем embed
+                channel_id = db.get_setting('birthday_channel')
+                if channel_id:
+                    await update_birthday_embed(self.bot, channel_id)
+                    
+        except Exception as e:
+            print(f"❌ [Birthday] Ошибка очистки: {e}")
 
 
 initializer = None

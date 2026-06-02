@@ -1218,6 +1218,34 @@ class Database:
             cursor.execute('SELECT role_id FROM application_reward_roles')
             return [row[0] for row in cursor.fetchall()]
 
+    # ===== МЕТОДЫ ДЛЯ ЗАКРЫТИЯ ЗАЯВОК ПРИ ВЫХОДЕ =====
+
+    def get_active_application_id(self, user_id: str):
+        """Получить ID активной заявки пользователя"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT id FROM applications WHERE user_id = ? AND status IN ("pending", "interviewing")', (user_id,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+
+    def close_application_on_leave(self, application_id: int):
+        """Закрыть заявку при выходе пользователя"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE applications 
+                SET status = 'rejected', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, reject_reason = ?
+                WHERE id = ?
+            ''', ('system', 'Пользователь покинул сервер', application_id))
+            conn.commit()
+
+    def remove_birthday_on_leave(self, user_id: str):
+        """Удалить день рождения при выходе пользователя"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM birthdays WHERE user_id = ?', (user_id,))
+            conn.commit()
+
     # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ AFK =====
     
     def get_afk_setting(self, key: str) -> str:
