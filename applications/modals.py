@@ -21,51 +21,13 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
         fields = db.get_application_fields()
         
         for field in fields:
-            if field['name'] == 'nickname':
-                text_input = discord.ui.TextInput(
-                    label="🎮 Игровой ник",
-                    placeholder="Ваш ник в игре",
-                    max_length=50,
-                    required=field['required']
-                )
-            elif field['name'] == 'static':
-                text_input = discord.ui.TextInput(
-                    label="🎯 Статик на сервере",
-                    placeholder="Например: #15542",
-                    max_length=100,
-                    required=field['required']
-                )
-            elif field['name'] == 'previous_families':
-                text_input = discord.ui.TextInput(
-                    label="🏠 Где и в каких семьях играли ранее",
-                    placeholder="Названия семей, если были",
-                    max_length=200,
-                    required=field['required'],
-                    style=discord.TextStyle.paragraph
-                )
-            elif field['name'] == 'prime_time':
-                text_input = discord.ui.TextInput(
-                    label="⏰ Прайм-тайм игры",
-                    placeholder="Например: 19:00-23:00 МСК",
-                    max_length=50,
-                    required=field['required']
-                )
-            elif field['name'] == 'hours_per_day':
-                text_input = discord.ui.TextInput(
-                    label="📊 Количество часов в игре в день",
-                    placeholder="Например: 4-6 часов",
-                    max_length=30,
-                    required=field['required']
-                )
-            else:
-                text_input = discord.ui.TextInput(
-                    label=field['description'] or field['name'],
-                    placeholder=field['placeholder'] or "Введите информацию",
-                    max_length=500,
-                    required=field['required'],
-                    style=discord.TextStyle.paragraph
-                )
-            
+            text_input = discord.ui.TextInput(
+                label=field['description'] or field['name'],
+                placeholder=field['placeholder'] or "Введите информацию",
+                max_length=500,
+                required=field['required'],
+                style=discord.TextStyle.paragraph
+            )
             self.add_item(text_input)
             self.fields.append({'id': field['id'], 'name': field['name'], 'input': text_input})
     

@@ -157,15 +157,25 @@ class ApplicationModerationView(discord.ui.View):
                     else:
                         print(f"❌ Роль с ID {role_id} не найдена")
 
-        # Создание личного профиля
+        # Создание личного профиля (если есть nickname и static в answers)
+        answers = app.get('answers')
+        import json
+        try:
+            answers_dict = json.loads(answers) if answers else {}
+        except:
+            answers_dict = {}
+        
+        nickname = answers_dict.get('nickname', 'Участник')
+        static = answers_dict.get('static', '')
+
         channel = None
         error = None
         try:
             channel, error = await app_manager.create_member_profile(
                 guild,
                 app['user_id'],
-                app['nickname'],
-                app['static']
+                nickname,
+                static
             )
 
             if error:
@@ -276,8 +286,18 @@ class ApplicationModerationView(discord.ui.View):
             timestamp=datetime.now()
         )
         embed.add_field(name="👤 Модератор", value=interaction.user.mention)
-        embed.add_field(name="🎮 Ник", value=app['nickname'])
-        embed.add_field(name="🎯 Статик", value=app['static'])
+        
+        # Получаем данные из answers
+        answers = app.get('answers')
+        import json
+        try:
+            answers_dict = json.loads(answers) if answers else {}
+        except:
+            answers_dict = {}
+        
+        embed.add_field(name="🎮 Ник", value=answers_dict.get('nickname', 'Не указан'), inline=True)
+        embed.add_field(name="🎯 Статик", value=answers_dict.get('static', 'Не указан'), inline=True)
+        
         await interview_channel.send(content=f"{member.mention} {interaction.user.mention}", embed=embed)
 
         # Обновляем embed с информацией об обзвоне
@@ -327,6 +347,15 @@ class ApplicationModerationView(discord.ui.View):
         if not log_channel:
             return
 
+        # Получаем ник из answers
+        answers = app.get('answers')
+        import json
+        try:
+            answers_dict = json.loads(answers) if answers else {}
+        except:
+            answers_dict = {}
+        nickname = answers_dict.get('nickname', app.get('user_name', 'Неизвестно'))
+
         embed = discord.Embed(
             title=f"📋 {action}",
             color=0x00ff00 if action == "ПРИНЯТА" else 0xffa500,
@@ -334,7 +363,7 @@ class ApplicationModerationView(discord.ui.View):
         )
         embed.add_field(name="👤 Пользователь", value=f"<@{app['user_id']}>")
         embed.add_field(name="👤 Модератор", value=interaction.user.mention)
-        embed.add_field(name="🎮 Ник", value=app['nickname'])
+        embed.add_field(name="🎮 Ник", value=nickname)
 
         if details:
             embed.add_field(name="📝 Детали", value=details, inline=False)

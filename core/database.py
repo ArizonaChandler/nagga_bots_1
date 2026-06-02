@@ -183,24 +183,14 @@ class Database:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id TEXT NOT NULL,
                     user_name TEXT NOT NULL,
-                    nickname TEXT NOT NULL,
-                    static TEXT NOT NULL,
-                    previous_families TEXT,
-                    prime_time TEXT NOT NULL,
-                    hours_per_day TEXT NOT NULL,
-                    status TEXT DEFAULT 'pending',  -- pending, accepted, rejected, interviewing
+                    status TEXT DEFAULT 'pending',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     reviewed_by TEXT,
                     reviewed_at TIMESTAMP,
-                    reject_reason TEXT
+                    reject_reason TEXT,
+                    answers TEXT
                 )
             ''')
-
-            try:
-                cursor.execute('ALTER TABLE applications ADD COLUMN answers TEXT')
-                print("✅ Колонка answers добавлена в таблицу applications")
-            except sqlite3.OperationalError:
-                pass  # колонка уже существует
 
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS application_settings (
@@ -250,45 +240,6 @@ class Database:
                 )
             ''')
 
-            # ===== АВТОМАТИЧЕСКОЕ ДОБАВЛЕНИЕ СТАНДАРТНЫХ ПОЛЕЙ =====
-            try:
-                cursor.execute('SELECT COUNT(*) FROM application_fields')
-                count = cursor.fetchone()[0]
-                
-                if count == 0:
-                    print("📝 Добавляем стандартные поля для заявок...")
-                    cursor.execute('''
-                        INSERT INTO application_fields (field_name, field_description, placeholder, required, field_order, is_active)
-                        VALUES 
-                        ('nickname', '🎮 Игровой ник', 'Ваш ник в игре', 1, 1, 1),
-                        ('static', '🎯 Статик на сервере', 'Например: #15542', 1, 2, 1),
-                        ('previous_families', '🏠 Где и в каких семьях играли ранее', 'Названия семей, если были', 0, 3, 1),
-                        ('prime_time', '⏰ Прайм-тайм игры', 'Например: 19:00-23:00 МСК', 1, 4, 1),
-                        ('hours_per_day', '📊 Количество часов в игре в день', 'Например: 4-6 часов', 1, 5, 1)
-                    ''')
-                    print("✅ Стандартные поля добавлены")
-            except Exception as e:
-                print(f"⚠️ Ошибка добавления полей: {e}")
-
-            cursor.execute('''
-            CREATE TABLE IF NOT EXISTS applications (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
-                user_name TEXT NOT NULL,
-                nickname TEXT NOT NULL,
-                static TEXT NOT NULL,
-                previous_families TEXT,
-                prime_time TEXT NOT NULL,
-                hours_per_day TEXT NOT NULL,
-                status TEXT DEFAULT 'pending',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                reviewed_by TEXT,
-                reviewed_at TIMESTAMP,
-                reject_reason TEXT,
-                answers TEXT
-            )
-        ''')
-
             # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ AFK =====
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS afk_users (
@@ -317,9 +268,7 @@ class Database:
             cursor.execute('INSERT OR IGNORE INTO afk_settings (key, value) VALUES (?, ?)', 
                         ('afk_settings_channel', 'null'))
 
-            conn.commit()
-
-            # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ TIR =====
+            # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ TIER =====
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS tier_applications (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -487,22 +436,17 @@ class Database:
             cursor.execute('INSERT OR IGNORE INTO vacation_settings (key, value) VALUES (?, ?)', 
                         ('vacation_max_days', '30'))
 
-            # ========== ВЫЗОВ ТАБЛИЦ СИСТЕМ ИГР ========== 
-            # self.init_games_tables()
-            # print("⚠️ Таблицы игр временно отключены")
-
             # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ ДНЕЙ РОЖДЕНИЯ =====
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS birthdays (
                     user_id TEXT PRIMARY KEY,
                     user_name TEXT NOT NULL,
-                    birthday_date TEXT NOT NULL,  -- формат DD.MM
+                    birthday_date TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
 
             # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ MCL =====
-
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS mcl_registrations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -532,8 +476,71 @@ class Database:
                 )
             ''')
 
-            # Автоматическое добавление стандартных полей заявок
-            self.init_application_fields()
+            # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ ИГР =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS active_games (
+                    game_id TEXT PRIMARY KEY,
+                    game_type TEXT NOT NULL,
+                    channel_id TEXT NOT NULL,
+                    player1_id TEXT NOT NULL,
+                    player2_id TEXT NOT NULL,
+                    game_data TEXT NOT NULL,
+                    current_turn TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS game_stats (
+                    user_id TEXT PRIMARY KEY,
+                    user_name TEXT NOT NULL,
+                    wins INTEGER DEFAULT 0,
+                    losses INTEGER DEFAULT 0,
+                    games_played INTEGER DEFAULT 0
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS game_settings (
+                    game_type TEXT PRIMARY KEY,
+                    enabled INTEGER DEFAULT 1
+                )
+            ''')
+
+            conn.commit()
+
+        # ===== АВТОМАТИЧЕСКОЕ ДОБАВЛЕНИЕ СТАНДАРТНЫХ ПОЛЕЙ ЗАЯВКИ (ВНЕ ТРАНЗАКЦИИ) =====
+        self.init_application_fields()
+
+    def init_application_fields(self):
+        """Автоматическое создание стандартных полей заявки"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute('SELECT COUNT(*) FROM application_fields')
+                count = cursor.fetchone()[0]
+                
+                if count == 0:
+                    print("📝 Добавляем стандартные поля для заявок...")
+                    fields = [
+                        ('nickname', '🎮 Игровой ник', 'Ваш ник в игре', 1, 1),
+                        ('static', '🎯 Статик на сервере', 'Например: #15542', 1, 2),
+                        ('previous_families', '🏠 Где и в каких семьях играли ранее', 'Названия семей, если были', 0, 3),
+                        ('prime_time', '⏰ Прайм-тайм игры', 'Например: 19:00-23:00 МСК', 1, 4),
+                        ('hours_per_day', '📊 Количество часов в игре в день', 'Например: 4-6 часов', 1, 5),
+                    ]
+                    
+                    for field in fields:
+                        cursor.execute('''
+                            INSERT INTO application_fields (field_name, field_description, placeholder, required, field_order, is_active)
+                            VALUES (?, ?, ?, ?, ?, 1)
+                        ''', field)
+                    
+                    conn.commit()
+                    print(f"✅ Добавлено {len(fields)} стандартных полей")
+        except Exception as e:
+            print(f"⚠️ Ошибка добавления полей: {e}")
 
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
     def add_user(self, discord_id: str, added_by: str):
@@ -687,7 +694,6 @@ class Database:
     
     # ----- МЕРОПРИЯТИЯ -----
     def add_event(self, name: str, weekday: int, event_time: str, created_by: str) -> int:
-        """Добавить новое мероприятие"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -698,15 +704,12 @@ class Database:
             return cursor.lastrowid
     
     def update_event(self, event_id: int, **kwargs) -> bool:
-        """Обновить мероприятие"""
         allowed = {'name', 'weekday', 'event_time', 'enabled'}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if not updates:
             return False
-        
         sets = ', '.join([f"{k} = ?" for k in updates.keys()])
         values = list(updates.values()) + [event_id]
-        
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(f'''
@@ -718,44 +721,30 @@ class Database:
             return cursor.rowcount > 0
     
     def get_events(self, enabled_only: bool = True, weekday: int = None):
-        """Получить список мероприятий"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             query = 'SELECT * FROM events WHERE 1=1'
             params = []
-            
             if enabled_only:
                 query += ' AND enabled = 1'
             if weekday is not None:
                 query += ' AND weekday = ?'
                 params.append(weekday)
-            
             query += ' ORDER BY weekday, event_time'
             cursor.execute(query, params)
-            
             columns = [description[0] for description in cursor.description]
             rows = cursor.fetchall()
-            
-            result = []
-            for row in rows:
-                result.append(dict(zip(columns, row)))
-            return result
+            return [dict(zip(columns, row)) for row in rows]
     
     def get_event(self, event_id: int):
-        """Получить мероприятие по ID"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM events WHERE id = ?', (event_id,))
-            
             columns = [description[0] for description in cursor.description]
             row = cursor.fetchone()
-            
-            if row:
-                return dict(zip(columns, row))
-            return None
+            return dict(zip(columns, row)) if row else None
     
     def delete_event(self, event_id: int, soft: bool = False) -> bool:
-        """Удалить мероприятие"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             if soft:
@@ -768,10 +757,7 @@ class Database:
             conn.commit()
             return cursor.rowcount > 0
     
-    # ----- ВЗЯТИЕ МЕРОПРИЯТИЙ -----
-    def take_event(self, event_id: int, user_id: str, user_name: str, 
-                   group_code: str, meeting_place: str, event_date: str) -> int:
-        """Записать взятие МП"""
+    def take_event(self, event_id: int, user_id: str, user_name: str, group_code: str, meeting_place: str, event_date: str) -> int:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -780,18 +766,15 @@ class Database:
                 VALUES (?, ?, ?, ?, ?, ?)
             ''', (event_id, user_id, user_name, group_code, meeting_place, event_date))
             conn.commit()
-            
             cursor.execute('''
                 UPDATE event_schedule 
                 SET taken_by = ?, group_code = ?, meeting_place = ?
                 WHERE event_id = ? AND scheduled_date = ?
             ''', (user_id, group_code, meeting_place, event_id, event_date))
             conn.commit()
-            
             return cursor.lastrowid
     
     def get_event_takes(self, user_id: str = None, days: int = 30):
-        """Получить статистику взятий"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             query = '''
@@ -801,24 +784,16 @@ class Database:
                 WHERE et.event_date >= date('now', ?) AND et.is_cancelled = 0
             '''
             params = [f'-{days} days']
-            
             if user_id:
                 query += ' AND et.user_id = ?'
                 params.append(user_id)
-            
             query += ' ORDER BY et.event_date DESC'
             cursor.execute(query, params)
-            
             columns = [description[0] for description in cursor.description]
             rows = cursor.fetchall()
-            
-            result = []
-            for row in rows:
-                result.append(dict(zip(columns, row)))
-            return result
+            return [dict(zip(columns, row)) for row in rows]
     
     def get_top_organizers(self, limit: int = 10, days: int = 30):
-        """Топ организаторов МП за последние N дней"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -830,9 +805,7 @@ class Database:
                 ORDER BY count DESC
                 LIMIT ?
             ''', (f'-{days} days', limit))
-            
             result = cursor.fetchall()
-            
             if not result:
                 cursor.execute('''
                     SELECT user_id, user_name, COUNT(*) as count
@@ -843,39 +816,30 @@ class Database:
                     LIMIT ?
                 ''', (limit,))
                 result = cursor.fetchall()
-            
             return result
 
     def get_event_stats_summary(self):
-        """Получить сводную статистику по мероприятиям"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
             cursor.execute('SELECT COUNT(*) FROM events')
             total_events = cursor.fetchone()[0]
-            
             cursor.execute('SELECT COUNT(*) FROM events WHERE enabled = 1')
             active_events = cursor.fetchone()[0]
-            
             cursor.execute('SELECT COUNT(*) FROM event_takes WHERE is_cancelled = 0')
             total_takes = cursor.fetchone()[0]
-            
             cursor.execute('''
                 SELECT COUNT(*) FROM event_takes 
                 WHERE is_cancelled = 0 
                 AND event_date >= date('now', '-30 days')
             ''')
             takes_30d = cursor.fetchone()[0]
-            
             msk_tz = pytz.timezone('Europe/Moscow')
             today = datetime.now(msk_tz).date().isoformat()
-            
             cursor.execute('''
                 SELECT COUNT(*) FROM event_takes 
                 WHERE is_cancelled = 0 AND event_date = ?
             ''', (today,))
             takes_today = cursor.fetchone()[0]
-            
             return {
                 'total_events': total_events,
                 'active_events': active_events,
@@ -884,50 +848,37 @@ class Database:
                 'takes_today': takes_today
             }
     
-    # ----- РАСПИСАНИЕ -----
     def generate_schedule(self, days_ahead: int = 14):
-        """Сгенерировать расписание на ближайшие дни"""
         from datetime import datetime, timedelta
         import pytz
-        
         msk_tz = pytz.timezone('Europe/Moscow')
-        now = datetime.now(msk_tz)  # aware datetime
+        now = datetime.now(msk_tz)
         today = now.date()
-        
         with self.get_connection() as conn:
             cursor = conn.cursor()
             events = self.get_events(enabled_only=True)
-            
             for event in events:
                 for day_offset in range(days_ahead):
                     check_date = today + timedelta(days=day_offset)
                     if check_date.weekday() == event['weekday']:
-                        # Создаем aware datetime для времени мероприятия
                         event_time = datetime.strptime(event['event_time'], "%H:%M").time()
                         event_datetime = msk_tz.localize(datetime.combine(check_date, event_time))
-                        
-                        # Пропускаем, если время уже прошло сегодня
                         if day_offset == 0 and event_datetime < now:
                             continue
-                        
                         cursor.execute('''
                             INSERT OR IGNORE INTO event_schedule 
                             (event_id, scheduled_date)
                             VALUES (?, ?)
                         ''', (event['id'], check_date.isoformat()))
-            
             conn.commit()
             return cursor.rowcount
     
     def get_today_events(self):
-        """Мероприятия на сегодня"""
         from datetime import datetime
         import pytz
-        
         msk_tz = pytz.timezone('Europe/Moscow')
-        today = datetime.now(msk_tz).date()  # aware -> date
+        today = datetime.now(msk_tz).date()
         weekday = today.weekday()
-        
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -938,17 +889,11 @@ class Database:
                 WHERE e.weekday = ? AND e.enabled = 1
                 ORDER BY e.event_time
             ''', (today.isoformat(), weekday))
-            
             columns = [description[0] for description in cursor.description]
             rows = cursor.fetchall()
-            
-            result = []
-            for row in rows:
-                result.append(dict(zip(columns, row)))
-            return result
+            return [dict(zip(columns, row)) for row in rows]
     
     def mark_reminder_sent(self, event_id: int, event_date: str):
-        """Отметить что напоминание отправлено"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -958,9 +903,7 @@ class Database:
             ''', (event_id, event_date))
             conn.commit()
     
-    # ----- ЛОГИРОВАНИЕ СОБЫТИЙ -----
     def log_event_action(self, event_id: int, action: str, user_id: str = None, details: str = None):
-        """Логирование действий с мероприятиями"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -973,7 +916,6 @@ class Database:
     def save_ad_settings(self, message_text: str, image_url: str, channel_id: str, 
                         interval: int = 65, sleep_start: str = "02:00", 
                         sleep_end: str = "06:30", updated_by: str = None) -> bool:
-        """Сохранить настройки авто-рекламы"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('UPDATE auto_ad SET is_active = 0')
@@ -988,7 +930,6 @@ class Database:
             return cursor.rowcount > 0
 
     def get_active_ad(self):
-        """Получить активные настройки авто-рекламы"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM auto_ad WHERE is_active = 1 ORDER BY created_at DESC LIMIT 1')
@@ -999,14 +940,12 @@ class Database:
             return None
 
     def update_last_sent(self, ad_id: int):
-        """Обновить время последней отправки"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('UPDATE auto_ad SET last_sent = CURRENT_TIMESTAMP WHERE id = ?', (ad_id,))
             conn.commit()
 
     def log_ad_sent(self, success: bool, error: str = None):
-        """Записать в лог отправку рекламы"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1017,7 +956,6 @@ class Database:
 
     # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ЗАЯВОК =====
     def get_application_setting(self, key: str) -> str:
-        """Получить настройку системы заявок"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT value FROM application_settings WHERE key = ?', (key,))
@@ -1025,7 +963,6 @@ class Database:
             return result[0] if result else None
 
     def set_application_setting(self, key: str, value: str, updated_by: str = None):
-        """Установить настройку системы заявок"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1033,37 +970,29 @@ class Database:
                 VALUES (?, ?)
             ''', (key, value))
             conn.commit()
-            # Проверяем, что updated_by не None перед логированием
             if updated_by:
                 self.log_action(updated_by, f"SET_APP_SETTING", f"{key}={value}")
 
     def create_application(self, user_id: str, user_name: str, nickname: str, 
                       static: str, previous_families: str, prime_time: str, 
                       hours_per_day: str) -> tuple:
-        """Создать новую заявку"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
-            # Проверяем, нет ли уже активной заявки (pending или interviewing)
             cursor.execute('''
                 SELECT id FROM applications 
                 WHERE user_id = ? AND status IN ('pending', 'interviewing')
             ''', (user_id,))
-            
             if cursor.fetchone():
                 return None, "❌ У вас уже есть активная заявка"
-            
             cursor.execute('''
                 INSERT INTO applications 
                 (user_id, user_name, nickname, static, previous_families, prime_time, hours_per_day)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (user_id, user_name, nickname, static, previous_families, prime_time, hours_per_day))
-            
             conn.commit()
             return cursor.lastrowid, None
 
     def get_pending_applications(self):
-        """Получить все ожидающие заявки"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1073,125 +1002,79 @@ class Database:
                 WHERE status = 'pending'
                 ORDER BY created_at
             ''')
-            
             columns = [description[0] for description in cursor.description]
             rows = cursor.fetchall()
-            
             return [dict(zip(columns, row)) for row in rows]
 
     def get_application(self, app_id: int):
-        """Получить заявку по ID"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM applications WHERE id = ?', (app_id,))
-            
             columns = [description[0] for description in cursor.description]
             row = cursor.fetchone()
-            
             return dict(zip(columns, row)) if row else None
 
     def accept_application(self, app_id: int, reviewer_id: str):
-        """Принять заявку (из любого активного статуса)"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
-            # Проверяем, существует ли заявка
             cursor.execute('SELECT status FROM applications WHERE id = ?', (app_id,))
             result = cursor.fetchone()
-            
             if not result:
-                print(f"❌ Заявка {app_id} не найдена")
                 return False
-            
             current_status = result[0]
-            print(f"📊 Текущий статус заявки {app_id}: {current_status}")
-            
-            # Разрешаем принимать заявки в статусах 'pending' и 'interviewing'
             if current_status not in ['pending', 'interviewing']:
-                print(f"❌ Заявка {app_id} в статусе {current_status}, нельзя принять")
                 return False
-            
             cursor.execute('''
                 UPDATE applications 
                 SET status = 'accepted', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP
                 WHERE id = ? AND status IN ('pending', 'interviewing')
             ''', (reviewer_id, app_id))
-            
             conn.commit()
-            success = cursor.rowcount > 0
-            print(f"✅ Результат принятия: {success}")
-            return success
+            return cursor.rowcount > 0
 
     def reject_application(self, app_id: int, reviewer_id: str, reason: str):
-        """Отклонить заявку"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
-            # Проверим, существует ли заявка
             cursor.execute('SELECT status FROM applications WHERE id = ?', (app_id,))
             result = cursor.fetchone()
-            print(f"📊 Текущий статус заявки {app_id}: {result}")
-            
             if not result:
-                print(f"❌ Заявка {app_id} не найдена")
                 return False
-            
             current_status = result[0]
-            
-            # Разрешаем отклонять заявки в любом статусе, кроме 'accepted'
             if current_status == 'accepted':
-                print(f"❌ Заявка {app_id} уже принята, нельзя отклонить")
                 return False
-            
             cursor.execute('''
                 UPDATE applications 
                 SET status = 'rejected', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, 
                     reject_reason = ?
                 WHERE id = ?
             ''', (reviewer_id, reason, app_id))
-            
             conn.commit()
-            success = cursor.rowcount > 0
-            print(f"✅ Результат отклонения: {success}, затронуто строк: {cursor.rowcount}")
-            return success
+            return cursor.rowcount > 0
 
     def set_interviewing(self, app_id: int, reviewer_id: str):
-        """Назначить обзвон"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
-            # Проверяем, что заявка в статусе 'pending'
             cursor.execute('SELECT status FROM applications WHERE id = ?', (app_id,))
             result = cursor.fetchone()
-            
             if not result or result[0] != 'pending':
-                print(f"❌ Нельзя назначить обзвон: заявка {app_id} в статусе {result[0] if result else 'not found'}")
                 return False
-            
             cursor.execute('''
                 UPDATE applications 
                 SET status = 'interviewing', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP
                 WHERE id = ? AND status = 'pending'
             ''', (reviewer_id, app_id))
-            
             conn.commit()
-            success = cursor.rowcount > 0
-            print(f"✅ Обзвон назначен: {success}")
-            return success
+            return cursor.rowcount > 0
 
     def load_application_settings(self):
-        """Загрузить все настройки системы заявок в CONFIG"""
-        from core.config import CONFIG  # ← импорт внутри метода
+        from core.config import CONFIG
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT key, value FROM application_settings')
             settings = dict(cursor.fetchall())
-        
         for key, value in settings.items():
             if value and value.lower() != 'null':
                 CONFIG[key] = value
-
-    # ===== МЕТОДЫ ДЛЯ ГИБКИХ ПОЛЕЙ ЗАЯВКИ =====
 
     def get_application_fields(self):
         with self.get_connection() as conn:
@@ -1223,66 +1106,24 @@ class Database:
             conn.commit()
             self.log_action(removed_by, "REMOVE_APP_FIELD", f"ID {field_id}")
 
-    def update_field_order(self, field_id: int, new_order: int):
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('UPDATE application_fields SET field_order = ? WHERE id = ?', (new_order, field_id))
-            conn.commit()
-
     def create_application_dynamic(self, user_id: str, user_name: str, answers_json: str) -> tuple:
-        """Создать заявку с динамическими полями"""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                
-                # Проверяем активную заявку
                 cursor.execute('SELECT id FROM applications WHERE user_id = ? AND status IN ("pending", "interviewing")', (user_id,))
                 if cursor.fetchone():
                     return None, "❌ У вас уже есть активная заявка"
-                
                 cursor.execute('''
                     INSERT INTO applications (user_id, user_name, answers, status)
                     VALUES (?, ?, ?, 'pending')
                 ''', (user_id, user_name, answers_json))
-                
                 conn.commit()
                 return cursor.lastrowid, None
         except Exception as e:
             print(f"❌ Ошибка create_application_dynamic: {e}")
             return None, f"❌ Ошибка: {e}"
 
-    def init_application_fields(self):
-        """Автоматическое создание стандартных полей заявки"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Проверяем, есть ли хоть одно поле
-            cursor.execute('SELECT COUNT(*) FROM application_fields')
-            count = cursor.fetchone()[0]
-            
-            if count == 0:
-                print("📝 Добавляем стандартные поля для заявок...")
-                fields = [
-                    ('nickname', '🎮 Игровой ник', 'Ваш ник в игре', 1, 1),
-                    ('static', '🎯 Статик на сервере', 'Например: #15542', 1, 2),
-                    ('previous_families', '🏠 Где и в каких семьях играли ранее', 'Названия семей, если были', 0, 3),
-                    ('prime_time', '⏰ Прайм-тайм игры', 'Например: 19:00-23:00 МСК', 1, 4),
-                    ('hours_per_day', '📊 Количество часов в игре в день', 'Например: 4-6 часов', 1, 5),
-                ]
-                
-                for field in fields:
-                    cursor.execute('''
-                        INSERT INTO application_fields (field_name, field_description, placeholder, required, field_order, is_active)
-                        VALUES (?, ?, ?, ?, ?, 1)
-                    ''', field)
-                
-                conn.commit()
-                print(f"✅ Добавлено {len(fields)} стандартных полей")
-
-        # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ЗАЯВОК (сообщения) =====
-    
     def save_application_message(self, application_id: int, channel_id: str, message_id: str, user_id: str):
-        """Сохранить ID сообщения с заявкой"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1293,7 +1134,6 @@ class Database:
             self.log_action(user_id, "SAVE_APP_MESSAGE", f"App {application_id}, Msg {message_id}")
     
     def get_all_application_messages(self):
-        """Получить все сохранённые сообщения с заявками"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1303,155 +1143,110 @@ class Database:
                 JOIN applications a ON am.application_id = a.id
                 WHERE a.status IN ('pending', 'interviewing')
             ''')
-            
             columns = [description[0] for description in cursor.description]
             rows = cursor.fetchall()
-            
             return [dict(zip(columns, row)) for row in rows]
     
     def delete_application_message(self, application_id: int):
-        """Удалить запись о сообщении после обработки заявки"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM application_messages WHERE application_id = ?', (application_id,))
             conn.commit()
             return cursor.rowcount > 0
-    
-    def get_application_by_message(self, message_id: str):
-        """Получить заявку по ID сообщения"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT a.* FROM applications a
-                JOIN application_messages am ON a.id = am.application_id
-                WHERE am.message_id = ?
-            ''', (message_id,))
-            
-            columns = [description[0] for description in cursor.description]
-            row = cursor.fetchone()
-            
-            return dict(zip(columns, row)) if row else None
 
     def reset_user_applications(self, user_id: str, reset_by: str = None):
-        """Сбросить все заявки пользователя (для возможности подать новую)"""
-        print(f"🔍 database.py: Сброс пользователя {user_id} от {reset_by}")
-        
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
-            # Сначала проверим, есть ли заявки у пользователя
             cursor.execute('SELECT COUNT(*) FROM applications WHERE user_id = ?', (user_id,))
             count = cursor.fetchone()[0]
-            print(f"📊 Найдено заявок: {count}")
-            
             if count == 0:
                 return False, f"❌ У пользователя {user_id} нет заявок"
-            
-            # Удаляем записи о сообщениях (если есть)
             cursor.execute('''
                 DELETE FROM application_messages 
                 WHERE application_id IN (SELECT id FROM applications WHERE user_id = ?)
             ''', (user_id,))
-            deleted_messages = cursor.rowcount
-            print(f"✅ Удалено записей о сообщениях: {deleted_messages}")
-            
-            # Удаляем все заявки пользователя
             cursor.execute('''
                 DELETE FROM applications 
                 WHERE user_id = ?
             ''', (user_id,))
-            
             deleted_count = cursor.rowcount
-            print(f"✅ Удалено заявок: {deleted_count}")
-            
             conn.commit()
-            
             if deleted_count > 0 and reset_by:
                 self.log_action(reset_by, "RESET_USER_APPLICATIONS", f"User {user_id}, deleted {deleted_count} applications")
-            
             return True, f"✅ Удалено {deleted_count} заявок пользователя <@{user_id}>"
 
-    def close_user_applications(self, user_id: str):
-        """Закрыть все активные заявки пользователя при выходе с сервера"""
+    def add_reward_role(self, role_id: str, added_by: str):
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
-            # Получаем активные заявки
-            cursor.execute('''
-                SELECT id FROM applications 
-                WHERE user_id = ? AND status IN ('pending', 'interviewing')
-            ''', (user_id,))
-            apps = cursor.fetchall()
-            
-            if not apps:
-                return 0
-            
-            # Закрываем все заявки
-            cursor.execute('''
-                UPDATE applications 
-                SET status = 'rejected', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, 
-                    reject_reason = ?
-                WHERE user_id = ? AND status IN ('pending', 'interviewing')
-            ''', ('system', 'Пользователь покинул сервер', user_id))
-            
-            # Удаляем записи о сообщениях
-            for app in apps:
-                cursor.execute('DELETE FROM application_messages WHERE application_id = ?', (app[0],))
-            
+            cursor.execute('INSERT OR IGNORE INTO application_reward_roles (role_id, added_by) VALUES (?, ?)', 
+                        (role_id, added_by))
             conn.commit()
-            return len(apps)
 
-    def get_active_application_id(self, user_id: str):
-        """Получить ID активной заявки пользователя"""
+    def remove_reward_role(self, role_id: str):
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('''
-                SELECT id FROM applications 
-                WHERE user_id = ? AND status IN ('pending', 'interviewing')
-            ''', (user_id,))
-            result = cursor.fetchone()
-            return result[0] if result else None
-
-    def get_interview_channels_for_user(self, user_id: str):
-        """Получить все каналы обзвона, связанные с пользователем"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            # Получаем ID активной заявки
-            app_id = self.get_active_application_id(user_id)
-            
-            if app_id:
-                # Ищем по ID заявки (хранится в application_messages)
-                cursor.execute('''
-                    SELECT channel_id, message_id FROM application_messages 
-                    WHERE application_id = ?
-                ''', (app_id,))
-                result = cursor.fetchone()
-                if result:
-                    return [{'channel_id': result[0], 'message_id': result[1], 'type': 'by_application'}]
-            
-            return []
-
-    def create_application_dynamic(self, user_id: str, user_name: str, answers_json: str) -> tuple:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Проверяем активную заявку
-            cursor.execute('SELECT id FROM applications WHERE user_id = ? AND status IN ("pending", "interviewing")', (user_id,))
-            if cursor.fetchone():
-                return None, "❌ У вас уже есть активная заявка"
-            
-            cursor.execute('''
-                INSERT INTO applications (user_id, user_name, answers, status)
-                VALUES (?, ?, ?, 'pending')
-            ''', (user_id, user_name, answers_json))
-            
+            cursor.execute('DELETE FROM application_reward_roles WHERE role_id = ?', (role_id,))
             conn.commit()
-            return cursor.lastrowid, None
+
+    def get_reward_roles(self):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT role_id FROM application_reward_roles')
+            return [row[0] for row in cursor.fetchall()]
+
+    def migrate_applications_table(self):
+        """Автоматически удаляет стандартные поля из таблицы applications"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Проверяем, есть ли старые колонки
+                cursor.execute("PRAGMA table_info(applications)")
+                columns = [col[1] for col in cursor.fetchall()]
+                
+                old_columns = ['nickname', 'static', 'previous_families', 'prime_time', 'hours_per_day']
+                existing_old = [col for col in old_columns if col in columns]
+                
+                if existing_old:
+                    print(f"🔧 Миграция таблицы applications: удаляю старые поля {existing_old}...")
+                    
+                    # Создаём новую таблицу без старых полей
+                    cursor.execute('''
+                        CREATE TABLE applications_new (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            user_id TEXT NOT NULL,
+                            user_name TEXT NOT NULL,
+                            status TEXT DEFAULT 'pending',
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            reviewed_by TEXT,
+                            reviewed_at TIMESTAMP,
+                            reject_reason TEXT,
+                            answers TEXT
+                        )
+                    ''')
+                    
+                    # Копируем данные
+                    cursor.execute('''
+                        INSERT INTO applications_new (id, user_id, user_name, status, created_at, reviewed_by, reviewed_at, reject_reason, answers)
+                        SELECT id, user_id, user_name, status, created_at, reviewed_by, reviewed_at, reject_reason, answers
+                        FROM applications
+                    ''')
+                    
+                    # Удаляем старую таблицу
+                    cursor.execute('DROP TABLE applications')
+                    
+                    # Переименовываем новую
+                    cursor.execute('ALTER TABLE applications_new RENAME TO applications')
+                    
+                    conn.commit()
+                    print("✅ Таблица applications обновлена (стандартные поля удалены)")
+                    
+        except Exception as e:
+            print(f"⚠️ Ошибка миграции: {e}")
 
     # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ AFK =====
     
     def get_afk_setting(self, key: str) -> str:
-        """Получить настройку AFK"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT value FROM afk_settings WHERE key = ?', (key,))
@@ -1459,7 +1254,6 @@ class Database:
             return result[0] if result else None
     
     def set_afk_setting(self, key: str, value: str, updated_by: str = None):
-        """Установить настройку AFK"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1471,46 +1265,35 @@ class Database:
                 self.log_action(updated_by, f"SET_AFK_SETTING", f"{key}={value}")
     
     def add_afk_user(self, user_id: str, user_name: str, reason: str, hours: int) -> tuple:
-        """Добавить пользователя в AFK"""
         from datetime import datetime, timedelta
         import pytz
-        
         msk_tz = pytz.timezone('Europe/Moscow')
         until_time = datetime.now(msk_tz) + timedelta(hours=hours)
-        
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
-            # Проверяем, не в AFK ли уже
             cursor.execute('SELECT id FROM afk_users WHERE user_id = ?', (user_id,))
             if cursor.fetchone():
                 return False, "❌ Вы уже в AFK"
-            
             cursor.execute('''
                 INSERT INTO afk_users (user_id, user_name, reason, hours, until_time)
                 VALUES (?, ?, ?, ?, ?)
             ''', (user_id, user_name, reason, hours, until_time.isoformat()))
-            
             conn.commit()
             self.log_action(user_id, "AFK_GO", f"Reason: {reason}, Hours: {hours}")
-            
             return True, f"✅ Вы ушли в AFK до {until_time.strftime('%d.%m.%Y %H:%M')} МСК"
     
     def remove_afk_user(self, user_id: str) -> tuple:
-        """Удалить пользователя из AFK"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM afk_users WHERE user_id = ?', (user_id,))
             removed = cursor.rowcount > 0
             conn.commit()
-            
             if removed:
                 self.log_action(user_id, "AFK_BACK", "User returned from AFK")
                 return True, "✅ Добро пожаловать обратно!"
             return False, "❌ Вы не были в AFK"
     
     def get_all_afk_users(self):
-        """Получить всех AFK пользователей"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1518,53 +1301,40 @@ class Database:
                 FROM afk_users
                 ORDER BY until_time
             ''')
-            
             columns = [description[0] for description in cursor.description]
             rows = cursor.fetchall()
-            
             return [dict(zip(columns, row)) for row in rows]
     
     def get_afk_user(self, user_id: str):
-        """Получить AFK пользователя по ID"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT user_id, user_name, reason, until_time
                 FROM afk_users WHERE user_id = ?
             ''', (user_id,))
-            
             columns = [description[0] for description in cursor.description]
             row = cursor.fetchone()
-            
             return dict(zip(columns, row)) if row else None
     
     def check_expired_afk_users(self):
-        """Проверить и вернуть просроченных AFK пользователей"""
         from datetime import datetime
         import pytz
-        
         msk_tz = pytz.timezone('Europe/Moscow')
         now = datetime.now(msk_tz)
-        
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT user_id, user_name FROM afk_users
                 WHERE until_time < ?
             ''', (now.isoformat(),))
-            
             expired = cursor.fetchall()
-            
-            # Удаляем просроченных
             cursor.execute('DELETE FROM afk_users WHERE until_time < ?', (now.isoformat(),))
             conn.commit()
-            
             return expired
 
-        # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ TIR =====
+    # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ TIER =====
     
     def get_tier_setting(self, key: str) -> str:
-        """Получить настройку TIR"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT value FROM tier_settings WHERE key = ?', (key,))
@@ -1572,7 +1342,6 @@ class Database:
             return result[0] if result else None
     
     def set_tier_setting(self, key: str, value: str, updated_by: str = None):
-        """Установить настройку TIR"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1584,7 +1353,6 @@ class Database:
                 self.log_action(updated_by, f"SET_TIER_SETTING", f"{key}={value}")
     
     def set_tier_requirements(self, tier: str, requirements: str, updated_by: str = None):
-        """Сохранить требования для тира"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1596,7 +1364,6 @@ class Database:
                 self.log_action(updated_by, f"SET_TIER_REQUIREMENTS", f"{tier}={requirements[:50]}...")
     
     def get_tier_requirements(self, tier: str) -> str:
-        """Получить требования для тира"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT requirements FROM tier_requirements WHERE tier = ?', (tier,))
@@ -1606,33 +1373,25 @@ class Database:
     def create_tier_application(self, user_id: str, user_name: str, nickname: str,
                                 arena_link: str, screenshots: str, additional: str,
                                 target_tier: str) -> tuple:
-        """Создать заявку на повышение"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
-            # Проверяем, нет ли уже активной заявки
             cursor.execute('''
                 SELECT id FROM tier_applications 
                 WHERE user_id = ? AND status = 'pending'
             ''', (user_id,))
-            
             if cursor.fetchone():
                 return None, "❌ У вас уже есть активная заявка"
-            
             cursor.execute('''
                 INSERT INTO tier_applications 
                 (user_id, user_name, nickname, arena_link, screenshots, additional, target_tier)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (user_id, user_name, nickname, arena_link, screenshots, additional, target_tier))
-            
             conn.commit()
             return cursor.lastrowid, None
     
     def get_pending_tier_applications(self, target_tier: str = None):
-        """Получить ожидающие заявки"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
             if target_tier:
                 cursor.execute('''
                     SELECT id, user_id, user_name, nickname, arena_link, screenshots,
@@ -1649,25 +1408,19 @@ class Database:
                     WHERE status = 'pending'
                     ORDER BY created_at
                 ''')
-            
             columns = [description[0] for description in cursor.description]
             rows = cursor.fetchall()
-            
             return [dict(zip(columns, row)) for row in rows]
     
     def get_tier_application(self, app_id: int):
-        """Получить заявку по ID"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM tier_applications WHERE id = ?', (app_id,))
-            
             columns = [description[0] for description in cursor.description]
             row = cursor.fetchone()
-            
             return dict(zip(columns, row)) if row else None
     
     def approve_tier_application(self, app_id: int, reviewer_id: str, target_tier: str) -> bool:
-        """Одобрить заявку"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1677,14 +1430,11 @@ class Database:
             ''', (reviewer_id, app_id))
             conn.commit()
             success = cursor.rowcount > 0
-            
             if success:
                 self.log_action(reviewer_id, "TIER_APPROVED", f"App {app_id}, Tier {target_tier}")
-            
             return success
     
     def reject_tier_application(self, app_id: int, reviewer_id: str, reason: str) -> bool:
-        """Отклонить заявку"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1695,26 +1445,21 @@ class Database:
             ''', (reviewer_id, reason, app_id))
             conn.commit()
             success = cursor.rowcount > 0
-            
             if success:
                 self.log_action(reviewer_id, "TIER_REJECTED", f"App {app_id}, Reason: {reason[:50]}")
-            
             return success
 
     def load_tier_settings(self):
-        """Загрузить все настройки системы TIER в CONFIG"""
         from core.config import CONFIG
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT key, value FROM tier_settings')
             settings = dict(cursor.fetchall())
-        
         for key, value in settings.items():
             if value and value.lower() != 'null':
                 CONFIG[key] = value
 
     def save_tier_application_message(self, application_id: int, channel_id: str, message_id: str, user_id: str):
-        """Сохранить ID сообщения с заявкой TIER"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1725,7 +1470,6 @@ class Database:
             self.log_action(user_id, "SAVE_TIER_APP_MESSAGE", f"App {application_id}, Msg {message_id}")
 
     def get_all_tier_application_messages(self):
-        """Получить все сохранённые сообщения с заявками TIER"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1735,59 +1479,30 @@ class Database:
                 JOIN tier_applications ta ON tam.application_id = ta.id
                 WHERE ta.status = 'pending'
             ''')
-            
             columns = [description[0] for description in cursor.description]
             rows = cursor.fetchall()
-            
             return [dict(zip(columns, row)) for row in rows]
 
     def delete_tier_application_message(self, application_id: int):
-        """Удалить запись о сообщении TIER"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM tier_application_messages WHERE application_id = ?', (application_id,))
             conn.commit()
             return cursor.rowcount > 0
-    
-    def reset_stuck_tier_applications(self):
-        """Сбросить все зависшие заявки TIER"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Находим заявки без записей в application_messages
-            cursor.execute('''
-                SELECT ta.id FROM tier_applications ta
-                LEFT JOIN tier_application_messages tam ON ta.id = tam.application_id
-                WHERE ta.status = 'pending' AND tam.id IS NULL
-            ''')
-            stuck_apps = cursor.fetchall()
-            
-            if not stuck_apps:
-                return 0
-            
-            # Удаляем зависшие заявки
-            for app in stuck_apps:
-                cursor.execute('DELETE FROM tier_applications WHERE id = ?', (app[0],))
-            
-            conn.commit()
-            return len(stuck_apps)
 
-        # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ СТАТИСТИКИ =====
+    # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ СТАТИСТИКИ =====
 
     def load_stats_settings(self):
-        """Загрузить все настройки системы статистики в CONFIG"""
         from core.config import CONFIG
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT key, value FROM stats_settings')
             settings = dict(cursor.fetchall())
-        
         for key, value in settings.items():
             if value and value.lower() != 'null':
                 CONFIG[key] = value
     
     def get_stats_setting(self, key: str) -> str:
-        """Получить настройку статистики"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT value FROM stats_settings WHERE key = ?', (key,))
@@ -1795,7 +1510,6 @@ class Database:
             return result[0] if result else None
     
     def set_stats_setting(self, key: str, value: str, updated_by: str = None):
-        """Установить настройку статистики"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1807,45 +1521,35 @@ class Database:
                 self.log_action(updated_by, f"SET_STATS_SETTING", f"{key}={value}")
     
     def save_daily_stats(self, stats_data: dict):
-        """Сохранить дневную статистику"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT OR REPLACE INTO daily_stats 
                 (date, new_members, left_members, new_applications, accepted_applications, max_voice_online, capt_registrations)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                stats_data['date'],
-                stats_data.get('new_members', 0),
-                stats_data.get('left_members', 0),
-                stats_data.get('new_applications', 0),
-                stats_data.get('accepted_applications', 0),
-                stats_data.get('max_voice_online', 0),
-                stats_data.get('capt_registrations', 0)
-            ))
+            ''', (stats_data['date'], stats_data.get('new_members', 0), stats_data.get('left_members', 0),
+                stats_data.get('new_applications', 0), stats_data.get('accepted_applications', 0),
+                stats_data.get('max_voice_online', 0), stats_data.get('capt_registrations', 0)))
             conn.commit()
     
     def get_stats_for_date(self, date_str: str):
-        """Получить статистику за конкретную дату"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM daily_stats WHERE date = ?', (date_str,))
             row = cursor.fetchone()
-            
             if row:
                 columns = [description[0] for description in cursor.description]
                 return dict(zip(columns, row))
             return None
     
     def get_today_stats(self):
-        """Получить статистику за сегодня"""
         from datetime import datetime
         import pytz
         msk_tz = pytz.timezone('Europe/Moscow')
         today = datetime.now(msk_tz).date().isoformat()
         return self.get_stats_for_date(today)
 
-        # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ОТПУСКОВ =====
+    # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ОТПУСКОВ =====
     
     def get_vacation_setting(self, key: str) -> str:
         with self.get_connection() as conn:
@@ -1855,12 +1559,9 @@ class Database:
             return result[0] if result else None
     
     def set_vacation_setting(self, key: str, value: str, updated_by: str = None):
-        """Установить настройку отпусков"""
-        # Если value — это список, преобразуем в JSON строку
         if isinstance(value, list):
             import json
             value = json.dumps(value)
-        
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('INSERT OR REPLACE INTO vacation_settings (key, value) VALUES (?, ?)', (key, value))
@@ -1873,10 +1574,7 @@ class Database:
         import pytz
         msk_tz = pytz.timezone('Europe/Moscow')
         until_date = (datetime.now(msk_tz) + timedelta(days=days)).date().isoformat()
-        
         roles_str = ','.join(roles) if roles else ''
-        print(f"💾 Сохраняем роли в БД для сервера {guild_id}: {roles_str}")
-        
         with self.get_connection() as conn:
             cursor = conn.cursor()
             try:
@@ -1887,7 +1585,6 @@ class Database:
                 conn.commit()
                 return cursor.lastrowid, None
             except Exception as e:
-                print(f"❌ Ошибка БД: {e}")
                 return None, f"Ошибка БД: {e}"
     
     def get_pending_vacation_applications(self):
@@ -1907,30 +1604,23 @@ class Database:
             return dict(zip(columns, row)) if row else None
     
     def approve_vacation_application(self, app_id: int, reviewer_id: str) -> bool:
-        from datetime import datetime
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT user_id, user_name, reason, until_date, saved_roles, guild_id FROM vacation_applications WHERE id = ? AND status = "pending"', (app_id,))
             app = cursor.fetchone()
             if not app:
-                print(f"❌ Заявка {app_id} не найдена или уже обработана")
                 return False
-            
             user_id, user_name, reason, until_date, saved_roles, guild_id = app
-            print(f"💾 Переносим в vacation_active: user={user_id}, guild={guild_id}, roles={saved_roles}")
-            
             cursor.execute('''
                 INSERT OR REPLACE INTO vacation_active (user_id, user_name, reason, until_date, saved_roles, guild_id)
                 VALUES (?, ?, ?, ?, ?, ?)
             ''', (user_id, user_name, reason, until_date, saved_roles, guild_id))
-            
             cursor.execute('''
                 UPDATE vacation_applications 
                 SET status = "approved", reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             ''', (reviewer_id, app_id))
             conn.commit()
-            print(f"✅ Заявка {app_id} одобрена")
             return True
     
     def reject_vacation_application(self, app_id: int, reviewer_id: str, reason: str) -> bool:
@@ -1972,15 +1662,12 @@ class Database:
         import pytz
         msk_tz = pytz.timezone('Europe/Moscow')
         today = datetime.now(msk_tz).date().isoformat()
-        
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT user_id, user_name FROM vacation_active WHERE until_date < ?', (today,))
             expired = cursor.fetchall()
-            
             for user_id, user_name in expired:
                 cursor.execute('DELETE FROM vacation_active WHERE user_id = ?', (user_id,))
-            
             conn.commit()
             return expired
     
@@ -2015,18 +1702,14 @@ class Database:
             return cursor.rowcount > 0
 
     def load_vacation_settings(self):
-        """Загрузить все настройки системы отпусков в CONFIG"""
         from core.config import CONFIG
         import json
-        
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT key, value FROM vacation_settings')
             settings = dict(cursor.fetchall())
-        
         for key, value in settings.items():
             if value and value.lower() != 'null':
-                # Пробуем распарсить JSON для списков
                 if key == 'vacation_approve_roles':
                     try:
                         CONFIG[key] = json.loads(value)
@@ -2035,88 +1718,39 @@ class Database:
                 else:
                     CONFIG[key] = value
 
-    def add_reward_role(self, role_id: str, added_by: str):
-        """Добавить роль для автоматической выдачи"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('INSERT OR IGNORE INTO application_reward_roles (role_id, added_by) VALUES (?, ?)', 
-                        (role_id, added_by))
-            conn.commit()
-
-    def remove_reward_role(self, role_id: str):
-        """Удалить роль из списка"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM application_reward_roles WHERE role_id = ?', (role_id,))
-            conn.commit()
-
-    def get_reward_roles(self):
-        """Получить все роли для выдачи"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT role_id FROM application_reward_roles')
-            return [row[0] for row in cursor.fetchall()]
-
-        # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ОТПУСКОВ (ДОПОЛНИТЕЛЬНЫЕ) =====
-    
     def get_expired_vacations(self):
-        """Получить все просроченные отпуска (где дата окончания <= сегодня)"""
         from datetime import datetime
-        
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT user_id, user_name, saved_roles, guild_id, reason, until_date FROM vacation_active')
             all_vacations = cursor.fetchall()
-        
         today = datetime.now().date()
         expired = []
-        
         for row in all_vacations:
             user_id, user_name, saved_roles, guild_id, reason, until_date = row
             try:
                 until = datetime.strptime(until_date, '%Y-%m-%d').date()
                 if until <= today:
                     expired.append(row)
-            except Exception as e:
-                print(f"❌ Ошибка парсинга даты {until_date}: {e}")
-        
+            except:
+                pass
         return expired
     
     def delete_expired_vacations(self):
-        """Удалить все просроченные отпуска из БД"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM vacation_active WHERE until_date < date("now")')
             conn.commit()
             return cursor.rowcount
     
-    def get_all_vacation_active(self):
-        """Получить ВСЕХ активных в отпуске (для проверки при запуске)"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT user_id, user_name, saved_roles, guild_id, reason, until_date FROM vacation_active')
-            return cursor.fetchall()
-    
     def delete_vacation_user(self, user_id: str):
-        """Удалить пользователя из отпуска"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM vacation_active WHERE user_id = ?', (user_id,))
             conn.commit()
             return cursor.rowcount > 0
     
-    def get_role_ids_from_vacation(self, user_id: str):
-        """Получить сохранённые роли пользователя в отпуске"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT saved_roles FROM vacation_active WHERE user_id = ?', (user_id,))
-            result = cursor.fetchone()
-            if result and result[0]:
-                return result[0].split(',')
-            return []
-
     def remove_user_from_vacation(self, user_id: str) -> bool:
-        """Удалить пользователя из отпуска (при выходе с сервера)"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM vacation_active WHERE user_id = ?', (user_id,))
@@ -2125,61 +1759,7 @@ class Database:
 
     # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ИГР =====
 
-    def init_games_tables(self):
-        """Создать таблицы для игр с повторными попытками"""
-        import time
-        
-        for attempt in range(5):  # 5 попыток
-            try:
-                with sqlite3.connect(self.db_path, timeout=15) as conn:
-                    cursor = conn.cursor()
-                    
-                    cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS active_games (
-                            game_id TEXT PRIMARY KEY,
-                            game_type TEXT NOT NULL,
-                            channel_id TEXT NOT NULL,
-                            player1_id TEXT NOT NULL,
-                            player2_id TEXT NOT NULL,
-                            game_data TEXT NOT NULL,
-                            current_turn TEXT NOT NULL,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                    ''')
-                    
-                    cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS game_stats (
-                            user_id TEXT PRIMARY KEY,
-                            user_name TEXT NOT NULL,
-                            wins INTEGER DEFAULT 0,
-                            losses INTEGER DEFAULT 0,
-                            games_played INTEGER DEFAULT 0
-                        )
-                    ''')
-                    
-                    cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS game_settings (
-                            game_type TEXT PRIMARY KEY,
-                            enabled INTEGER DEFAULT 1
-                        )
-                    ''')
-                    
-                    conn.commit()
-                    print("✅ Таблицы игр успешно созданы")
-                    return True
-                    
-            except sqlite3.OperationalError as e:
-                if "locked" in str(e) and attempt < 4:
-                    print(f"⚠️ БД заблокирована, повторная попытка через 1 секунду... ({attempt + 1}/5)")
-                    time.sleep(1)
-                else:
-                    print(f"❌ Ошибка создания таблиц игр: {e}")
-                    raise
-        
-        return False
-
     def get_active_game(self, game_id: str):
-        """Получить активную игру по ID"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM active_games WHERE game_id = ?', (game_id,))
@@ -2198,7 +1778,6 @@ class Database:
             return None
 
     def get_all_active_games(self):
-        """Получить все активные игры"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM active_games')
@@ -2219,7 +1798,6 @@ class Database:
 
     def save_active_game(self, game_id: str, game_type: str, channel_id: str, 
                         player1_id: str, player2_id: str, game_data: str, current_turn: str):
-        """Сохранить активную игру"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -2230,14 +1808,12 @@ class Database:
             conn.commit()
 
     def delete_active_game(self, game_id: str):
-        """Удалить активную игру"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM active_games WHERE game_id = ?', (game_id,))
             conn.commit()
 
     def get_game_stats(self, user_id: str):
-        """Получить статистику игрока"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT wins, losses, games_played FROM game_stats WHERE user_id = ?', (user_id,))
@@ -2247,7 +1823,6 @@ class Database:
             return {'wins': 0, 'losses': 0, 'games_played': 0}
 
     def update_game_stats(self, user_id: str, user_name: str, won: bool):
-        """Обновить статистику игрока"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             if won:
@@ -2271,7 +1846,6 @@ class Database:
             conn.commit()
 
     def get_top_players(self, limit: int = 3):
-        """Получить топ игроков по победам"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -2283,7 +1857,6 @@ class Database:
             return cursor.fetchall()
 
     def get_game_enabled(self, game_type: str) -> bool:
-        """Проверить, включена ли игра"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT enabled FROM game_settings WHERE game_type = ?', (game_type,))
@@ -2293,7 +1866,6 @@ class Database:
             return True
 
     def set_game_enabled(self, game_type: str, enabled: bool):
-        """Включить/выключить игру"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -2302,59 +1874,7 @@ class Database:
             ''', (game_type, 1 if enabled else 0))
             conn.commit()
 
-    def create_games_tables_if_not_exist(self):
-        """Создать таблицы игр вне транзакции init_db"""
-        import time
-        
-        for attempt in range(5):
-            try:
-                with sqlite3.connect(self.db_path, timeout=15) as conn:
-                    cursor = conn.cursor()
-                    
-                    cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS active_games (
-                            game_id TEXT PRIMARY KEY,
-                            game_type TEXT NOT NULL,
-                            channel_id TEXT NOT NULL,
-                            player1_id TEXT NOT NULL,
-                            player2_id TEXT NOT NULL,
-                            game_data TEXT NOT NULL,
-                            current_turn TEXT NOT NULL,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                    ''')
-                    
-                    cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS game_stats (
-                            user_id TEXT PRIMARY KEY,
-                            user_name TEXT NOT NULL,
-                            wins INTEGER DEFAULT 0,
-                            losses INTEGER DEFAULT 0,
-                            games_played INTEGER DEFAULT 0
-                        )
-                    ''')
-                    
-                    cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS game_settings (
-                            game_type TEXT PRIMARY KEY,
-                            enabled INTEGER DEFAULT 1
-                        )
-                    ''')
-                    
-                    conn.commit()
-                    print("✅ Таблицы игр созданы")
-                    return True
-                    
-            except sqlite3.OperationalError as e:
-                if "locked" in str(e) and attempt < 4:
-                    print(f"⚠️ БД заблокирована, попытка {attempt + 1}/5...")
-                    time.sleep(1)
-                else:
-                    print(f"❌ Ошибка: {e}")
-                    return False
-        return False
-
-        # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ДНЕЙ РОЖДЕНИЯ =====
+    # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ДНЕЙ РОЖДЕНИЯ =====
 
     def set_birthday(self, user_id: str, user_name: str, birthday_date: str) -> bool:
         with self.get_connection() as conn:
@@ -2423,7 +1943,7 @@ class Database:
             cursor.execute('SELECT COUNT(*) FROM birthdays')
             return cursor.fetchone()[0]
 
-        # ===== МЕТОДЫ ДЛЯ MCL СИСТЕМЫ =====
+    # ===== МЕТОДЫ ДЛЯ MCL СИСТЕМЫ =====
 
     def mcl_add_registration(self, user_id: str, user_name: str, list_type: str) -> bool:
         with self.get_connection() as conn:
@@ -2533,4 +2053,3 @@ class Database:
             return cursor.rowcount
 
 db = Database()
-db.create_games_tables_if_not_exist()

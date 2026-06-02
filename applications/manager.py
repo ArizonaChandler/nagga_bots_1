@@ -102,7 +102,6 @@ class ApplicationManager:
             return False
     
     def create_application_dynamic(self, user_id: str, user_name: str, answers: dict) -> tuple:
-        """Создать заявку с динамическими полями"""
         import json
         return db.create_application_dynamic(user_id, user_name, json.dumps(answers, ensure_ascii=False))
     
