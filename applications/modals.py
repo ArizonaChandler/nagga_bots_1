@@ -14,22 +14,46 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
     def __init__(self):
         super().__init__()
         self.fields = []
-        self._add_fields()
+        try:
+            self._add_fields()
+        except Exception as e:
+            print(f"❌ [ЗАЯВКА] Ошибка в __init__: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _add_fields(self):
         """Динамически добавляем поля из БД"""
-        fields = db.get_application_fields()
-        
-        for field in fields:
-            text_input = discord.ui.TextInput(
-                label=field['description'] or field['name'],
-                placeholder=field['placeholder'] or "Введите информацию",
-                max_length=500,
-                required=field['required'],
-                style=discord.TextStyle.paragraph
-            )
-            self.add_item(text_input)
-            self.fields.append({'id': field['id'], 'name': field['name'], 'input': text_input})
+        try:
+            fields = db.get_application_fields()
+            print(f"🔍 [ЗАЯВКА] Загружено полей: {len(fields)}")
+            
+            if not fields:
+                print("❌ [ЗАЯВКА] Нет полей в БД!")
+                # Добавляем заглушку, чтобы модалка не падала
+                text_input = discord.ui.TextInput(
+                    label="Ошибка",
+                    placeholder="Нет настроенных полей, обратитесь к администратору",
+                    required=False
+                )
+                self.add_item(text_input)
+                return
+            
+            for field in fields:
+                print(f"🔍 [ЗАЯВКА] Добавляю поле: {field['name']} - {field['description']}")
+                text_input = discord.ui.TextInput(
+                    label=field['description'] or field['name'],
+                    placeholder=field['placeholder'] or "Введите информацию",
+                    max_length=500,
+                    required=field['required'],
+                    style=discord.TextStyle.paragraph
+                )
+                self.add_item(text_input)
+                self.fields.append({'id': field['id'], 'name': field['name'], 'input': text_input})
+                
+        except Exception as e:
+            print(f"❌ [ЗАЯВКА] КРИТИЧЕСКАЯ ОШИБКА В _add_fields: {e}")
+            import traceback
+            traceback.print_exc()
     
     async def on_submit(self, interaction: discord.Interaction):
         # Собираем ответы
