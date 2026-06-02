@@ -250,6 +250,26 @@ class Database:
                 )
             ''')
 
+            # ===== АВТОМАТИЧЕСКОЕ ДОБАВЛЕНИЕ СТАНДАРТНЫХ ПОЛЕЙ =====
+            try:
+                cursor.execute('SELECT COUNT(*) FROM application_fields')
+                count = cursor.fetchone()[0]
+                
+                if count == 0:
+                    print("📝 Добавляем стандартные поля для заявок...")
+                    cursor.execute('''
+                        INSERT INTO application_fields (field_name, field_description, placeholder, required, field_order, is_active)
+                        VALUES 
+                        ('nickname', '🎮 Игровой ник', 'Ваш ник в игре', 1, 1, 1),
+                        ('static', '🎯 Статик на сервере', 'Например: #15542', 1, 2, 1),
+                        ('previous_families', '🏠 Где и в каких семьях играли ранее', 'Названия семей, если были', 0, 3, 1),
+                        ('prime_time', '⏰ Прайм-тайм игры', 'Например: 19:00-23:00 МСК', 1, 4, 1),
+                        ('hours_per_day', '📊 Количество часов в игре в день', 'Например: 4-6 часов', 1, 5, 1)
+                    ''')
+                    print("✅ Стандартные поля добавлены")
+            except Exception as e:
+                print(f"⚠️ Ошибка добавления полей: {e}")
+
             cursor.execute('''
             CREATE TABLE IF NOT EXISTS applications (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
