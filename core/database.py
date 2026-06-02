@@ -192,6 +192,51 @@ class Database:
                 )
             ''')
 
+            # ===== МИГРАЦИЯ: УДАЛЕНИЕ СТАРЫХ КОЛОНОК ИЗ applications =====
+            try:
+                # Проверяем, есть ли старые колонки
+                cursor.execute("PRAGMA table_info(applications)")
+                columns = [col[1] for col in cursor.fetchall()]
+                
+                old_columns = ['nickname', 'static', 'previous_families', 'prime_time', 'hours_per_day']
+                existing_old = [col for col in old_columns if col in columns]
+                
+                if existing_old:
+                    print(f"🔧 Миграция: удаляю старые колонки {existing_old} из таблицы applications...")
+                    
+                    # Создаём новую таблицу без старых колонок
+                    cursor.execute('''
+                        CREATE TABLE applications_new (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            user_id TEXT NOT NULL,
+                            user_name TEXT NOT NULL,
+                            status TEXT DEFAULT 'pending',
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            reviewed_by TEXT,
+                            reviewed_at TIMESTAMP,
+                            reject_reason TEXT,
+                            answers TEXT
+                        )
+                    ''')
+                    
+                    # Копируем данные
+                    cursor.execute('''
+                        INSERT INTO applications_new (id, user_id, user_name, status, created_at, reviewed_by, reviewed_at, reject_reason, answers)
+                        SELECT id, user_id, user_name, status, created_at, reviewed_by, reviewed_at, reject_reason, answers
+                        FROM applications
+                    ''')
+                    
+                    # Удаляем старую таблицу
+                    cursor.execute('DROP TABLE applications')
+                    
+                    # Переименовываем новую
+                    cursor.execute('ALTER TABLE applications_new RENAME TO applications')
+                    
+                    conn.commit()
+                    print("✅ Таблица applications успешно обновлена (старые колонки удалены)")
+            except Exception as e:
+                print(f"⚠️ Ошибка миграции: {e}")
+
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS application_settings (
                     key TEXT PRIMARY KEY,
