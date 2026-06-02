@@ -75,17 +75,25 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
         for field in self.fields:
             answers[field['name']] = field['input'].value
         
-        # Увеличиваем счётчик новых заявок в статистике
+        print(f"🔍 [ЗАЯВКА] Ответы: {answers}")
+        
+        # Увеличиваем счётчик
         collector = get_collector()
         if collector:
             collector.increment_new_applications()
         
-        # Сохраняем заявку с динамическими полями
-        app_id, error = app_manager.create_application_dynamic(
-            user_id=str(interaction.user.id),
-            user_name=interaction.user.display_name,
-            answers=answers
-        )
+        # Сохраняем заявку
+        try:
+            app_id, error = app_manager.create_application_dynamic(
+                user_id=str(interaction.user.id),
+                user_name=interaction.user.display_name,
+                answers=answers
+            )
+            print(f"🔍 [ЗАЯВКА] Результат: app_id={app_id}, error={error}")
+        except Exception as e:
+            print(f"❌ [ЗАЯВКА] Исключение: {e}")
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+            return
         
         if error:
             await interaction.response.send_message(error, ephemeral=True)

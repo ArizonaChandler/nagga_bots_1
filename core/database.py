@@ -1208,21 +1208,26 @@ class Database:
             conn.commit()
 
     def create_application_dynamic(self, user_id: str, user_name: str, answers_json: str) -> tuple:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Проверяем активную заявку
-            cursor.execute('SELECT id FROM applications WHERE user_id = ? AND status IN ("pending", "interviewing")', (user_id,))
-            if cursor.fetchone():
-                return None, "❌ У вас уже есть активная заявка"
-            
-            cursor.execute('''
-                INSERT INTO applications (user_id, user_name, answers, status)
-                VALUES (?, ?, ?, 'pending')
-            ''', (user_id, user_name, answers_json))
-            
-            conn.commit()
-            return cursor.lastrowid, None
+        """Создать заявку с динамическими полями"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Проверяем активную заявку
+                cursor.execute('SELECT id FROM applications WHERE user_id = ? AND status IN ("pending", "interviewing")', (user_id,))
+                if cursor.fetchone():
+                    return None, "❌ У вас уже есть активная заявка"
+                
+                cursor.execute('''
+                    INSERT INTO applications (user_id, user_name, answers, status)
+                    VALUES (?, ?, ?, 'pending')
+                ''', (user_id, user_name, answers_json))
+                
+                conn.commit()
+                return cursor.lastrowid, None
+        except Exception as e:
+            print(f"❌ Ошибка create_application_dynamic: {e}")
+            return None, f"❌ Ошибка: {e}"
 
         # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ЗАЯВОК (сообщения) =====
     
