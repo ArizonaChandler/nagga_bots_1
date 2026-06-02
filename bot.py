@@ -94,7 +94,7 @@ setup_log(bot)
 setup_ad_commands(bot)
 
 # Запуск планировщика мероприятий
-await setup_scheduler(bot)
+setup_scheduler(bot)
 
 @bot.event
 async def on_ready():
