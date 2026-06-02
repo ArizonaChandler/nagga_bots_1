@@ -196,6 +196,12 @@ class Database:
                 )
             ''')
 
+            try:
+                cursor.execute('ALTER TABLE applications ADD COLUMN answers TEXT')
+                print("✅ Колонка answers добавлена в таблицу applications")
+            except sqlite3.OperationalError:
+                pass  # колонка уже существует
+
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS application_settings (
                     key TEXT PRIMARY KEY,

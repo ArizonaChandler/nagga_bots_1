@@ -105,10 +105,6 @@ class ApplicationManager:
         """Создать заявку с динамическими полями"""
         import json
         return db.create_application_dynamic(user_id, user_name, json.dumps(answers))
-
-    def create_application_dynamic(self, user_id: str, user_name: str, answers: dict) -> tuple:
-        import json
-        return db.create_application_dynamic(user_id, user_name, json.dumps(answers))
     
     # ===== НОВЫЕ МЕТОДЫ ДЛЯ ЛИЧНЫХ ПРОФИЛЕЙ =====
     
