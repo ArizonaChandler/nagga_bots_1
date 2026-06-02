@@ -110,15 +110,29 @@ class RemoveRewardRoleModal(discord.ui.Modal, title="➖ УДАЛИТЬ РОЛЬ
 
 class AddFieldModal(discord.ui.Modal, title="➕ ДОБАВИТЬ ПОЛЕ"):
     field_name = discord.ui.TextInput(label="Название поля", placeholder="например: arena_link", max_length=50, required=True)
-    field_description = discord.ui.TextInput(label="Описание", placeholder="Ссылка на откат с арены", max_length=100, required=True)
-    placeholder = discord.ui.TextInput(label="Placeholder", placeholder="https://...", max_length=200, required=False)
+    field_description = discord.ui.TextInput(label="Описание (макс. 45 символов)", placeholder="Ссылка на откат с арены", max_length=45, required=True)
+    placeholder = discord.ui.TextInput(label="Placeholder (макс. 100 символов)", placeholder="https://...", max_length=100, required=False)
     required = discord.ui.TextInput(label="Обязательное (да/нет)", placeholder="да", max_length=3, required=True)
+    
     async def on_submit(self, interaction: discord.Interaction):
         req = self.required.value.lower() == 'да'
+        
+        if len(self.field_description.value) > 45:
+            await interaction.response.send_message("❌ Описание не может быть длиннее 45 символов!", ephemeral=True)
+            return
+        
+        if self.placeholder.value and len(self.placeholder.value) > 100:
+            await interaction.response.send_message("❌ Placeholder не может быть длиннее 100 символов!", ephemeral=True)
+            return
+        
         fields = db.get_application_fields()
+        if len(fields) >= 5:
+            await interaction.response.send_message("❌ Нельзя добавить больше 5 полей! Discord не поддерживает модальные окна с более чем 5 полями.", ephemeral=True)
+            return
+        
         order = len(fields) + 1
         db.add_application_field(self.field_name.value, self.field_description.value, self.placeholder.value or "", req, order, str(interaction.user.id))
-        # Обновляем меню
+        
         embed = discord.Embed(
             title="📝 **УПРАВЛЕНИЕ ПОЛЯМИ ЗАЯВКИ**",
             description="Добавление, удаление и просмотр полей формы подачи заявки",
@@ -131,7 +145,44 @@ class RemoveFieldModal(discord.ui.Modal, title="➖ УДАЛИТЬ ПОЛЕ"):
     field_id = discord.ui.TextInput(label="ID поля", placeholder="1", max_length=5, required=True)
     async def on_submit(self, interaction: discord.Interaction):
         db.remove_application_field(int(self.field_id.value), str(interaction.user.id))
-        # Обновляем меню
+        embed = discord.Embed(
+            title="📝 **УПРАВЛЕНИЕ ПОЛЯМИ ЗАЯВКИ**",
+            description="Добавление, удаление и просмотр полей формы подачи заявки",
+            color=0x00ff00
+        )
+        await interaction.response.edit_message(embed=embed, view=ApplicationFieldsView())
+
+
+class EditFieldModal(discord.ui.Modal, title="✏️ РЕДАКТИРОВАТЬ ПОЛЕ"):
+    def __init__(self, field_id: int, current_name: str, current_description: str, current_placeholder: str, current_required: bool):
+        super().__init__()
+        self.field_id = field_id
+        
+        self.field_name = discord.ui.TextInput(label="Название поля", default=current_name, max_length=50, required=True)
+        self.add_item(self.field_name)
+        
+        self.field_description = discord.ui.TextInput(label="Описание (макс. 45 символов)", default=current_description, max_length=45, required=True)
+        self.add_item(self.field_description)
+        
+        self.placeholder = discord.ui.TextInput(label="Placeholder (макс. 100 символов)", default=current_placeholder, max_length=100, required=False)
+        self.add_item(self.placeholder)
+        
+        self.required = discord.ui.TextInput(label="Обязательное (да/нет)", default="да" if current_required else "нет", max_length=3, required=True)
+        self.add_item(self.required)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        req = self.required.value.lower() == 'да'
+        
+        if len(self.field_description.value) > 45:
+            await interaction.response.send_message("❌ Описание не может быть длиннее 45 символов!", ephemeral=True)
+            return
+        
+        if self.placeholder.value and len(self.placeholder.value) > 100:
+            await interaction.response.send_message("❌ Placeholder не может быть длиннее 100 символов!", ephemeral=True)
+            return
+        
+        db.update_application_field(self.field_id, self.field_name.value, self.field_description.value, self.placeholder.value or "", req)
+        
         embed = discord.Embed(
             title="📝 **УПРАВЛЕНИЕ ПОЛЯМИ ЗАЯВКИ**",
             description="Добавление, удаление и просмотр полей формы подачи заявки",
@@ -156,6 +207,9 @@ class ApplicationFieldsView(PermanentView):
         list_btn = discord.ui.Button(label="📋 Список полей", style=discord.ButtonStyle.secondary, row=0, custom_id="list_fields")
         list_btn.callback = self.list_fields
         self.add_item(list_btn)
+        edit_btn = discord.ui.Button(label="✏️ Редактировать", style=discord.ButtonStyle.secondary, row=1, custom_id="edit_field")
+        edit_btn.callback = self.edit_field
+        self.add_item(edit_btn)
         back_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary, row=1, custom_id="back_fields")
         back_btn.callback = self.back
         self.add_item(back_btn)
@@ -177,6 +231,32 @@ class ApplicationFieldsView(PermanentView):
             text += f"`{f['id']}` {req} **{f['name']}** — {f['description']}\n"
         embed = discord.Embed(title="📋 Поля заявки", description=text, color=0x00ff00)
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    async def edit_field(self, interaction: discord.Interaction):
+        fields = db.get_application_fields()
+        if not fields:
+            await interaction.response.send_message("📭 Нет полей для редактирования", ephemeral=True)
+            return
+        
+        # Создаём select меню для выбора поля
+        options = []
+        for f in fields:
+            options.append(discord.SelectOption(label=f"{f['name']}", description=f"{f['description'][:50]}", value=str(f['id'])))
+        
+        select = discord.ui.Select(placeholder="Выберите поле для редактирования", options=options)
+        
+        async def select_callback(select_interaction: discord.Interaction):
+            field_id = int(select.values[0])
+            field = next((f for f in fields if f['id'] == field_id), None)
+            if field:
+                modal = EditFieldModal(field_id, field['name'], field['description'], field['placeholder'], field['required'])
+                await select_interaction.response.send_modal(modal)
+        
+        select.callback = select_callback
+        
+        view = discord.ui.View()
+        view.add_item(select)
+        await interaction.response.send_message("Выберите поле для редактирования:", view=view, ephemeral=True)
 
     async def back(self, interaction: discord.Interaction):
         embed = discord.Embed(
