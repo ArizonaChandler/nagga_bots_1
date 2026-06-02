@@ -1721,7 +1721,9 @@ class Database:
                     'current_turn': row[6],
                     'created_at': row[7]
                 }
-            return None    def get_all_active_games(self):
+            return None
+
+    def get_all_active_games(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM active_games')
