@@ -171,24 +171,31 @@ class EditFieldModal(discord.ui.Modal, title="✏️ РЕДАКТИРОВАТЬ 
         self.add_item(self.required)
     
     async def on_submit(self, interaction: discord.Interaction):
-        req = self.required.value.lower() == 'да'
-        
-        if len(self.field_description.value) > 45:
-            await interaction.response.send_message("❌ Описание не может быть длиннее 45 символов!", ephemeral=True)
-            return
-        
-        if self.placeholder.value and len(self.placeholder.value) > 100:
-            await interaction.response.send_message("❌ Placeholder не может быть длиннее 100 символов!", ephemeral=True)
-            return
-        
-        db.update_application_field(self.field_id, self.field_name.value, self.field_description.value, self.placeholder.value or "", req)
-        
-        embed = discord.Embed(
-            title="📝 **УПРАВЛЕНИЕ ПОЛЯМИ ЗАЯВКИ**",
-            description="Добавление, удаление и просмотр полей формы подачи заявки",
-            color=0x00ff00
-        )
-        await interaction.response.edit_message(embed=embed, view=ApplicationFieldsView())
+        try:
+            req = self.required.value.lower() == 'да'
+            
+            if len(self.field_description.value) > 45:
+                await interaction.response.send_message("❌ Описание не может быть длиннее 45 символов!", ephemeral=True)
+                return
+            
+            if self.placeholder.value and len(self.placeholder.value) > 100:
+                await interaction.response.send_message("❌ Placeholder не может быть длиннее 100 символов!", ephemeral=True)
+                return
+            
+            # Обновляем поле в БД
+            db.update_application_field(self.field_id, self.field_name.value, self.field_description.value, self.placeholder.value or "", req)
+            
+            # Обновляем меню управления полями
+            embed = discord.Embed(
+                title="📝 **УПРАВЛЕНИЕ ПОЛЯМИ ЗАЯВКИ**",
+                description="Добавление, удаление и просмотр полей формы подачи заявки",
+                color=0x00ff00
+            )
+            await interaction.response.edit_message(embed=embed, view=ApplicationFieldsView())
+            
+        except Exception as e:
+            print(f"❌ Ошибка редактирования поля: {e}")
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
 
 class ApplicationFieldsView(PermanentView):

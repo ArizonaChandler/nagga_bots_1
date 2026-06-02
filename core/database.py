@@ -1218,6 +1218,16 @@ class Database:
             cursor.execute('SELECT role_id FROM application_reward_roles')
             return [row[0] for row in cursor.fetchall()]
 
+    def update_application_field(self, field_id: int, field_name: str, field_description: str, placeholder: str, required: bool):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE application_fields 
+                SET field_name = ?, field_description = ?, placeholder = ?, required = ?
+                WHERE id = ?
+            ''', (field_name, field_description, placeholder, 1 if required else 0, field_id))
+            conn.commit()
+
     # ===== МЕТОДЫ ДЛЯ ЗАКРЫТИЯ ЗАЯВОК ПРИ ВЫХОДЕ =====
 
     def get_active_application_id(self, user_id: str):
