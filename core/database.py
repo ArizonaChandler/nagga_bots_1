@@ -512,6 +512,9 @@ class Database:
                 )
             ''')
 
+            # Автоматическое добавление стандартных полей заявок
+            self.init_application_fields()
+
     # ===== СУЩЕСТВУЮЩИЕ МЕТОДЫ =====
     def add_user(self, discord_id: str, added_by: str):
         with self.get_connection() as conn:
@@ -1227,6 +1230,34 @@ class Database:
         except Exception as e:
             print(f"❌ Ошибка create_application_dynamic: {e}")
             return None, f"❌ Ошибка: {e}"
+
+    def init_application_fields(self):
+        """Автоматическое создание стандартных полей заявки"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Проверяем, есть ли хоть одно поле
+            cursor.execute('SELECT COUNT(*) FROM application_fields')
+            count = cursor.fetchone()[0]
+            
+            if count == 0:
+                print("📝 Добавляем стандартные поля для заявок...")
+                fields = [
+                    ('nickname', '🎮 Игровой ник', 'Ваш ник в игре', 1, 1),
+                    ('static', '🎯 Статик на сервере', 'Например: #15542', 1, 2),
+                    ('previous_families', '🏠 Где и в каких семьях играли ранее', 'Названия семей, если были', 0, 3),
+                    ('prime_time', '⏰ Прайм-тайм игры', 'Например: 19:00-23:00 МСК', 1, 4),
+                    ('hours_per_day', '📊 Количество часов в игре в день', 'Например: 4-6 часов', 1, 5),
+                ]
+                
+                for field in fields:
+                    cursor.execute('''
+                        INSERT INTO application_fields (field_name, field_description, placeholder, required, field_order, is_active)
+                        VALUES (?, ?, ?, ?, ?, 1)
+                    ''', field)
+                
+                conn.commit()
+                print(f"✅ Добавлено {len(fields)} стандартных полей")
 
         # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ЗАЯВОК (сообщения) =====
     
