@@ -509,7 +509,7 @@ class Database:
 
             conn.commit()
 
-        # ===== АВТОМАТИЧЕСКОЕ ДОБАВЛЕНИЕ СТАНДАРТНЫХ ПОЛЕЙ ЗАЯВКИ (ВНЕ ТРАНЗАКЦИИ) =====
+        # ===== АВТОМАТИЧЕСКОЕ ДОБАВЛЕНИЕ СТАНДАРТНЫХ ПОЛЕЙ ЗАЯВКИ =====
         self.init_application_fields()
 
     def init_application_fields(self):
@@ -692,7 +692,6 @@ class Database:
     
     # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ОПОВЕЩЕНИЙ =====
     
-    # ----- МЕРОПРИЯТИЯ -----
     def add_event(self, name: str, weekday: int, event_time: str, created_by: str) -> int:
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -973,31 +972,11 @@ class Database:
             if updated_by:
                 self.log_action(updated_by, f"SET_APP_SETTING", f"{key}={value}")
 
-    def create_application(self, user_id: str, user_name: str, nickname: str, 
-                      static: str, previous_families: str, prime_time: str, 
-                      hours_per_day: str) -> tuple:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT id FROM applications 
-                WHERE user_id = ? AND status IN ('pending', 'interviewing')
-            ''', (user_id,))
-            if cursor.fetchone():
-                return None, "❌ У вас уже есть активная заявка"
-            cursor.execute('''
-                INSERT INTO applications 
-                (user_id, user_name, nickname, static, previous_families, prime_time, hours_per_day)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (user_id, user_name, nickname, static, previous_families, prime_time, hours_per_day))
-            conn.commit()
-            return cursor.lastrowid, None
-
     def get_pending_applications(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT id, user_id, user_name, nickname, static, previous_families, 
-                    prime_time, hours_per_day, created_at
+                SELECT id, user_id, user_name, created_at, answers
                 FROM applications 
                 WHERE status = 'pending'
                 ORDER BY created_at
@@ -1138,7 +1117,7 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT am.application_id, am.channel_id, am.message_id, am.user_id,
-                       a.status, a.user_id as applicant_id, a.nickname
+                       a.status, a.user_id as applicant_id
                 FROM application_messages am
                 JOIN applications a ON am.application_id = a.id
                 WHERE a.status IN ('pending', 'interviewing')
@@ -1193,56 +1172,6 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('SELECT role_id FROM application_reward_roles')
             return [row[0] for row in cursor.fetchall()]
-
-    def migrate_applications_table(self):
-        """Автоматически удаляет стандартные поля из таблицы applications"""
-        try:
-            with self.get_connection() as conn:
-                cursor = conn.cursor()
-                
-                # Проверяем, есть ли старые колонки
-                cursor.execute("PRAGMA table_info(applications)")
-                columns = [col[1] for col in cursor.fetchall()]
-                
-                old_columns = ['nickname', 'static', 'previous_families', 'prime_time', 'hours_per_day']
-                existing_old = [col for col in old_columns if col in columns]
-                
-                if existing_old:
-                    print(f"🔧 Миграция таблицы applications: удаляю старые поля {existing_old}...")
-                    
-                    # Создаём новую таблицу без старых полей
-                    cursor.execute('''
-                        CREATE TABLE applications_new (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            user_id TEXT NOT NULL,
-                            user_name TEXT NOT NULL,
-                            status TEXT DEFAULT 'pending',
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            reviewed_by TEXT,
-                            reviewed_at TIMESTAMP,
-                            reject_reason TEXT,
-                            answers TEXT
-                        )
-                    ''')
-                    
-                    # Копируем данные
-                    cursor.execute('''
-                        INSERT INTO applications_new (id, user_id, user_name, status, created_at, reviewed_by, reviewed_at, reject_reason, answers)
-                        SELECT id, user_id, user_name, status, created_at, reviewed_by, reviewed_at, reject_reason, answers
-                        FROM applications
-                    ''')
-                    
-                    # Удаляем старую таблицу
-                    cursor.execute('DROP TABLE applications')
-                    
-                    # Переименовываем новую
-                    cursor.execute('ALTER TABLE applications_new RENAME TO applications')
-                    
-                    conn.commit()
-                    print("✅ Таблица applications обновлена (стандартные поля удалены)")
-                    
-        except Exception as e:
-            print(f"⚠️ Ошибка миграции: {e}")
 
     # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ AFK =====
     
@@ -1489,6 +1418,23 @@ class Database:
             cursor.execute('DELETE FROM tier_application_messages WHERE application_id = ?', (application_id,))
             conn.commit()
             return cursor.rowcount > 0
+
+    def reset_stuck_tier_applications(self):
+        """Сбросить все зависшие заявки TIER"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT ta.id FROM tier_applications ta
+                LEFT JOIN tier_application_messages tam ON ta.id = tam.application_id
+                WHERE ta.status = 'pending' AND tam.id IS NULL
+            ''')
+            stuck_apps = cursor.fetchall()
+            if not stuck_apps:
+                return 0
+            for app in stuck_apps:
+                cursor.execute('DELETE FROM tier_applications WHERE id = ?', (app[0],))
+            conn.commit()
+            return len(stuck_apps)
 
     # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ СТАТИСТИКИ =====
 
@@ -1775,9 +1721,7 @@ class Database:
                     'current_turn': row[6],
                     'created_at': row[7]
                 }
-            return None
-
-    def get_all_active_games(self):
+            return None    def get_all_active_games(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM active_games')
