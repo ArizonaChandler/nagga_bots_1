@@ -1028,7 +1028,18 @@ class Database:
             ''')
             columns = [description[0] for description in cursor.description]
             rows = cursor.fetchall()
-            return [dict(zip(columns, row)) for row in rows]
+            result = []
+            for row in rows:
+                app = dict(zip(columns, row))
+                # Извлекаем nickname из answers для отображения
+                try:
+                    import json
+                    answers = json.loads(app.get('answers', '{}'))
+                    app['nickname'] = answers.get('nickname', app['user_name'])
+                except:
+                    app['nickname'] = app['user_name']
+                result.append(app)
+            return result
 
     def get_application(self, app_id: int):
         with self.get_connection() as conn:

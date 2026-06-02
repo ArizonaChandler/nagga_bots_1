@@ -349,15 +349,31 @@ class ApplicationsCombinedPanel(PermanentView):
         embed = discord.Embed(title="📋 Роли для выдачи", description=text, color=0x00ff00)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    async def show_pending(self, interaction: discord.Interaction):
+    async def show_pending(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
+        
         apps = app_manager.get_pending_applications()
+        
         if not apps:
             await interaction.followup.send("📭 Нет ожидающих заявок", ephemeral=True)
             return
-        embed = discord.Embed(title="📋 ОЖИДАЮЩИЕ ЗАЯВКИ", color=0xffa500, timestamp=datetime.now())
+        
+        embed = discord.Embed(
+            title="📋 ОЖИДАЮЩИЕ ЗАЯВКИ",
+            color=0xffa500,
+            timestamp=datetime.now()
+        )
+        
         for app in apps[:10]:
-            embed.add_field(name=f"ID: {app['id']} - {app['nickname']}", value=f"👤 <@{app['user_id']}>\n⏰ {app['created_at'][:16]}", inline=False)
+            embed.add_field(
+                name=f"ID: {app['id']} - {app.get('nickname', 'Неизвестно')}",
+                value=f"👤 <@{app['user_id']}>\n⏰ {app['created_at'][:16]}",
+                inline=False
+            )
+        
+        if len(apps) > 10:
+            embed.set_footer(text=f"Показано 10 из {len(apps)} заявок")
+        
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     async def manage_fields(self, interaction: discord.Interaction):
