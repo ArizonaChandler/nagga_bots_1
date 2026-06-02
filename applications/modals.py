@@ -29,7 +29,6 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
             
             if not fields:
                 print("❌ [ЗАЯВКА] Нет полей в БД!")
-                # Добавляем заглушку, чтобы модалка не падала
                 text_input = discord.ui.TextInput(
                     label="Ошибка",
                     placeholder="Нет настроенных полей, обратитесь к администратору",
@@ -40,9 +39,19 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
             
             for field in fields:
                 print(f"🔍 [ЗАЯВКА] Добавляю поле: {field['name']} - {field['description']}")
+                
+                # Discord ограничения: label до 45 символов, placeholder до 100
+                label = field['description'] or field['name']
+                if len(label) > 45:
+                    label = label[:42] + "..."
+                
+                placeholder = field['placeholder'] or "Введите информацию"
+                if len(placeholder) > 100:
+                    placeholder = placeholder[:97] + "..."
+                
                 text_input = discord.ui.TextInput(
-                    label=field['description'] or field['name'],
-                    placeholder=field['placeholder'] or "Введите информацию",
+                    label=label,
+                    placeholder=placeholder,
                     max_length=500,
                     required=field['required'],
                     style=discord.TextStyle.paragraph
