@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import pytz
 import discord
 from core.database import db
+from core.config import CONFIG
 from birthday.views import BirthdayPublicView, update_birthday_embed
 from birthday.settings import BirthdaySettingsView
 from birthday.manager import birthday_manager
@@ -29,17 +30,17 @@ class BirthdayInitializer:
         self.greeting_channel_id = db.get_setting('birthday_greeting_channel')
         self.settings_channel_id = db.get_setting('birthday_settings_channel')
 
-        # 1. Публичный канал с кнопками и embed
+        # 1. Очистка ушедших пользователей (ДО создания embed)
+        await self._cleanup_left_users()
+
+        # 2. Публичный канал с кнопками и embed
         await self._init_public_channel()
 
-        # 2. Канал настроек (панель управления)
+        # 3. Канал настроек (панель управления)
         await self._init_settings_channel()
 
-        # 3. Запускаем проверку дней рождений в 00:00
+        # 4. Запускаем проверку дней рождений в 00:00
         await self.start_birthday_checker()
-
-        # 4. Очистка ушедших пользователей
-        await self._cleanup_left_users()
 
         logger.info("✅ Инициализация системы дней рождения завершена")
         print("🎂 [Birthday] Инициализация системы дней рождения завершена")
