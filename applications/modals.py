@@ -84,6 +84,9 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
             print(f"❌ Канал {applications_channel_id} не найден")
             return
         
+        # Получаем описания полей из БД
+        fields_info = {f['name']: f['description'] for f in db.get_application_fields()}
+        
         embed = discord.Embed(
             title="📝 НОВАЯ ЗАЯВКА",
             color=0xffa500,
@@ -94,7 +97,8 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
         
         for key, value in answers.items():
             if value:
-                embed.add_field(name=key, value=value[:1024], inline=False)
+                display_name = fields_info.get(key, key)
+                embed.add_field(name=display_name, value=value[:1024], inline=False)
         
         embed.set_footer(text=f"Заявка ID: {app_id}")
         
