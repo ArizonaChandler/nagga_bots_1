@@ -1171,7 +1171,6 @@ class Database:
     # ===== МЕТОДЫ ДЛЯ ГИБКИХ ПОЛЕЙ ЗАЯВКИ =====
 
     def get_application_fields(self):
-        """Получить все активные поля заявки"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
