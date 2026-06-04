@@ -37,6 +37,7 @@ class ModulesControlPanel(AdminOnlyView):
             if col >= 3:  # ← 3 кнопки в ряду
                 col = 0
                 row += 1
+                
 
     def _create_callback(self, module_key: str):
         """Создать callback для кнопки модуля"""
