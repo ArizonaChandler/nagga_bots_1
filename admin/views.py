@@ -97,7 +97,7 @@ class SettingsView(BaseMenuView):
             row=0
         )
         async def modules_cb(i):
-            from core.module_manager import module_manager
+            from core.module_views import ModulesControlPanel
             embed = discord.Embed(
                 title="🎛️ **УПРАВЛЕНИЕ МОДУЛЯМИ**",
                 description="Включение и выключение систем бота",

@@ -1679,13 +1679,38 @@ class SetGlobalSettingsChannelModal(discord.ui.Modal, title="🎛️ КАНАЛ 
     async def on_submit(self, interaction: discord.Interaction):
         from core.config import CONFIG, save_config
         from core.database import db
+        from core.module_views import ModulesControlPanel
+        import discord
         
+        channel = interaction.guild.get_channel(int(self.channel_id.value))
+        if not channel:
+            await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
+            return
+        
+        # Сохраняем настройку
         CONFIG['global_settings_channel'] = self.channel_id.value
         db.set_setting('global_settings_channel', self.channel_id.value, str(interaction.user.id))
         save_config(str(interaction.user.id))
         
+        # Удаляем старые сообщения бота в канале
+        async for msg in channel.history(limit=50):
+            if msg.author == interaction.client.user:
+                await msg.delete()
+        
+        # Создаём панель управления прямо сейчас, без перезагрузки
+        embed = discord.Embed(
+            title="🎛️ **ЦЕНТР УПРАВЛЕНИЯ МОДУЛЯМИ**",
+            description="Включение/выключение систем бота.\n\n"
+                        "🟢 **Включено** — система активна и работает\n"
+                        "🔴 **Выключено** — система недоступна, все её каналы отключены\n\n"
+                        "Настройки каналов каждой системы производятся после её включения "
+                        "через отдельные панели управления.",
+            color=0x7289da
+        )
+        await channel.send(embed=embed, view=ModulesControlPanel(interaction.client))
+        
         await interaction.response.send_message(
-            f"✅ Канал управления модулями установлен: <#{self.channel_id.value}>\n"
-            f"🔄 Перезапустите бота для создания панели.",
+            f"✅ Канал управления модулями настроен: {channel.mention}\n"
+            f"🎛️ Панель управления создана!",
             ephemeral=True
         )
