@@ -64,6 +64,7 @@ class MainView(BaseMenuView):
 
 
 class SettingsView(BaseMenuView):
+    """Главное меню настроек (!settings)"""
     def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
         super().__init__(user_id, guild, previous_view, previous_embed)
         
@@ -92,7 +93,7 @@ class SettingsView(BaseMenuView):
         )
         async def modules_cb(i):
             from core.module_views import ModulesControlPanel
-            from core.module_manager import module_manager  # ← импортируем глобальный менеджер
+            from core.module_manager import module_manager
             
             embed = discord.Embed(
                 title="🎛️ **УПРАВЛЕНИЕ МОДУЛЯМИ**",
@@ -103,7 +104,7 @@ class SettingsView(BaseMenuView):
         modules_btn.callback = modules_cb
         self.add_item(modules_btn)
         
-        # Назад
+        # ✅ КНОПКА "НАЗАД"
         back_btn = discord.ui.Button(
             label="◀ Назад",
             style=discord.ButtonStyle.secondary,

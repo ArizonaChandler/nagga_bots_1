@@ -11,7 +11,7 @@ MODULES = {
         "enabled": False,
         "channels": ["capt_reg_main_channel", "capt_reg_reserve_channel", "capt_alert_channel", "capt_log_channel"],
         "settings_channels": ["capt_settings_channel"],
-        "initializer": "capt_registration.manager",
+        "initializer": "capt_registration.manager.capt_reg_manager",
         "initialize_method": "initialize_buttons",
         "toggleable": True
     },
@@ -21,7 +21,7 @@ MODULES = {
         "enabled": False,
         "channels": ["mcl_reg_main_channel", "mcl_reg_reserve_channel", "mcl_error_channel", "mcl_announcement_channel"],
         "settings_channels": ["mcl_settings_channel"],
-        "initializer": "mcl_registration.manager",    # ← ТОЛЬКО МОДУЛЬ
+        "initializer": "mcl_registration.manager.mcl_manager",
         "initialize_method": "initialize_buttons",
         "toggleable": True
     },
@@ -32,7 +32,7 @@ MODULES = {
         "channels": ["submit_channel", "applications_channel", "applications_log_channel"],
         "settings_channels": ["applications_settings_channel"],
         "initializer": "applications.initializer",
-        "initialize_method": "setup",  # ← функция setup, а не initializer
+        "initialize_method": "setup",
         "toggleable": True
     },
     "events": {
@@ -42,7 +42,7 @@ MODULES = {
         "channels": ["alarm_channels", "announce_channels"],
         "settings_channels": ["events_settings_channel"],
         "initializer": "events.scheduler",
-        "initialize_method": "setup",  # ← функция setup
+        "initialize_method": "setup",
         "toggleable": True
     },
     "afk": {
@@ -52,7 +52,7 @@ MODULES = {
         "channels": ["afk_channel", "afk_log_channel"],
         "settings_channels": ["afk_settings_channel"],
         "initializer": "afk.initializer",
-        "initialize_method": "setup",  # ← функция setup
+        "initialize_method": "setup",
         "toggleable": True
     },
     "tier": {
@@ -62,7 +62,7 @@ MODULES = {
         "channels": ["tier_submit_channel", "tier_applications_channel", "tier_log_channel", "tier_info_channel"],
         "settings_channels": ["tier_settings_channel"],
         "initializer": "tier.initializer",
-        "initialize_method": "setup",  # ← функция setup
+        "initialize_method": "setup",
         "toggleable": True
     },
     "vacation": {
@@ -72,7 +72,7 @@ MODULES = {
         "channels": ["vacation_public_channel", "vacation_applications_channel", "vacation_log_channel"],
         "settings_channels": ["vacation_settings_channel"],
         "initializer": "vacation.initializer",
-        "initialize_method": "setup",  # ← функция setup
+        "initialize_method": "setup",
         "toggleable": True
     },
     "games": {
@@ -82,7 +82,7 @@ MODULES = {
         "channels": ["games_rules_channel", "games_lobby_channel", "games_log_channel", "games_category_id"],
         "settings_channels": ["games_settings_channel"],
         "initializer": "games.manager",
-        "initialize_method": "setup",  # ← функция setup
+        "initialize_method": "setup",
         "toggleable": True
     },
     "birthday": {
@@ -92,7 +92,7 @@ MODULES = {
         "channels": ["birthday_channel", "birthday_greeting_channel"],
         "settings_channels": ["birthday_settings_channel"],
         "initializer": "birthday.initializer",
-        "initialize_method": "setup",  # ← функция setup
+        "initialize_method": "setup",
         "toggleable": True
     },
     "advertising": {
@@ -102,7 +102,7 @@ MODULES = {
         "channels": [],
         "settings_channels": ["ad_settings_channel"],
         "initializer": "advertising.core",
-        "initialize_method": "setup",  # ← функция setup
+        "initialize_method": "setup",
         "toggleable": True
     },
     "server_stats": {
@@ -111,8 +111,8 @@ MODULES = {
         "enabled": False,
         "channels": ["stats_channel"],
         "settings_channels": ["stats_settings_channel"],
-        "initializer": "server_stats.global_collector",  # ← МОДУЛЬ
-        "initialize_method": "set_collector",            # ← МЕТОД
+        "initializer": "server_stats.global_collector",
+        "initialize_method": "setup",
         "toggleable": True
     },
     "files": {
@@ -170,23 +170,11 @@ class ModuleManager:
         return True, f"Модуль **{MODULES[module_key]['name']}** {'включён' if enabled else 'выключен'}"
 
     async def _enable_module(self, module_key: str):
-        """Включить модуль — полная инициализация"""
         module = MODULES[module_key]
         initializer_path = module.get("initializer")
         initialize_method = module.get("initialize_method", "initialize_all")
         
-        if module_key == "server_stats":
-            # Особый случай для статистики
-            try:
-                from server_stats.global_collector import set_collector
-                set_collector(self.bot)
-                collector = get_collector()
-                if collector and hasattr(collector, 'start'):
-                    await collector.start()
-                print(f"✅ [MODULE] Статистика сервера инициализирована")
-            except Exception as e:
-                print(f"❌ [MODULE] Ошибка инициализации статистики: {e}")
-        elif initializer_path:
+        if initializer_path:
             await self._call_module_method(initializer_path, initialize_method)
 
     async def _disable_module(self, module_key: str):
@@ -195,17 +183,12 @@ class ModuleManager:
     async def _call_module_method(self, module_path: str, method_name: str):
         """Универсальный вызов метода модуля"""
         try:
-            # Разделяем путь на модуль и атрибут
             parts = module_path.split('.')
-            
-            # Если есть атрибут (последняя часть может быть атрибутом, а не подмодулем)
-            # Пробуем импортировать модуль и получить атрибут
             module_name = '.'.join(parts[:-1]) if len(parts) > 1 else module_path
             attr_name = parts[-1] if len(parts) > 1 else None
             
             imported = __import__(module_name, fromlist=[attr_name] if attr_name else [])
             
-            # Получаем нужный объект
             if attr_name:
                 obj = getattr(imported, attr_name, None)
                 if obj is None:
@@ -214,14 +197,12 @@ class ModuleManager:
             else:
                 obj = imported
             
-            # Проверяем наличие метода
             if not hasattr(obj, method_name):
                 print(f"❌ [MODULE] У {obj} нет метода {method_name}")
                 return
             
             method = getattr(obj, method_name)
             
-            # Вызываем метод
             try:
                 await method(self.bot)
             except TypeError:
@@ -239,14 +220,12 @@ class ModuleManager:
             traceback.print_exc()
 
     async def _disable_all_embeds(self, module_key: str):
-        """Заменить все embed модуля на 'Система отключена'"""
         module = MODULES[module_key]
         all_keys = module.get("channels", []) + module.get("settings_channels", [])
         
         for channel_key in all_keys:
             channel_id = db.get_setting(channel_key)
             
-            # Пропускаем если channel_id None, 'null', '[]' или пустая строка
             if not channel_id or channel_id == 'null' or channel_id == '[]':
                 continue
             

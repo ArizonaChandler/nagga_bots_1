@@ -11,11 +11,10 @@ class ModulesControlPanel(AdminOnlyView):
     def __init__(self, bot, module_manager):
         super().__init__()
         self.bot = bot
-        self.module_manager = module_manager  # ← сохраняем переданный менеджер
+        self.module_manager = module_manager
         self._add_buttons()
 
     def _add_buttons(self):
-        """Добавить кнопки для всех модулей (по 3 в ряд)"""
         self.clear_items()
         row = 0
         col = 0
@@ -40,7 +39,6 @@ class ModulesControlPanel(AdminOnlyView):
                 row += 1
 
     def _create_callback(self, module_key: str):
-        """Создать callback для кнопки модуля"""
         async def callback(interaction: discord.Interaction):
             if not await is_super_admin(str(interaction.user.id)):
                 await interaction.response.send_message(
