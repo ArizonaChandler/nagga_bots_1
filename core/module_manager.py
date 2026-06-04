@@ -11,7 +11,7 @@ MODULES = {
         "enabled": False,
         "channels": ["capt_reg_main_channel", "capt_reg_reserve_channel", "capt_alert_channel", "capt_log_channel"],
         "settings_channels": ["capt_settings_channel"],
-        "initializer": "capt_registration.manager.capt_reg_manager",
+        "initializer": "capt_registration.manager",
         "initialize_method": "initialize_buttons",
         "toggleable": True
     },
@@ -21,7 +21,7 @@ MODULES = {
         "enabled": False,
         "channels": ["mcl_reg_main_channel", "mcl_reg_reserve_channel", "mcl_error_channel", "mcl_announcement_channel"],
         "settings_channels": ["mcl_settings_channel"],
-        "initializer": "mcl_registration.manager.mcl_manager",
+        "initializer": "mcl_registration.manager",    # ← ТОЛЬКО МОДУЛЬ
         "initialize_method": "initialize_buttons",
         "toggleable": True
     },
@@ -111,8 +111,8 @@ MODULES = {
         "enabled": False,
         "channels": ["stats_channel"],
         "settings_channels": ["stats_settings_channel"],
-        "initializer": "server_stats.global_collector",
-        "initialize_method": "set_collector",  # ← требует bot
+        "initializer": "server_stats.global_collector",  # ← МОДУЛЬ
+        "initialize_method": "set_collector",            # ← МЕТОД
         "toggleable": True
     },
     "files": {
@@ -175,47 +175,64 @@ class ModuleManager:
         initializer_path = module.get("initializer")
         initialize_method = module.get("initialize_method", "initialize_all")
         
-        if initializer_path:
+        if module_key == "server_stats":
+            # Особый случай для статистики
+            try:
+                from server_stats.global_collector import set_collector
+                set_collector(self.bot)
+                collector = get_collector()
+                if collector and hasattr(collector, 'start'):
+                    await collector.start()
+                print(f"✅ [MODULE] Статистика сервера инициализирована")
+            except Exception as e:
+                print(f"❌ [MODULE] Ошибка инициализации статистики: {e}")
+        elif initializer_path:
             await self._call_module_method(initializer_path, initialize_method)
-        else:
-            # Проверяем наличие каналов перед восстановлением
-            all_keys = module.get("channels", []) + module.get("settings_channels", [])
-            has_valid_channels = False
-            for channel_key in all_keys:
-                channel_id = db.get_setting(channel_key)
-                if channel_id and channel_id not in ['null', '[]']:
-                    has_valid_channels = True
-                    break
-            
-            if has_valid_channels:
-                await self._restore_module_embeds(module_key)
 
     async def _disable_module(self, module_key: str):
         await self._disable_all_embeds(module_key)
 
     async def _call_module_method(self, module_path: str, method_name: str):
+        """Универсальный вызов метода модуля"""
         try:
+            # Разделяем путь на модуль и атрибут
             parts = module_path.split('.')
-            module_name = '.'.join(parts)
             
-            imported = __import__(module_name, fromlist=[method_name])
+            # Если есть атрибут (последняя часть может быть атрибутом, а не подмодулем)
+            # Пробуем импортировать модуль и получить атрибут
+            module_name = '.'.join(parts[:-1]) if len(parts) > 1 else module_path
+            attr_name = parts[-1] if len(parts) > 1 else None
             
-            if hasattr(imported, method_name):
-                method = getattr(imported, method_name)
-                
-                # Пробуем вызвать с bot и без
-                try:
-                    await method(self.bot)
-                except TypeError:
-                    try:
-                        await method()
-                    except TypeError as e:
-                        print(f"❌ [MODULE] Не удалось вызвать {method_name}: {e}")
-                        return
-                
-                print(f"✅ [MODULE] {module_name}.{method_name}() вызван")
+            imported = __import__(module_name, fromlist=[attr_name] if attr_name else [])
+            
+            # Получаем нужный объект
+            if attr_name:
+                obj = getattr(imported, attr_name, None)
+                if obj is None:
+                    print(f"❌ [MODULE] В {module_name} нет атрибута {attr_name}")
+                    return
             else:
-                print(f"❌ [MODULE] В {module_name} нет функции {method_name}")
+                obj = imported
+            
+            # Проверяем наличие метода
+            if not hasattr(obj, method_name):
+                print(f"❌ [MODULE] У {obj} нет метода {method_name}")
+                return
+            
+            method = getattr(obj, method_name)
+            
+            # Вызываем метод
+            try:
+                await method(self.bot)
+            except TypeError:
+                try:
+                    await method()
+                except TypeError as e:
+                    print(f"❌ [MODULE] Не удалось вызвать {method_name}: {e}")
+                    return
+            
+            print(f"✅ [MODULE] {module_path}.{method_name}() вызван")
+            
         except Exception as e:
             print(f"❌ [MODULE] Ошибка вызова {method_name} для {module_path}: {e}")
             import traceback
