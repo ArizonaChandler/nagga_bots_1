@@ -92,12 +92,14 @@ class SettingsView(BaseMenuView):
         )
         async def modules_cb(i):
             from core.module_views import ModulesControlPanel
+            from core.module_manager import module_manager  # ← импортируем глобальный менеджер
+            
             embed = discord.Embed(
                 title="🎛️ **УПРАВЛЕНИЕ МОДУЛЯМИ**",
                 description="Включение и выключение систем бота",
                 color=0xff0000
             )
-            await i.response.edit_message(embed=embed, view=ModulesControlPanel(i.client))
+            await i.response.edit_message(embed=embed, view=ModulesControlPanel(i.client, module_manager))
         modules_btn.callback = modules_cb
         self.add_item(modules_btn)
         
