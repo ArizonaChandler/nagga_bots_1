@@ -10,7 +10,6 @@ from admin.modals import *
 from files.core import file_manager
 from files.views import FilesView
 from events.views import EventInfoView
-from core.module_views import ModulesControlPanel
 
 
 class MainView(BaseMenuView):
@@ -95,25 +94,18 @@ class SettingsView(BaseMenuView):
             style=discord.ButtonStyle.danger,
             emoji="🎛️",
             row=0
+            custom_id="modules_control"
         )
         async def modules_cb(i):
-            print("🔍 [DEBUG] modules_cb вызван")
-            try:
-                from core.module_views import ModulesControlPanel
-                print("✅ [DEBUG] ModulesControlPanel импортирован")
-                embed = discord.Embed(
-                    title="🎛️ **УПРАВЛЕНИЕ МОДУЛЯМИ**",
-                    description="Включение и выключение систем бота",
-                    color=0xff0000
-                )
-                view = ModulesControlPanel(i.client)
-                print("✅ [DEBUG] View создан")
-                await i.response.edit_message(embed=embed, view=view)
-                print("✅ [DEBUG] Сообщение обновлено")
-            except Exception as e:
-                print(f"❌ [DEBUG] Ошибка: {e}")
-                import traceback
-                traceback.print_exc()
+            print("🔥🔥🔥 КНОПКА УПРАВЛЕНИЯ МОДУЛЯМИ НАЖАТА 🔥🔥🔥")
+            embed = discord.Embed(
+                title="🎛️ **УПРАВЛЕНИЕ МОДУЛЯМИ**",
+                description="Включение и выключение систем бота",
+                color=0xff0000
+            )
+            await i.response.edit_message(embed=embed, view=ModulesControlPanel(i.client))
+        modules_btn.callback = modules_cb
+        self.add_item(modules_btn)
         
         # ✅ КНОПКА "НАЗАД"
         back_btn = discord.ui.Button(
@@ -304,7 +296,8 @@ class GlobalSettingsView(BaseMenuView):
             await i.response.send_modal(SetFamilyNameModal())
         family_name_btn.callback = family_name_cb
         self.add_item(family_name_btn)
-
+        
+        # РЯД 2: КАНАЛ УПРАВЛЕНИЯ МОДУЛЯМИ
         settings_channel_btn = discord.ui.Button(
             label="🎛️ Канал управления модулями",
             style=discord.ButtonStyle.primary,
