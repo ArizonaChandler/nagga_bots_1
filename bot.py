@@ -38,6 +38,7 @@ from games.initializer import setup as setup_games
 from birthday.initializer import setup as setup_birthday
 from mcl_registration.manager import mcl_manager
 from mcl_registration.initializer import setup as setup_mcl
+from core.module_manager import setup as setup_modules
 
 # ========== СТАТИСТИКА ==========
 from server_stats.global_collector import set_collector, get_collector
@@ -127,40 +128,33 @@ async def on_ready():
     print(f"🌐 Серверов: {len(bot.guilds)}")
     print(f"📁 Файловое хранилище: {file_manager.storage_path}")
 
-    # Инициализация всех систем
-    modules = [
-        ("CAPT регистрации", init_capt),
-        ("авто-рекламы", init_advertising),
-        ("мероприятий", init_events),
-        ("заявок", setup_applications, bot),
-        ("TIER", setup_tier, bot),
-        ("AFK", setup_afk, bot),
-        ("статистики", init_stats),
-        ("отпусков", setup_vacation, bot),
-        ("игр", setup_games, bot),
-        ("дней рождения", setup_birthday, bot),
-    ]
-
-    for name, func, *args in modules:
-        try:
-            print(f"🔄 Инициализация системы {name}...")
-            if args:
-                await func(args[0])
-            else:
-                await func()
-        except Exception as e:
-            print(f"❌ Ошибка инициализации {name}: {e}")
-            traceback.print_exc()
-
-    # MCL отдельно (требует set_bot)
+    # ========== ИНИЦИАЛИЗАЦИЯ СИСТЕМЫ МОДУЛЕЙ ==========
     try:
-        mcl_manager.set_bot(bot)
-        print("🎯 Инициализация MCL...")
-        await setup_mcl(bot)
+        from core.module_manager import setup as setup_modules
+        print("🎛️ Инициализация системы модулей...")
+        await setup_modules(bot)
     except Exception as e:
-        print(f"❌ Ошибка MCL: {e}")
+        print(f"❌ Ошибка инициализации модулей: {e}")
         traceback.print_exc()
 
+    # ========== ИНИЦИАЛИЗАЦИЯ СТАТИСТИКИ ==========
+    try:
+        print("📊 Инициализация сборщика статистики...")
+        from server_stats.initializer import setup as setup_stats_panel
+        await setup_stats_panel(bot)
+        
+        from server_stats.global_collector import set_collector, get_collector
+        set_collector(bot)
+        collector = get_collector()
+        if collector:
+            await collector.start()
+        else:
+            print("❌ collector не инициализирован")
+    except Exception as e:
+        print(f"❌ Ошибка инициализации статистики: {e}")
+        traceback.print_exc()
+
+    # ========== СТАТУС БОТА ==========
     await bot.change_presence(activity=discord.Activity(
         type=discord.ActivityType.watching,
         name=f"{CONFIG.get('family_name', 'Семья')} | !info"

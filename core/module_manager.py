@@ -94,6 +94,35 @@ MODULES = {
         "initializer": "birthday.initializer.initializer",
         "initialize_method": "initialize_all",
         "toggleable": True
+    },
+    "advertising": {
+        "name": "📢 Авто-реклама",
+        "description": "Автоматическая рассылка рекламы",
+        "enabled": False,
+        "channels": [],
+        "settings_channels": ["ad_settings_channel"],
+        "initializer": "advertising.core.advertiser",
+        "initialize_method": "initialize_settings_channel",
+        "toggleable": True
+    },
+    "server_stats": {
+        "name": "📊 Статистика сервера",
+        "description": "Сбор и отображение статистики",
+        "enabled": False,
+        "channels": ["stats_channel"],
+        "settings_channels": ["stats_settings_channel"],
+        "initializer": "server_stats.stat_collector.collector",
+        "initialize_method": "start",
+        "toggleable": True
+    },
+    "files": {
+        "name": "📁 Полезные файлы",
+        "description": "Хранилище файлов для участников",
+        "enabled": True,
+        "channels": [],
+        "settings_channels": [],
+        "initializer": None,
+        "toggleable": False
     }
 }
 
