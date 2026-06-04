@@ -140,7 +140,7 @@ class MCLRegistrationManager:
 
     async def end_registration(self, user_id: str):
         if self.active_session:
-            db.mcl_end_session(self.active_session, user_id)
+            db.mcl_end_session(self.active_session, user_id)  # ← это устанавливает is_active = 0
         
         self.active_session = None
         self.session_info = None
@@ -247,5 +247,25 @@ class MCLRegistrationManager:
                     print(f"🎯 [MCL] Публичный канал обновлён, active={active}")
             except Exception as e:
                 print(f"🎯 [MCL] Ошибка публичного канала: {e}")
+
+    async def stop(self):
+        """Остановить систему MCL"""
+        print("🎯 [MCL] Остановка системы MCL...")
+        
+        for channel_id in [self.main_channel_id, self.reserve_channel_id]:
+            if channel_id:
+                channel = self.bot.get_channel(int(channel_id))
+                if channel:
+                    async for msg in channel.history(limit=50):
+                        if msg.author == self.bot.user and msg.embeds:
+                            await msg.edit(
+                                embed=discord.Embed(
+                                    title="🎯 **РЕГИСТРАЦИЯ НА MCL/ВЗМ**",
+                                    description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
+                                    color=0x808080
+                                ),
+                                view=None
+                            )
+                            break
 
 mcl_manager = MCLRegistrationManager()

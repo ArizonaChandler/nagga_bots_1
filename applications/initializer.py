@@ -215,6 +215,27 @@ class ApplicationsInitializer:
         
         print(f"✅ Восстановлено {restored} заявок")
 
+    async def stop(self):
+        """Остановить систему заявок"""
+        print("📝 [APPLICATIONS] Остановка системы заявок...")
+        
+        settings = app_manager.get_settings()
+        channel_id = settings.get('submit_channel')
+        if channel_id:
+            channel = self.bot.get_channel(int(channel_id))
+            if channel:
+                async for msg in channel.history(limit=50):
+                    if msg.author == self.bot.user and msg.embeds:
+                        await msg.edit(
+                            embed=discord.Embed(
+                                title="📝 ПОДАЧА ЗАЯВОК В СЕМЬЮ",
+                                description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
+                                color=0x808080
+                            ),
+                            view=None
+                        )
+                        break
+
 
 # Глобальный экземпляр
 initializer = None

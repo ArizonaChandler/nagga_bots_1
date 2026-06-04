@@ -225,6 +225,27 @@ class TierInitializer:
         
         print(f"✅ Восстановлено {restored} заявок TIER")
 
+    async def stop(self):
+        """Остановить систему TIER"""
+        print("🌟 [TIER] Остановка системы TIER...")
+        
+        settings = tier_manager.get_settings()
+        channel_id = settings.get('tier_submit_channel')
+        if channel_id:
+            channel = self.bot.get_channel(int(channel_id))
+            if channel:
+                async for msg in channel.history(limit=50):
+                    if msg.author == self.bot.user and msg.embeds:
+                        await msg.edit(
+                            embed=discord.Embed(
+                                title="🌟 **ПОДАЧА ЗАЯВОК НА TIER**",
+                                description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
+                                color=0x808080
+                            ),
+                            view=None
+                        )
+                        break
+
 # Глобальный экземпляр
 initializer = None
 

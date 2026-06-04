@@ -742,5 +742,26 @@ class CaptRegistrationManager:
         
         await channel.send(embed=embed)
 
+    async def stop(self):
+        """Остановить систему CAPT"""
+        print("🎯 [CAPT] Остановка системы CAPT...")
+        
+        # Очищаем каналы
+        for channel_id in [self.main_channel_id, self.reserve_channel_id]:
+            if channel_id:
+                channel = self.bot.get_channel(int(channel_id))
+                if channel:
+                    async for msg in channel.history(limit=50):
+                        if msg.author == self.bot.user and msg.embeds:
+                            await msg.edit(
+                                embed=discord.Embed(
+                                    title="🎯 **РЕГИСТРАЦИЯ НА CAPT**",
+                                    description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
+                                    color=0x808080
+                                ),
+                                view=None
+                            )
+                            break
+
 # Глобальный экземпляр
 capt_reg_manager = CaptRegistrationManager()

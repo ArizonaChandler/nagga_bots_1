@@ -481,6 +481,30 @@ class EventScheduler:
             logger.error(f"❌ Критическая ошибка инициализации канала настроек: {e}", exc_info=True)
             return False
 
+    async def stop(self):
+        """Остановить систему мероприятий"""
+        print("🔔 [EVENTS] Остановка системы мероприятий...")
+        
+        self.running = False
+        if self.task:
+            self.task.cancel()
+        
+        # Очищаем каналы напоминаний
+        for channel_id in CONFIG.get('alarm_channels', []):
+            channel = self.bot.get_channel(int(channel_id))
+            if channel:
+                async for msg in channel.history(limit=50):
+                    if msg.author == self.bot.user and msg.embeds:
+                        await msg.edit(
+                            embed=discord.Embed(
+                                title="🔔 **МЕРОПРИЯТИЯ**",
+                                description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
+                                color=0x808080
+                            ),
+                            view=None
+                        )
+                        break
+
 scheduler = None
 
 async def setup(bot):

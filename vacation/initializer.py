@@ -172,6 +172,31 @@ class VacationInitializer:
             )
             await channel.send(embed=embed, view=VacationSettingsView())
 
+    async def stop(self):
+        """Остановить систему отпусков"""
+        print("🏖️ [VACATION] Остановка системы отпусков...")
+        
+        self.running = False
+        if self.task:
+            self.task.cancel()
+        
+        settings = vacation_manager.get_settings()
+        channel_id = settings.get('vacation_public_channel')
+        if channel_id:
+            channel = self.bot.get_channel(int(channel_id))
+            if channel:
+                async for msg in channel.history(limit=50):
+                    if msg.author == self.bot.user and msg.embeds:
+                        await msg.edit(
+                            embed=discord.Embed(
+                                title="🏖️ **СИСТЕМА ОТПУСКОВ**",
+                                description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
+                                color=0x808080
+                            ),
+                            view=None
+                        )
+                        break
+
 
 initializer = None
 

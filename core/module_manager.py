@@ -112,7 +112,7 @@ MODULES = {
         "channels": ["stats_channel"],
         "settings_channels": ["stats_settings_channel"],
         "initializer": "server_stats.global_collector",
-        "initialize_method": "setup",
+        "initialize_method": "set_collector",
         "toggleable": True
     },
     "files": {
@@ -178,10 +178,20 @@ class ModuleManager:
             await self._call_module_method(initializer_path, initialize_method)
 
     async def _disable_module(self, module_key: str):
+        """Выключить модуль"""
+        module = MODULES[module_key]
+        initializer_path = module.get("initializer")
+        
+        # Пытаемся вызвать метод stop, если он есть
+        if initializer_path:
+            try:
+                await self._call_module_method(initializer_path, "stop")
+            except:
+                pass  # Если нет метода stop — просто отключаем embed
+        
         await self._disable_all_embeds(module_key)
 
     async def _call_module_method(self, module_path: str, method_name: str):
-        """Универсальный вызов метода модуля"""
         try:
             parts = module_path.split('.')
             module_name = '.'.join(parts[:-1]) if len(parts) > 1 else module_path
@@ -203,6 +213,7 @@ class ModuleManager:
             
             method = getattr(obj, method_name)
             
+            # Пробуем вызвать с bot
             try:
                 await method(self.bot)
             except TypeError:

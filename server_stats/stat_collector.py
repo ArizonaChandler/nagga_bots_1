@@ -159,6 +159,13 @@ class StatsCollector:
         stats_manager.increment_stat('capt_registrations')
         print(f"📊 +1 регистрация CAPT")
 
+    async def stop(self):
+        """Остановить сбор статистики"""
+        print("📊 [STATS] Остановка сбора статистики...")
+        
+        if self.task:
+            self.task.cancel()
+
 
 # Глобальный экземпляр
 collector = None

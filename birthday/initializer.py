@@ -198,6 +198,29 @@ class BirthdayInitializer:
         except Exception as e:
             print(f"❌ [Birthday] Ошибка очистки: {e}")
 
+    async def stop(self):
+        """Остановить систему дней рождения"""
+        print("🎂 [BIRTHDAY] Остановка системы дней рождения...")
+        
+        self.running = False
+        if self.task:
+            self.task.cancel()
+        
+        if self.channel_id:
+            channel = self.bot.get_channel(int(self.channel_id))
+            if channel:
+                async for msg in channel.history(limit=50):
+                    if msg.author == self.bot.user and msg.embeds:
+                        await msg.edit(
+                            embed=discord.Embed(
+                                title="🎂 **ДНИ РОЖДЕНИЯ**",
+                                description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
+                                color=0x808080
+                            ),
+                            view=None
+                        )
+                        break
+
 
 initializer = None
 

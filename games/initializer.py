@@ -136,6 +136,26 @@ class GamesInitializer:
         await channel.send(embed=embed, view=GamesSettingsView())
         logger.info(f"✅ Создана панель настроек игр в #{channel.name}")
 
+    async def stop(self):
+        """Остановить систему игр"""
+        print("🎮 [GAMES] Остановка системы игр...")
+        
+        # Очищаем лобби
+        if self.lobby_channel_id:
+            channel = self.bot.get_channel(int(self.lobby_channel_id))
+            if channel:
+                async for msg in channel.history(limit=50):
+                    if msg.author == self.bot.user and msg.embeds:
+                        await msg.edit(
+                            embed=discord.Embed(
+                                title="🎮 **ИГРЫ DISCORD**",
+                                description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
+                                color=0x808080
+                            ),
+                            view=None
+                        )
+                        break
+
 
 # Глобальный экземпляр
 initializer = None

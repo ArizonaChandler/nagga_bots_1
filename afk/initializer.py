@@ -184,6 +184,33 @@ class AFKInitializer:
             await channel.send(embed=embed, view=AFKSettingsView())
             logger.info(f"✅ Создана панель настроек AFK в #{channel.name}")
 
+    async def stop(self):
+        """Остановить систему AFK"""
+        logger.info("🛑 Остановка системы AFK...")
+        print("🛌 [AFK] Остановка системы AFK...")
+        
+        # Останавливаем фоновые задачи
+        self.running = False
+        if self.task:
+            self.task.cancel()
+        
+        # Очищаем канал AFK
+        channel_id = afk_manager.get_settings().get('afk_channel')
+        if channel_id:
+            channel = self.bot.get_channel(int(channel_id))
+            if channel:
+                async for msg in channel.history(limit=50):
+                    if msg.author == self.bot.user and msg.embeds:
+                        await msg.edit(
+                            embed=discord.Embed(
+                                title="🛌 **СИСТЕМА AFK**",
+                                description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
+                                color=0x808080
+                            ),
+                            view=None
+                        )
+                        break
+
 
 # Глобальный экземпляр
 initializer = None
