@@ -170,17 +170,30 @@ class ModuleManager:
         return True, f"Модуль **{MODULES[module_key]['name']}** {'включён' if enabled else 'выключен'}"
 
     async def _enable_module(self, module_key: str):
+        """Включить модуль — полная инициализация"""
         module = MODULES[module_key]
         initializer_path = module.get("initializer")
         initialize_method = module.get("initialize_method", "initialize_all")
+        
         if initializer_path:
             await self._call_module_method(initializer_path, initialize_method)
+        else:
+            # Проверяем наличие каналов перед восстановлением
+            all_keys = module.get("channels", []) + module.get("settings_channels", [])
+            has_valid_channels = False
+            for channel_key in all_keys:
+                channel_id = db.get_setting(channel_key)
+                if channel_id and channel_id not in ['null', '[]']:
+                    has_valid_channels = True
+                    break
+            
+            if has_valid_channels:
+                await self._restore_module_embeds(module_key)
 
     async def _disable_module(self, module_key: str):
         await self._disable_all_embeds(module_key)
 
     async def _call_module_method(self, module_path: str, method_name: str):
-        """Универсальный вызов метода модуля с передачей bot если нужно"""
         try:
             parts = module_path.split('.')
             module_name = '.'.join(parts[:-1])
@@ -189,35 +202,52 @@ class ModuleManager:
             imported = __import__(module_name, fromlist=[attr_name])
             instance = getattr(imported, attr_name, None)
             
-            if instance and hasattr(instance, method_name):
-                method = getattr(instance, method_name)
-                
-                # Проверяем сигнатуру метода
-                import inspect
-                sig = inspect.signature(method)
-                
-                # Если метод требует аргумент 'bot', передаём его
-                if 'bot' in sig.parameters:
-                    await method(self.bot)
-                else:
+            if instance is None:
+                print(f"❌ [MODULE] Не найден экземпляр {attr_name} в {module_name}")
+                return
+            
+            if not hasattr(instance, method_name):
+                print(f"❌ [MODULE] У {attr_name} нет метода {method_name}")
+                return
+            
+            method = getattr(instance, method_name)
+            
+            # Пробуем вызвать с bot и без
+            try:
+                await method(self.bot)
+            except TypeError:
+                try:
                     await method()
-                
-                print(f"✅ [MODULE] {module_path}.{method_name}() вызван")
+                except TypeError as e:
+                    print(f"❌ [MODULE] Не удалось вызвать {method_name}: {e}")
+                    return
+            
+            print(f"✅ [MODULE] {module_path}.{method_name}() вызван")
         except Exception as e:
             print(f"❌ [MODULE] Ошибка вызова {method_name} для {module_path}: {e}")
             import traceback
             traceback.print_exc()
 
     async def _disable_all_embeds(self, module_key: str):
+        """Заменить все embed модуля на 'Система отключена'"""
         module = MODULES[module_key]
         all_keys = module.get("channels", []) + module.get("settings_channels", [])
+        
         for channel_key in all_keys:
             channel_id = db.get_setting(channel_key)
-            if not channel_id:
+            
+            # Пропускаем если channel_id None, 'null', '[]' или пустая строка
+            if not channel_id or channel_id == 'null' or channel_id == '[]':
                 continue
-            channel = self.bot.get_channel(int(channel_id))
-            if not channel:
+            
+            try:
+                channel = self.bot.get_channel(int(channel_id))
+                if not channel:
+                    continue
+            except (ValueError, TypeError):
+                print(f"⚠️ [MODULE] Неверный ID канала для {channel_key}: {channel_id}")
                 continue
+            
             try:
                 async for msg in channel.history(limit=50):
                     if msg.author == self.bot.user and msg.embeds:
@@ -238,11 +268,21 @@ class ModuleManager:
         print("📋 [MODULE] Инициализация включённых модулей...")
         for module_key, module in MODULES.items():
             if module["enabled"]:
+                print(f"🔍 [MODULE] Пытаюсь инициализировать {module['name']}...")
                 initializer_path = module.get("initializer")
                 initialize_method = module.get("initialize_method", "initialize_all")
                 if initializer_path:
-                    await self._call_module_method(initializer_path, initialize_method)
-                    print(f"✅ [MODULE] {module['name']} инициализирован")
+                    try:
+                        await self._call_module_method(initializer_path, initialize_method)
+                        print(f"✅ [MODULE] {module['name']} инициализирован")
+                    except Exception as e:
+                        print(f"❌ [MODULE] Ошибка инициализации {module['name']}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                else:
+                    print(f"⚠️ [MODULE] {module['name']} не имеет инициализатора")
+            else:
+                print(f"⏭️ [MODULE] {module['name']} выключен, пропускаем")
         print("📋 [MODULE] Инициализация завершена")
 
 
