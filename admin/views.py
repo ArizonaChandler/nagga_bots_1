@@ -101,17 +101,25 @@ class SettingsView(BaseMenuView):
             print("🔥🔥🔥 КНОПКА УПРАВЛЕНИЯ МОДУЛЯМИ НАЖАТА 🔥🔥🔥")
             try:
                 from core.module_views import ModulesControlPanel
-                from core.module_manager import module_manager
+                
+                # Проверяем, что импорт работает
+                print("✅ ModulesControlPanel импортирован")
+                
+                # Создаём простую тестовую панель
+                class TestPanel(discord.ui.View):
+                    def __init__(self):
+                        super().__init__(timeout=60)
+                        btn = discord.ui.Button(label="Тест", style=discord.ButtonStyle.primary)
+                        btn.callback = lambda x: x.response.send_message("Тест работает!", ephemeral=True)
+                        self.add_item(btn)
                 
                 embed = discord.Embed(
-                    title="🎛️ **УПРАВЛЕНИЕ МОДУЛЯМИ**",
-                    description="Включение и выключение систем бота",
+                    title="🎛️ **УПРАВЛЕНИЕ МОДУЛЯМИ (ТЕСТ)**",
+                    description="Если ты видишь эту панель — кнопка работает",
                     color=0xff0000
                 )
-                # Передаём bot из interaction.client
-                view = ModulesControlPanel(i.client)
-                await i.response.edit_message(embed=embed, view=view)
-                print("✅ Панель управления модулями открыта")
+                await i.response.edit_message(embed=embed, view=TestPanel())
+                print("✅ Тестовая панель отправлена")
             except Exception as e:
                 print(f"❌ Ошибка: {e}")
                 import traceback
