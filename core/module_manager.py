@@ -180,17 +180,33 @@ class ModuleManager:
         await self._disable_all_embeds(module_key)
 
     async def _call_module_method(self, module_path: str, method_name: str):
+        """Универсальный вызов метода модуля с передачей bot если нужно"""
         try:
             parts = module_path.split('.')
             module_name = '.'.join(parts[:-1])
             attr_name = parts[-1]
+            
             imported = __import__(module_name, fromlist=[attr_name])
             instance = getattr(imported, attr_name, None)
+            
             if instance and hasattr(instance, method_name):
-                await getattr(instance, method_name)()
+                method = getattr(instance, method_name)
+                
+                # Проверяем сигнатуру метода
+                import inspect
+                sig = inspect.signature(method)
+                
+                # Если метод требует аргумент 'bot', передаём его
+                if 'bot' in sig.parameters:
+                    await method(self.bot)
+                else:
+                    await method()
+                
                 print(f"✅ [MODULE] {module_path}.{method_name}() вызван")
         except Exception as e:
             print(f"❌ [MODULE] Ошибка вызова {method_name} для {module_path}: {e}")
+            import traceback
+            traceback.print_exc()
 
     async def _disable_all_embeds(self, module_key: str):
         module = MODULES[module_key]
