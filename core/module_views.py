@@ -12,6 +12,7 @@ class ModulesControlPanel(AdminOnlyView):
     def __init__(self, bot):
         super().__init__()
         self.bot = bot
+        print(f"✅ ModulesControlPanel создан, bot={bot.user.name if bot else 'None'}")
         self._add_buttons()
 
     def _add_buttons(self):
