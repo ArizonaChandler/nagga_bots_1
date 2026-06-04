@@ -232,7 +232,6 @@ class ModuleManager:
 
 module_manager = None
 
-
 async def setup(bot):
     global module_manager
     module_manager = ModuleManager(bot)
