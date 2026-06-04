@@ -10,6 +10,7 @@ from admin.modals import *
 from files.core import file_manager
 from files.views import FilesView
 from events.views import EventInfoView
+from core.module_views import ModulesControlPanel
 
 
 class MainView(BaseMenuView):
