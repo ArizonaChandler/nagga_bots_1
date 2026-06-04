@@ -16,6 +16,15 @@ class Database:
             cursor = conn.cursor()
             
             # Существующие таблицы
+
+            # Таблица для хранения состояния модулей
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS module_settings (
+                    module_key TEXT PRIMARY KEY,
+                    enabled TEXT DEFAULT '0'
+                )
+            ''')
+
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS users (
                     discord_id TEXT PRIMARY KEY,
@@ -2091,5 +2100,23 @@ class Database:
             ''')
             conn.commit()
             return cursor.rowcount
+
+    # ===== МЕТОДЫ ДЛЯ РАБОТЫ МОДУЛЕЙ =====
+
+    def get_module_setting(self, module_key: str) -> str:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT enabled FROM module_settings WHERE module_key = ?', (module_key,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+
+    def set_module_setting(self, module_key: str, enabled: str):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO module_settings (module_key, enabled)
+                VALUES (?, ?)
+            ''', (module_key, enabled))
+            conn.commit()
 
 db = Database()

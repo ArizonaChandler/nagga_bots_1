@@ -72,6 +72,7 @@ CONFIG = {
     'mcl_role_id': None,
     'mcl_settings_channel': None,
     'mcl_announcement_channel': None,
+    'global_settings_channel': None,
 }
 
 def load_config():

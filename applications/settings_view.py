@@ -3,6 +3,7 @@ import discord
 from datetime import datetime
 from core.database import db
 from core.utils import format_mention, is_admin
+from core.admin_views import AdminOnlyView
 from applications.base import PermanentView
 from applications.manager import app_manager
 
@@ -10,6 +11,9 @@ from applications.manager import app_manager
 class SetSubmitChannelModal(discord.ui.Modal, title="📝 КАНАЛ ПОДАЧИ ЗАЯВОК"):
     channel_id = discord.ui.TextInput(label="ID канала", placeholder="123456789012345678", max_length=20, required=True)
     async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
         channel = interaction.guild.get_channel(int(self.channel_id.value))
         if not channel:
             await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
@@ -21,6 +25,9 @@ class SetSubmitChannelModal(discord.ui.Modal, title="📝 КАНАЛ ПОДАЧ�
 class SetApplicationsChannelModal(discord.ui.Modal, title="📋 КАНАЛ АНКЕТ"):
     channel_id = discord.ui.TextInput(label="ID канала", placeholder="123456789012345678", max_length=20, required=True)
     async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
         channel = interaction.guild.get_channel(int(self.channel_id.value))
         if not channel:
             await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
@@ -32,6 +39,9 @@ class SetApplicationsChannelModal(discord.ui.Modal, title="📋 КАНАЛ АН�
 class SetLogChannelModal(discord.ui.Modal, title="📜 КАНАЛ ЛОГОВ"):
     channel_id = discord.ui.TextInput(label="ID канала", placeholder="123456789012345678", max_length=20, required=True)
     async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
         channel = interaction.guild.get_channel(int(self.channel_id.value))
         if not channel:
             await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
@@ -43,6 +53,9 @@ class SetLogChannelModal(discord.ui.Modal, title="📜 КАНАЛ ЛОГОВ"):
 class SetRecruitRoleModal(discord.ui.Modal, title="👥 РОЛЬ РЕКРУТА"):
     role_id = discord.ui.TextInput(label="ID роли", placeholder="123456789012345678", max_length=20, required=True)
     async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
         role = interaction.guild.get_role(int(self.role_id.value))
         if not role:
             await interaction.response.send_message("❌ Роль не найдена", ephemeral=True)
@@ -54,6 +67,9 @@ class SetRecruitRoleModal(discord.ui.Modal, title="👥 РОЛЬ РЕКРУТА"
 class SetSubmitTextModal(discord.ui.Modal, title="📝 ТЕКСТ НАД КНОПКОЙ"):
     text = discord.ui.TextInput(label="Текст", placeholder="Нажмите кнопку ниже, чтобы подать заявку", style=discord.TextStyle.paragraph, max_length=500, required=True)
     async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
         app_manager.save_setting('submit_text', self.text.value, str(interaction.user.id))
         from applications.initializer import update_submit_channel
         await update_submit_channel(interaction.client)
@@ -63,6 +79,9 @@ class SetSubmitTextModal(discord.ui.Modal, title="📝 ТЕКСТ НАД КНО�
 class SetSubmitImageModal(discord.ui.Modal, title="🖼️ КАРТИНКА ДЛЯ ЭМБЕДА"):
     image_url = discord.ui.TextInput(label="URL картинки", placeholder="https://example.com/image.png", max_length=500, required=False)
     async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
         app_manager.save_setting('submit_image', self.image_url.value or "", str(interaction.user.id))
         from applications.initializer import update_submit_channel
         await update_submit_channel(interaction.client)
@@ -73,6 +92,9 @@ class SetWelcomeMessageModal(discord.ui.Modal, title="👋 ПРИВЕТСТВИ�
     message = discord.ui.TextInput(label="Текст", placeholder="Добро пожаловать! Подайте заявку в канале {channel}", style=discord.TextStyle.paragraph, max_length=1000, required=True)
     image_url = discord.ui.TextInput(label="URL картинки (опционально)", placeholder="https://example.com/image.png", max_length=500, required=False)
     async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
         app_manager.save_setting('welcome_message', self.message.value, str(interaction.user.id))
         app_manager.save_setting('welcome_image', self.image_url.value or "", str(interaction.user.id))
         await interaction.response.send_message("✅ Приветствие настроено!", ephemeral=True)
@@ -82,6 +104,9 @@ class ResetUserModal(discord.ui.Modal, title="🔄 СБРОС ПОЛЬЗОВАТ
     user_id = discord.ui.TextInput(label="ID пользователя", placeholder="123456789012345678", max_length=20, required=True)
     confirm = discord.ui.TextInput(label="Подтверждение (введите 'СБРОС')", placeholder="СБРОС", max_length=10, required=True)
     async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
         if self.confirm.value != "СБРОС":
             await interaction.response.send_message("❌ Неверное подтверждение", ephemeral=True)
             return
@@ -93,6 +118,9 @@ class ResetUserModal(discord.ui.Modal, title="🔄 СБРОС ПОЛЬЗОВАТ
 class AddRewardRoleModal(discord.ui.Modal, title="➕ ДОБАВИТЬ РОЛЬ"):
     role_id = discord.ui.TextInput(label="ID роли", placeholder="123456789012345678", max_length=20, required=True)
     async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
         role = interaction.guild.get_role(int(self.role_id.value))
         if not role:
             await interaction.response.send_message("❌ Роль не найдена", ephemeral=True)
@@ -104,6 +132,9 @@ class AddRewardRoleModal(discord.ui.Modal, title="➕ ДОБАВИТЬ РОЛЬ"
 class RemoveRewardRoleModal(discord.ui.Modal, title="➖ УДАЛИТЬ РОЛЬ"):
     role_id = discord.ui.TextInput(label="ID роли", placeholder="123456789012345678", max_length=20, required=True)
     async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
         db.remove_reward_role(self.role_id.value)
         await interaction.response.send_message(f"✅ Роль ID {self.role_id.value} удалена", ephemeral=True)
 
@@ -115,6 +146,10 @@ class AddFieldModal(discord.ui.Modal, title="➕ ДОБАВИТЬ ПОЛЕ"):
     required = discord.ui.TextInput(label="Обязательное (да/нет)", placeholder="да", max_length=3, required=True)
     
     async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        
         req = self.required.value.lower() == 'да'
         
         if len(self.field_description.value) > 45:
@@ -144,6 +179,9 @@ class AddFieldModal(discord.ui.Modal, title="➕ ДОБАВИТЬ ПОЛЕ"):
 class RemoveFieldModal(discord.ui.Modal, title="➖ УДАЛИТЬ ПОЛЕ"):
     field_id = discord.ui.TextInput(label="ID поля", placeholder="1", max_length=5, required=True)
     async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
         db.remove_application_field(int(self.field_id.value), str(interaction.user.id))
         embed = discord.Embed(
             title="📝 **УПРАВЛЕНИЕ ПОЛЯМИ ЗАЯВКИ**",
@@ -171,6 +209,10 @@ class EditFieldModal(discord.ui.Modal, title="✏️ РЕДАКТИРОВАТЬ 
         self.add_item(self.required)
     
     async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        
         try:
             req = self.required.value.lower() == 'да'
             
@@ -182,10 +224,8 @@ class EditFieldModal(discord.ui.Modal, title="✏️ РЕДАКТИРОВАТЬ 
                 await interaction.response.send_message("❌ Placeholder не может быть длиннее 100 символов!", ephemeral=True)
                 return
             
-            # Обновляем поле в БД
             db.update_application_field(self.field_id, self.field_name.value, self.field_description.value, self.placeholder.value or "", req)
             
-            # Обновляем меню управления полями
             embed = discord.Embed(
                 title="📝 **УПРАВЛЕНИЕ ПОЛЯМИ ЗАЯВКИ**",
                 description="Добавление, удаление и просмотр полей формы подачи заявки",
@@ -198,7 +238,7 @@ class EditFieldModal(discord.ui.Modal, title="✏️ РЕДАКТИРОВАТЬ 
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
 
-class ApplicationFieldsView(PermanentView):
+class ApplicationFieldsView(AdminOnlyView):
     def __init__(self):
         super().__init__()
         self._add_buttons()
@@ -245,7 +285,6 @@ class ApplicationFieldsView(PermanentView):
             await interaction.response.send_message("📭 Нет полей для редактирования", ephemeral=True)
             return
         
-        # Создаём select меню для выбора поля
         options = []
         for f in fields:
             options.append(discord.SelectOption(label=f"{f['name']}", description=f"{f['description'][:50]}", value=str(f['id'])))
@@ -274,7 +313,7 @@ class ApplicationFieldsView(PermanentView):
         await interaction.response.edit_message(embed=embed, view=ApplicationsCombinedPanel())
 
 
-class ApplicationsCombinedPanel(PermanentView):
+class ApplicationsCombinedPanel(AdminOnlyView):
     def __init__(self):
         super().__init__()
         self._add_buttons()
@@ -305,7 +344,19 @@ class ApplicationsCombinedPanel(PermanentView):
         self.add_item(discord.ui.Button(label="📊 Текущие настройки", style=discord.ButtonStyle.secondary, row=4, custom_id="settings"))
 
     async def interaction_check(self, interaction: discord.Interaction):
-        custom_id = interaction.data.get('custom_id', '')
+        # Проверка на админа
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message(
+                "❌ **Доступ запрещён**\nТолько администраторы бота могут управлять настройками.",
+                ephemeral=True
+            )
+            return False
+        
+        # Логируем
+        custom_id = interaction.data.get('custom_id', 'unknown')
+        db.log_action(str(interaction.user.id), "ADMIN_PANEL_CLICK", f"Кнопка: {custom_id}")
+        
+        # Обработка
         if custom_id == "submit_channel":
             await interaction.response.send_modal(SetSubmitChannelModal())
         elif custom_id == "apps_channel":
@@ -349,42 +400,22 @@ class ApplicationsCombinedPanel(PermanentView):
         embed = discord.Embed(title="📋 Роли для выдачи", description=text, color=0x00ff00)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    async def show_pending(self, interaction: discord.Interaction, button: discord.ui.Button):
-        print(f"🔍 [PENDING] Кнопка нажата, interaction_id={interaction.id}")
-        try:
-            await interaction.response.defer(ephemeral=True)
-            print(f"✅ [PENDING] Defer выполнен")
-            
-            apps = app_manager.get_pending_applications()
-            print(f"📊 [PENDING] Получено заявок: {len(apps)}")
-            
-            if not apps:
-                await interaction.followup.send("📭 Нет ожидающих заявок", ephemeral=True)
-                return
-            
-            embed = discord.Embed(
-                title="📋 ОЖИДАЮЩИЕ ЗАЯВКИ",
-                color=0xffa500,
-                timestamp=datetime.now()
+    async def show_pending(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        apps = app_manager.get_pending_applications()
+        if not apps:
+            await interaction.followup.send("📭 Нет ожидающих заявок", ephemeral=True)
+            return
+        embed = discord.Embed(title="📋 ОЖИДАЮЩИЕ ЗАЯВКИ", color=0xffa500, timestamp=datetime.now())
+        for app in apps[:10]:
+            embed.add_field(
+                name=f"ID: {app['id']} - {app.get('nickname', 'Неизвестно')}",
+                value=f"👤 <@{app['user_id']}>\n⏰ {app['created_at'][:16]}",
+                inline=False
             )
-            
-            for app in apps[:10]:
-                embed.add_field(
-                    name=f"ID: {app['id']} - {app.get('nickname', 'Неизвестно')}",
-                    value=f"👤 <@{app['user_id']}>\n⏰ {app['created_at'][:16]}",
-                    inline=False
-                )
-            
-            if len(apps) > 10:
-                embed.set_footer(text=f"Показано 10 из {len(apps)} заявок")
-            
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            print(f"✅ [PENDING] Ответ отправлен")
-            
-        except Exception as e:
-            print(f"❌ [PENDING] Ошибка: {e}")
-            import traceback
-            traceback.print_exc()
+        if len(apps) > 10:
+            embed.set_footer(text=f"Показано 10 из {len(apps)} заявок")
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     async def manage_fields(self, interaction: discord.Interaction):
         embed = discord.Embed(
