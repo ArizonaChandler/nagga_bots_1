@@ -1,5 +1,6 @@
 """Базовые классы для админских панелей настроек"""
 import discord
+import traceback
 from core.utils import is_admin
 from core.database import db
 
@@ -10,18 +11,30 @@ class AdminOnlyView(discord.ui.View):
     def __init__(self, timeout=None):
         super().__init__(timeout=timeout)
     
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item):
+        error_msg = f"❌ Ошибка: {type(error).__name__}: {error}"
+        print(f"🔴 [ADMIN BUTTON ERROR] {error_msg}")
+        print(traceback.format_exc())
+        
+        db.log_action(
+            str(interaction.user.id),
+            "ADMIN_BUTTON_ERROR",
+            f"Кнопка: {item.custom_id if hasattr(item, 'custom_id') else 'unknown'} | Ошибка: {type(error).__name__}: {error}"
+        )
+        
+        try:
+            await interaction.response.send_message(error_msg, ephemeral=True)
+        except:
+            await interaction.followup.send(error_msg, ephemeral=True)
+    
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Проверка: только администраторы бота могут нажимать кнопки"""
         if not await is_admin(str(interaction.user.id)):
             await interaction.response.send_message(
-                "❌ **Доступ запрещён**\n"
-                "Только администраторы, добавленные в базу данных, могут управлять настройками бота.\n\n"
-                "Если вы считаете, что это ошибка, обратитесь к супер-администратору.",
+                "❌ **Доступ запрещён**\nТолько администраторы, добавленные в базу данных, могут управлять настройками бота.",
                 ephemeral=True
             )
             return False
         
-        # Логируем действие администратора
         custom_id = interaction.data.get('custom_id', 'unknown')
         channel_name = interaction.channel.name if interaction.channel else "ЛС"
         
@@ -38,26 +51,26 @@ class AdminOnlyModal(discord.ui.Modal):
     """Базовый класс для модалок настроек — только для админов бота"""
     
     async def on_submit(self, interaction: discord.Interaction):
-        """Проверка перед обработкой"""
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message(
-                "❌ **Доступ запрещён**\n"
-                "Только администраторы могут изменять настройки.",
-                ephemeral=True
+        try:
+            if not await is_admin(str(interaction.user.id)):
+                await interaction.response.send_message(
+                    "❌ **Доступ запрещён**\nТолько администраторы могут изменять настройки.",
+                    ephemeral=True
+                )
+                return
+            
+            modal_title = self.title if hasattr(self, 'title') else "Unknown"
+            db.log_action(
+                str(interaction.user.id),
+                "ADMIN_MODAL_SUBMIT",
+                f"Модалка: {modal_title}"
             )
-            return
-        
-        # Логируем действие
-        modal_title = self.title if hasattr(self, 'title') else "Unknown"
-        db.log_action(
-            str(interaction.user.id),
-            "ADMIN_MODAL_SUBMIT",
-            f"Модалка: {modal_title}"
-        )
-        
-        # Вызываем реальную обработку
-        await self.on_submit_admin(interaction)
+            
+            await self.on_submit_admin(interaction)
+        except Exception as e:
+            print(f"🔴 [MODAL ERROR] {e}")
+            traceback.print_exc()
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
     
     async def on_submit_admin(self, interaction: discord.Interaction):
-        """Переопределяемый метод для реальной логики"""
         pass

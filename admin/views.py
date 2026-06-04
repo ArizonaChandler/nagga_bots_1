@@ -64,7 +64,6 @@ class MainView(BaseMenuView):
 
 
 class SettingsView(BaseMenuView):
-    """Главное меню настроек (!settings)"""
     def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
         super().__init__(user_id, guild, previous_view, previous_embed)
         
@@ -73,22 +72,16 @@ class SettingsView(BaseMenuView):
             label="🌍 Глобальные", 
             style=discord.ButtonStyle.secondary, 
             emoji="🌍", 
-            row=0
+            row=0,
+            custom_id="global_settings"
         )
         async def global_cb(i):
             view = GlobalSettingsView(self.user_id, self.guild, self, self.get_current_embed())
-            server_name = await get_server_name(self.guild, CONFIG.get('server_id'))
-            embed = discord.Embed(
-                title="🌍 **ГЛОБАЛЬНЫЕ НАСТРОЙКИ**",
-                description=f"**Текущие настройки:**\n"
-                           f"🌍 Сервер: {server_name}",
-                color=0x7289da
-            )
+            embed = discord.Embed(title="🌍 **ГЛОБАЛЬНЫЕ НАСТРОЙКИ**", color=0x7289da)
             await i.response.edit_message(embed=embed, view=view)
         global_btn.callback = global_cb
         self.add_item(global_btn)
         
-
         # 🎛️ Управление модулями
         modules_btn = discord.ui.Button(
             label="🎛️ Управление модулями",
@@ -98,40 +91,23 @@ class SettingsView(BaseMenuView):
             custom_id="modules_control"
         )
         async def modules_cb(i):
-            print("🔥🔥🔥 КНОПКА УПРАВЛЕНИЯ МОДУЛЯМИ НАЖАТА 🔥🔥🔥")
-            try:
-                from core.module_views import ModulesControlPanel
-                
-                # Проверяем, что импорт работает
-                print("✅ ModulesControlPanel импортирован")
-                
-                # Создаём простую тестовую панель
-                class TestPanel(discord.ui.View):
-                    def __init__(self):
-                        super().__init__(timeout=60)
-                        btn = discord.ui.Button(label="Тест", style=discord.ButtonStyle.primary)
-                        btn.callback = lambda x: x.response.send_message("Тест работает!", ephemeral=True)
-                        self.add_item(btn)
-                
-                embed = discord.Embed(
-                    title="🎛️ **УПРАВЛЕНИЕ МОДУЛЯМИ (ТЕСТ)**",
-                    description="Если ты видишь эту панель — кнопка работает",
-                    color=0xff0000
-                )
-                await i.response.edit_message(embed=embed, view=TestPanel())
-                print("✅ Тестовая панель отправлена")
-            except Exception as e:
-                print(f"❌ Ошибка: {e}")
-                import traceback
-                traceback.print_exc()
-                await i.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+            from core.module_views import ModulesControlPanel
+            embed = discord.Embed(
+                title="🎛️ **УПРАВЛЕНИЕ МОДУЛЯМИ**",
+                description="Включение и выключение систем бота",
+                color=0xff0000
+            )
+            await i.response.edit_message(embed=embed, view=ModulesControlPanel(i.client))
+        modules_btn.callback = modules_cb
+        self.add_item(modules_btn)
         
-        # ✅ КНОПКА "НАЗАД"
+        # Назад
         back_btn = discord.ui.Button(
             label="◀ Назад",
             style=discord.ButtonStyle.secondary,
             emoji="◀",
-            row=4
+            row=4,
+            custom_id="back_to_admin"
         )
         async def back_cb(i):
             from commands.settings import AdminSettingsView
@@ -147,12 +123,11 @@ class SettingsView(BaseMenuView):
         self.add_item(back_btn)
     
     def get_current_embed(self):
-        embed = discord.Embed(
+        return discord.Embed(
             title="⚙️ **НАСТРОЙКИ СИСТЕМЫ**",
             description="Выберите раздел для настройки:",
             color=0x7289da
         )
-        return embed
 
 
 class AccessView(BaseMenuView):
