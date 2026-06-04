@@ -88,13 +88,13 @@ class SettingsView(BaseMenuView):
         global_btn.callback = global_cb
         self.add_item(global_btn)
         
-        
+
         # 🎛️ Управление модулями
         modules_btn = discord.ui.Button(
             label="🎛️ Управление модулями",
             style=discord.ButtonStyle.danger,
             emoji="🎛️",
-            row=0
+            row=0,
             custom_id="modules_control"
         )
         async def modules_cb(i):
