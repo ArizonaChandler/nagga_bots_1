@@ -29,7 +29,7 @@ class ModulesControlPanel(AdminOnlyView):
             btn.callback = self._create_callback(module_key)
             self.add_item(btn)
             col += 1
-            if col >= 2:
+            if col >= 5:  # ← 5 кнопок в ряду (максимум Discord)
                 col = 0
                 row += 1
 
