@@ -97,15 +97,23 @@ class SettingsView(BaseMenuView):
             row=0
         )
         async def modules_cb(i):
-            from core.module_views import ModulesControlPanel
-            embed = discord.Embed(
-                title="🎛️ **УПРАВЛЕНИЕ МОДУЛЯМИ**",
-                description="Включение и выключение систем бота",
-                color=0xff0000
-            )
-            await i.response.edit_message(embed=embed, view=ModulesControlPanel(i.client))
-        modules_btn.callback = modules_cb
-        self.add_item(modules_btn)
+            print("🔍 [DEBUG] modules_cb вызван")
+            try:
+                from core.module_views import ModulesControlPanel
+                print("✅ [DEBUG] ModulesControlPanel импортирован")
+                embed = discord.Embed(
+                    title="🎛️ **УПРАВЛЕНИЕ МОДУЛЯМИ**",
+                    description="Включение и выключение систем бота",
+                    color=0xff0000
+                )
+                view = ModulesControlPanel(i.client)
+                print("✅ [DEBUG] View создан")
+                await i.response.edit_message(embed=embed, view=view)
+                print("✅ [DEBUG] Сообщение обновлено")
+            except Exception as e:
+                print(f"❌ [DEBUG] Ошибка: {e}")
+                import traceback
+                traceback.print_exc()
         
         # ✅ КНОПКА "НАЗАД"
         back_btn = discord.ui.Button(
