@@ -14,7 +14,7 @@ class ModulesControlPanel(AdminOnlyView):
         self._add_buttons()
 
     def _add_buttons(self):
-        """Добавить кнопки для всех модулей (по 2 в ряд)"""
+        """Добавить кнопки для всех модулей (по 3 в ряд)"""
         self.clear_items()
         row = 0
         col = 0
@@ -34,7 +34,7 @@ class ModulesControlPanel(AdminOnlyView):
             self.add_item(btn)
             
             col += 1
-            if col >= 2:  # 2 кнопки в ряду
+            if col >= 3:  # ← 3 кнопки в ряду
                 col = 0
                 row += 1
 
