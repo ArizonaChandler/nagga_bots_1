@@ -7,7 +7,7 @@ from core.config import CONFIG, save_config
 MODULES = {
     "capt": {
         "name": "🎯 CAPT Регистрация",
-        "description": "Система регистрации на CAPT с рассылкой в ЛС",
+        "description": "Система регистрации на CAPT",
         "enabled": False,
         "channels": ["capt_reg_main_channel", "capt_reg_reserve_channel", "capt_alert_channel", "capt_log_channel"],
         "settings_channels": ["capt_settings_channel"],
@@ -17,7 +17,7 @@ MODULES = {
     },
     "mcl": {
         "name": "🎯 MCL/ВЗМ Регистрация",
-        "description": "Система регистрации на MCL/ВЗМ с рассылкой",
+        "description": "Система регистрации на MCL/ВЗМ",
         "enabled": False,
         "channels": ["mcl_reg_main_channel", "mcl_reg_reserve_channel", "mcl_error_channel", "mcl_announcement_channel"],
         "settings_channels": ["mcl_settings_channel"],
@@ -31,8 +31,8 @@ MODULES = {
         "enabled": False,
         "channels": ["submit_channel", "applications_channel", "applications_log_channel"],
         "settings_channels": ["applications_settings_channel"],
-        "initializer": "applications.initializer.initializer",
-        "initialize_method": "initialize_all",
+        "initializer": "applications.initializer",
+        "initialize_method": "setup",  # ← функция setup, а не initializer
         "toggleable": True
     },
     "events": {
@@ -41,8 +41,8 @@ MODULES = {
         "enabled": False,
         "channels": ["alarm_channels", "announce_channels"],
         "settings_channels": ["events_settings_channel"],
-        "initializer": "events.scheduler.scheduler",
-        "initialize_method": "start",
+        "initializer": "events.scheduler",
+        "initialize_method": "setup",  # ← функция setup
         "toggleable": True
     },
     "afk": {
@@ -51,8 +51,8 @@ MODULES = {
         "enabled": False,
         "channels": ["afk_channel", "afk_log_channel"],
         "settings_channels": ["afk_settings_channel"],
-        "initializer": "afk.initializer.initializer",
-        "initialize_method": "initialize_all",
+        "initializer": "afk.initializer",
+        "initialize_method": "setup",  # ← функция setup
         "toggleable": True
     },
     "tier": {
@@ -61,8 +61,8 @@ MODULES = {
         "enabled": False,
         "channels": ["tier_submit_channel", "tier_applications_channel", "tier_log_channel", "tier_info_channel"],
         "settings_channels": ["tier_settings_channel"],
-        "initializer": "tier.initializer.initializer",
-        "initialize_method": "initialize_all",
+        "initializer": "tier.initializer",
+        "initialize_method": "setup",  # ← функция setup
         "toggleable": True
     },
     "vacation": {
@@ -71,8 +71,8 @@ MODULES = {
         "enabled": False,
         "channels": ["vacation_public_channel", "vacation_applications_channel", "vacation_log_channel"],
         "settings_channels": ["vacation_settings_channel"],
-        "initializer": "vacation.initializer.initializer",
-        "initialize_method": "initialize_all",
+        "initializer": "vacation.initializer",
+        "initialize_method": "setup",  # ← функция setup
         "toggleable": True
     },
     "games": {
@@ -81,8 +81,8 @@ MODULES = {
         "enabled": False,
         "channels": ["games_rules_channel", "games_lobby_channel", "games_log_channel", "games_category_id"],
         "settings_channels": ["games_settings_channel"],
-        "initializer": "games.manager.game_manager",
-        "initialize_method": "initialize",
+        "initializer": "games.manager",
+        "initialize_method": "setup",  # ← функция setup
         "toggleable": True
     },
     "birthday": {
@@ -91,8 +91,8 @@ MODULES = {
         "enabled": False,
         "channels": ["birthday_channel", "birthday_greeting_channel"],
         "settings_channels": ["birthday_settings_channel"],
-        "initializer": "birthday.initializer.initializer",
-        "initialize_method": "initialize_all",
+        "initializer": "birthday.initializer",
+        "initialize_method": "setup",  # ← функция setup
         "toggleable": True
     },
     "advertising": {
@@ -101,8 +101,8 @@ MODULES = {
         "enabled": False,
         "channels": [],
         "settings_channels": ["ad_settings_channel"],
-        "initializer": "advertising.core.advertiser",
-        "initialize_method": "initialize_settings_channel",
+        "initializer": "advertising.core",
+        "initialize_method": "setup",  # ← функция setup
         "toggleable": True
     },
     "server_stats": {
@@ -111,8 +111,8 @@ MODULES = {
         "enabled": False,
         "channels": ["stats_channel"],
         "settings_channels": ["stats_settings_channel"],
-        "initializer": "server_stats.stat_collector.collector",
-        "initialize_method": "start",
+        "initializer": "server_stats.global_collector",
+        "initialize_method": "set_collector",  # ← требует bot
         "toggleable": True
     },
     "files": {
@@ -196,33 +196,26 @@ class ModuleManager:
     async def _call_module_method(self, module_path: str, method_name: str):
         try:
             parts = module_path.split('.')
-            module_name = '.'.join(parts[:-1])
-            attr_name = parts[-1]
+            module_name = '.'.join(parts)
             
-            imported = __import__(module_name, fromlist=[attr_name])
-            instance = getattr(imported, attr_name, None)
+            imported = __import__(module_name, fromlist=[method_name])
             
-            if instance is None:
-                print(f"❌ [MODULE] Не найден экземпляр {attr_name} в {module_name}")
-                return
-            
-            if not hasattr(instance, method_name):
-                print(f"❌ [MODULE] У {attr_name} нет метода {method_name}")
-                return
-            
-            method = getattr(instance, method_name)
-            
-            # Пробуем вызвать с bot и без
-            try:
-                await method(self.bot)
-            except TypeError:
+            if hasattr(imported, method_name):
+                method = getattr(imported, method_name)
+                
+                # Пробуем вызвать с bot и без
                 try:
-                    await method()
-                except TypeError as e:
-                    print(f"❌ [MODULE] Не удалось вызвать {method_name}: {e}")
-                    return
-            
-            print(f"✅ [MODULE] {module_path}.{method_name}() вызван")
+                    await method(self.bot)
+                except TypeError:
+                    try:
+                        await method()
+                    except TypeError as e:
+                        print(f"❌ [MODULE] Не удалось вызвать {method_name}: {e}")
+                        return
+                
+                print(f"✅ [MODULE] {module_name}.{method_name}() вызван")
+            else:
+                print(f"❌ [MODULE] В {module_name} нет функции {method_name}")
         except Exception as e:
             print(f"❌ [MODULE] Ошибка вызова {method_name} для {module_path}: {e}")
             import traceback
