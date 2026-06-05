@@ -202,8 +202,7 @@ class BirthdayInitializer:
         """Остановить систему дней рождения"""
         print("🎂 [BIRTHDAY] Остановка системы дней рождения...")
         
-        self.running = False
-        if self.task:
+        if hasattr(self, 'task') and self.task:
             self.task.cancel()
         
         if self.channel_id:

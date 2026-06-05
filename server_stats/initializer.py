@@ -55,6 +55,14 @@ class StatsInitializer:
             await channel.send(embed=embed, view=StatsSettingsView())
             logger.info(f"✅ Создана панель настроек статистики в #{channel.name}")
 
+    async def stop(self):
+        """Остановить систему статистики"""
+        print("📊 [STATS] Остановка системы статистики...")
+        
+        collector = get_collector()
+        if collector and hasattr(collector, 'stop'):
+            await collector.stop()
+
 
 # Глобальный экземпляр
 initializer = None

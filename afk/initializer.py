@@ -40,12 +40,12 @@ class AFKInitializer:
     
     async def start_expiry_checker(self):
         """Запустить фоновую задачу для проверки просроченных AFK"""
-        self.bot.loop.create_task(self._check_expired_afk())
+        self.expiry_task = self.bot.loop.create_task(self._check_expired_afk())
         logger.info("✅ Запущен автоматический проверщик просроченного AFK")
     
     async def start_embed_updater(self):
         """Запустить фоновую задачу для периодического обновления embed"""
-        self.bot.loop.create_task(self._update_embed_periodically())
+        self.embed_task = self.bot.loop.create_task(self._update_embed_periodically())
         logger.info("✅ Запущен автоматический обновлятор AFK embed (каждые 30 секунд)")
     
     async def _update_embed_periodically(self):
@@ -186,13 +186,13 @@ class AFKInitializer:
 
     async def stop(self):
         """Остановить систему AFK"""
-        logger.info("🛑 Остановка системы AFK...")
         print("🛌 [AFK] Остановка системы AFK...")
         
         # Останавливаем фоновые задачи
-        self.running = False
-        if self.task:
-            self.task.cancel()
+        if hasattr(self, 'expiry_task') and self.expiry_task:
+            self.expiry_task.cancel()
+        if hasattr(self, 'embed_task') and self.embed_task:
+            self.embed_task.cancel()
         
         # Очищаем канал AFK
         channel_id = afk_manager.get_settings().get('afk_channel')

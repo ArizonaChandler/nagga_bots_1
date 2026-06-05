@@ -97,6 +97,7 @@ class CaptRegistrationManager:
     
     async def initialize_buttons(self, bot):
         """Инициализация постоянных кнопок при старте бота"""
+        self.bot = bot
         logger.info("🔄 Инициализация постоянных кнопок CAPT регистрации")
         
         # ===== 1. ИНИЦИАЛИЗАЦИЯ КАНАЛА НАСТРОЕК =====
@@ -746,7 +747,10 @@ class CaptRegistrationManager:
         """Остановить систему CAPT"""
         print("🎯 [CAPT] Остановка системы CAPT...")
         
-        # Очищаем каналы
+        if not hasattr(self, 'bot') or not self.bot:
+            print("⚠️ [CAPT] Бот не инициализирован, пропускаем")
+            return
+        
         for channel_id in [self.main_channel_id, self.reserve_channel_id]:
             if channel_id:
                 channel = self.bot.get_channel(int(channel_id))

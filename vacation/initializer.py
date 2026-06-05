@@ -176,8 +176,7 @@ class VacationInitializer:
         """Остановить систему отпусков"""
         print("🏖️ [VACATION] Остановка системы отпусков...")
         
-        self.running = False
-        if self.task:
+        if hasattr(self, 'task') and self.task:
             self.task.cancel()
         
         settings = vacation_manager.get_settings()
