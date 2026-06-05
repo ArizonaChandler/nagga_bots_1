@@ -274,26 +274,8 @@ class MCLRegistrationManager:
     async def stop(self):
         """Остановить систему MCL"""
         print("🎯 [MCL] Остановка системы MCL...")
-        
-        if not hasattr(self, 'bot') or not self.bot:
-            print("⚠️ [MCL] Бот не инициализирован, пропускаем")
-            return
-        
-        for channel_id in [self.main_channel_id, self.reserve_channel_id]:
-            if channel_id:
-                channel = self.bot.get_channel(int(channel_id))
-                if channel:
-                    async for msg in channel.history(limit=50):
-                        if msg.author == self.bot.user and msg.embeds:
-                            await msg.edit(
-                                embed=discord.Embed(
-                                    title="🎯 **РЕГИСТРАЦИЯ НА MCL/ВЗМ**",
-                                    description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
-                                    color=0x808080
-                                ),
-                                view=None
-                            )
-                            break
+        # Не редактируем сообщения здесь — это делает _disable_all_embeds
+        pass
 
     async def enable(self):
         """Включить систему MCL (восстановить)"""

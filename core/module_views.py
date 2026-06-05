@@ -41,22 +41,20 @@ class ModulesControlPanel(AdminOnlyView):
     def _create_callback(self, module_key: str):
         async def callback(interaction: discord.Interaction):
             if not await is_super_admin(str(interaction.user.id)):
-                await interaction.response.send_message(
-                    "❌ Только супер-администратор может управлять модулями!",
-                    ephemeral=True
-                )
+                await interaction.response.send_message("❌ Только супер-администратор!", ephemeral=True)
                 return
             
             if self.module_manager is None:
-                await interaction.response.send_message(
-                    "❌ Система управления модулями не инициализирована! Перезапустите бота.",
-                    ephemeral=True
-                )
+                await interaction.response.send_message("❌ Система управления модулями не инициализирована!", ephemeral=True)
                 return
             
             module = MODULES[module_key]
             new_state = not module["enabled"]
             
+            # Сначала отвечаем пользователю
+            await interaction.response.send_message(f"🔄 {module['name']} {'включается' if new_state else 'выключается'}...", ephemeral=True)
+            
+            # Выполняем действие
             success, msg = await self.module_manager.set_enabled(
                 module_key, 
                 new_state, 
@@ -64,11 +62,15 @@ class ModulesControlPanel(AdminOnlyView):
             )
             
             if success:
-                self._add_buttons()
-                await interaction.response.edit_message(view=self)
+                # Обновляем кнопки (если сообщение ещё существует)
+                try:
+                    self._add_buttons()
+                    await interaction.message.edit(view=self)
+                except:
+                    pass  # Сообщение могло быть удалено
                 await interaction.followup.send(msg, ephemeral=True)
             else:
-                await interaction.response.send_message(f"❌ {msg}", ephemeral=True)
+                await interaction.followup.send(f"❌ {msg}", ephemeral=True)
         
         return callback
 
