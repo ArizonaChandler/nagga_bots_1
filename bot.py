@@ -266,11 +266,6 @@ async def on_member_remove(member):
 
 
 # ========== АДМИНИСТРАТИВНЫЕ КОМАНДЫ @bot.command ==========
-@bot.command(name='show_modules')
-async def show_modules(ctx):
-    from core.module_manager import MODULES
-    for key, val in MODULES.items():
-        await ctx.send(f"{key}: initializer = {val.get('initializer')}")
 
 # ========== ЗАПУСК ==========
 async def main():
