@@ -197,9 +197,11 @@ class VacationInitializer:
                         break
 
 
+# Глобальный экземпляр
 initializer = None
 
 async def setup(bot):
     global initializer
     initializer = VacationInitializer(bot)
     await initializer.initialize_all()
+    return initializer

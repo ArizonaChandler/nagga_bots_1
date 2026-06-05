@@ -241,7 +241,7 @@ class ApplicationsInitializer:
 initializer = None
 
 async def setup(bot):
-    """Функция для вызова из bot.py"""
     global initializer
     initializer = ApplicationsInitializer(bot)
     await initializer.initialize_all()
+    return initializer

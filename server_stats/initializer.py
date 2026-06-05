@@ -68,7 +68,7 @@ class StatsInitializer:
 initializer = None
 
 async def setup(bot):
-    """Функция для вызова из bot.py"""
     global initializer
     initializer = StatsInitializer(bot)
     await initializer.initialize_all()
+    return initializer

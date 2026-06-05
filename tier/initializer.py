@@ -251,7 +251,7 @@ class TierInitializer:
 initializer = None
 
 async def setup(bot):
-    """Функция для вызова из bot.py"""
     global initializer
     initializer = TierInitializer(bot)
     await initializer.initialize_all()
+    return initializer

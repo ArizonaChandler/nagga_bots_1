@@ -221,6 +221,7 @@ class BirthdayInitializer:
                         break
 
 
+# Глобальный экземпляр
 initializer = None
 
 async def setup(bot):
