@@ -170,12 +170,48 @@ class ModuleManager:
         return True, f"Модуль **{MODULES[module_key]['name']}** {'включён' if enabled else 'выключен'}"
 
     async def _enable_module(self, module_key: str):
+        """Включить модуль — полная инициализация"""
         module = MODULES[module_key]
         initializer_path = module.get("initializer")
-        initialize_method = module.get("initialize_method", "initialize_all")
         
-        if initializer_path:
-            await self._call_module_method(initializer_path, initialize_method)
+        if not initializer_path:
+            print(f"⚠️ [MODULE] {module['name']} не имеет инициализатора")
+            return
+        
+        # Пробуем получить объект
+        parts = initializer_path.split('.')
+        module_name = '.'.join(parts[:-1]) if len(parts) > 1 else initializer_path
+        attr_name = parts[-1] if len(parts) > 1 else None
+        
+        try:
+            imported = __import__(module_name, fromlist=[attr_name] if attr_name else [])
+            
+            if attr_name:
+                obj = getattr(imported, attr_name, None)
+            else:
+                obj = imported
+            
+            if obj is None:
+                print(f"❌ [MODULE] Не найден объект для {module['name']}")
+                return
+            
+            # Вызываем метод инициализации
+            if hasattr(obj, 'initialize_all'):
+                await obj.initialize_all()
+                print(f"✅ [MODULE] {module['name']} инициализирован (initialize_all)")
+            elif hasattr(obj, 'initialize_buttons'):
+                await obj.initialize_buttons(self.bot)
+                print(f"✅ [MODULE] {module['name']} инициализирован (initialize_buttons)")
+            elif hasattr(obj, 'setup'):
+                await obj.setup(self.bot)
+                print(f"✅ [MODULE] {module['name']} инициализирован (setup)")
+            else:
+                print(f"❌ [MODULE] У {module['name']} нет метода инициализации")
+                
+        except Exception as e:
+            print(f"❌ [MODULE] Ошибка инициализации {module['name']}: {e}")
+            import traceback
+            traceback.print_exc()
 
     async def _disable_module(self, module_key: str):
         """Выключить модуль"""
