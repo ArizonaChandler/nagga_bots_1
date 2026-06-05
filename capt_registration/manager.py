@@ -749,10 +749,5 @@ class CaptRegistrationManager:
         # Не редактируем сообщения здесь — это делает _disable_all_embeds
         pass
 
-    async def enable(self):
-        """Включить систему CAPT"""
-        print("🎯 [CAPT] Включение системы CAPT...")
-        await self.initialize_buttons(self.bot)
-
 # Глобальный экземпляр
 capt_reg_manager = CaptRegistrationManager()

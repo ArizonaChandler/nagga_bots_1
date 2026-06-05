@@ -195,18 +195,23 @@ class ModuleManager:
                 print(f"❌ [MODULE] Не найден объект для {module['name']}")
                 return
             
-            # Приоритет: enable (для перевключения) > initialize_all > initialize_buttons
-            if hasattr(obj, 'enable'):
-                await obj.enable()
-                print(f"✅ [MODULE] {module['name']} включён (enable)")
-            elif hasattr(obj, 'initialize_all'):
-                await obj.initialize_all()
-                print(f"✅ [MODULE] {module['name']} инициализирован (initialize_all)")
-            elif hasattr(obj, 'initialize_buttons'):
-                await obj.initialize_buttons(self.bot)
-                print(f"✅ [MODULE] {module['name']} инициализирован (initialize_buttons)")
+            # Для CAPT и MCL используем initialize_buttons напрямую
+            if module_key in ['capt', 'mcl']:
+                if hasattr(obj, 'initialize_buttons'):
+                    await obj.initialize_buttons(self.bot)
+                    print(f"✅ [MODULE] {module['name']} инициализирован (initialize_buttons)")
+                else:
+                    print(f"❌ [MODULE] У {module['name']} нет initialize_buttons")
             else:
-                print(f"❌ [MODULE] У {module['name']} нет метода enable/initialize")
+                # Для остальных модулей
+                if hasattr(obj, 'enable'):
+                    await obj.enable()
+                    print(f"✅ [MODULE] {module['name']} включён (enable)")
+                elif hasattr(obj, 'initialize_all'):
+                    await obj.initialize_all()
+                    print(f"✅ [MODULE] {module['name']} инициализирован (initialize_all)")
+                else:
+                    print(f"❌ [MODULE] У {module['name']} нет метода enable/initialize_all")
                 
         except Exception as e:
             print(f"❌ [MODULE] Ошибка инициализации {module['name']}: {e}")

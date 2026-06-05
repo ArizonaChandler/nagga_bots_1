@@ -277,10 +277,5 @@ class MCLRegistrationManager:
         # Не редактируем сообщения здесь — это делает _disable_all_embeds
         pass
 
-    async def enable(self):
-        """Включить систему MCL (восстановить)"""
-        print("🎯 [MCL] Включение системы MCL...")
-        await self.initialize_buttons(self.bot)
-
 
 mcl_manager = MCLRegistrationManager()
