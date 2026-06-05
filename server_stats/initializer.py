@@ -3,6 +3,7 @@ import discord
 import logging
 from server_stats.manager import stats_manager
 from server_stats.settings_view import StatsSettingsView
+from server_stats.global_collector import get_collector
 
 logger = logging.getLogger(__name__)
 

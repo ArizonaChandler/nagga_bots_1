@@ -184,10 +184,12 @@ class ModuleManager:
         
         # Пытаемся вызвать метод stop, если он есть
         if initializer_path:
+            print(f"🛑 [MODULE] Вызываю stop для {module_key}")
             try:
                 await self._call_module_method(initializer_path, "stop")
-            except:
-                pass  # Если нет метода stop — просто отключаем embed
+                print(f"✅ [MODULE] stop для {module_key} выполнен")
+            except Exception as e:
+                print(f"⚠️ [MODULE] stop для {module_key} не найден или ошибка: {e}")
         
         await self._disable_all_embeds(module_key)
 
