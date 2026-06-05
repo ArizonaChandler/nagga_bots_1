@@ -1681,40 +1681,40 @@ class SetGlobalSettingsChannelModal(discord.ui.Modal, title="🎛️ КАНАЛ 
             from core.config import CONFIG, save_config
             from core.database import db
             from core.module_views import ModulesControlPanel
+            from core.module_manager import module_manager
             import discord
             
-            # Проверяем, что канал существует
-            channel = interaction.guild.get_channel(int(self.channel_id.value))
-            if not channel:
-                await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
-                return
+            # НЕ ПРОВЕРЯЕМ СУЩЕСТВОВАНИЕ КАНАЛА (мы в ЛС)
+            # Просто сохраняем ID
+            channel_id = self.channel_id.value
             
-            # Сохраняем настройку
-            CONFIG['global_settings_channel'] = self.channel_id.value
-            db.set_setting('global_settings_channel', self.channel_id.value, str(interaction.user.id))
+            CONFIG['global_settings_channel'] = channel_id
+            db.set_setting('global_settings_channel', channel_id, str(interaction.user.id))
             save_config(str(interaction.user.id))
             
-            # Удаляем старые сообщения бота в канале
-            async for msg in channel.history(limit=50):
-                if msg.author == interaction.client.user:
-                    await msg.delete()
-            
-            # Создаём панель управления
-            from core.module_manager import module_manager
-            embed = discord.Embed(
-                title="🎛️ **ЦЕНТР УПРАВЛЕНИЯ МОДУЛЯМИ**",
-                description="Включение/выключение систем бота.\n\n"
-                            "🟢 **Включено** — система активна и работает\n"
-                            "🔴 **Выключено** — система недоступна, все её каналы отключены\n\n"
-                            "Настройки каналов каждой системы производятся после её вклющения "
-                            "через отдельные панели управления.",
-                color=0x7289da
-            )
-            await channel.send(embed=embed, view=ModulesControlPanel(interaction.client, module_manager))
+            # Пытаемся получить канал и создать панель (если получится)
+            guild = interaction.client.get_guild(int(CONFIG.get('server_id')))
+            if guild:
+                channel = guild.get_channel(int(channel_id))
+                if channel:
+                    async for msg in channel.history(limit=50):
+                        if msg.author == interaction.client.user:
+                            await msg.delete()
+                    
+                    embed = discord.Embed(
+                        title="🎛️ **ЦЕНТР УПРАВЛЕНИЯ МОДУЛЯМИ**",
+                        description="Включение/выключение систем бота.\n\n"
+                                    "🟢 **Включено** — система активна и работает\n"
+                                    "🔴 **Выключено** — система недоступна, все её каналы отключены\n\n"
+                                    "Настройки каналов каждой системы производятся после её включения "
+                                    "через отдельные панели управления.",
+                        color=0x7289da
+                    )
+                    await channel.send(embed=embed, view=ModulesControlPanel(interaction.client, module_manager))
             
             await interaction.response.send_message(
-                f"✅ Канал управления модулями настроен: {channel.mention}\n"
-                f"🎛️ Панель управления создана!",
+                f"✅ Канал управления модулями установлен: ID `{channel_id}`\n"
+                f"🎛️ Панель управления будет создана при следующем запуске бота в этом канале.",
                 ephemeral=True
             )
             
