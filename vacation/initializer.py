@@ -25,6 +25,7 @@ class VacationInitializer:
         await self._init_public_channel(settings)
         await self._init_settings_channel()
         await self._start_midnight_checker()
+        await self._restore_application_buttons()
 
     async def _check_expired_on_startup(self):
         """Проверка просроченных отпусков при запуске"""
@@ -171,6 +172,50 @@ class VacationInitializer:
                 color=0x00ff00
             )
             await channel.send(embed=embed, view=VacationSettingsView())
+
+    def get_all_application_messages(self):
+        return db.get_all_vacation_application_messages()
+
+    def delete_application_message(self, application_id: int):
+        return db.delete_vacation_application_message(application_id)
+
+    async def _restore_application_buttons(self):
+        """Восстановить кнопки у активных заявок на отпуск"""
+        from vacation.views import VacationModerationView
+        
+        print("🔄 [VACATION] Восстановление кнопок заявок на отпуск...")
+        
+        messages = vacation_manager.get_all_application_messages()
+        
+        if not messages:
+            print("📭 [VACATION] Нет активных заявок для восстановления")
+            return
+        
+        restored = 0
+        for msg_data in messages:
+            try:
+                channel = self.bot.get_channel(int(msg_data['channel_id']))
+                if not channel:
+                    print(f"❌ [VACATION] Канал {msg_data['channel_id']} не найден")
+                    continue
+                
+                try:
+                    message = await channel.fetch_message(int(msg_data['message_id']))
+                except discord.NotFound:
+                    print(f"❌ [VACATION] Сообщение {msg_data['message_id']} не найдено")
+                    vacation_manager.delete_application_message(msg_data['application_id'])
+                    continue
+                
+                # Восстанавливаем view
+                view = VacationModerationView(msg_data['application_id'])
+                await message.edit(view=view)
+                restored += 1
+                print(f"✅ [VACATION] Восстановлена заявка на отпуск {msg_data['application_id']} в #{channel.name}")
+                
+            except Exception as e:
+                print(f"❌ [VACATION] Ошибка восстановления заявки {msg_data['application_id']}: {e}")
+        
+        print(f"✅ [VACATION] Восстановлено {restored} заявок на отпуск")
 
     async def stop(self):
         """Остановить систему отпусков"""
