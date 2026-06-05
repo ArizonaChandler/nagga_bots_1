@@ -196,6 +196,39 @@ class ModuleManager:
     async def _call_module_method(self, module_path: str, method_name: str):
         try:
             parts = module_path.split('.')
+            
+            # Если путь заканчивается на .initializer, значит это специальный случай
+            if len(parts) >= 2 and parts[-1] == 'initializer':
+                module_name = '.'.join(parts[:-1])  # модуль без .initializer
+                attr_name = parts[-1]  # 'initializer'
+                
+                # Импортируем модуль
+                imported = __import__(module_name, fromlist=[attr_name])
+                
+                # Получаем переменную initializer (пока None)
+                obj = getattr(imported, attr_name, None)
+                
+                if obj is None:
+                    # Если initializer None, значит setup ещё не вызывался
+                    # Вызываем setup
+                    setup_func = getattr(imported, 'setup', None)
+                    if setup_func:
+                        obj = await setup_func(self.bot)
+                
+                if obj is None:
+                    print(f"❌ [MODULE] Не удалось получить экземпляр для {module_path}")
+                    return
+                
+                # Теперь у obj есть метод stop
+                if hasattr(obj, method_name):
+                    method = getattr(obj, method_name)
+                    await method()
+                    print(f"✅ [MODULE] {module_path}.{method_name}() вызван")
+                else:
+                    print(f"❌ [MODULE] У {obj} нет метода {method_name}")
+                return
+            
+            # Обычный путь (без .initializer)
             module_name = '.'.join(parts[:-1]) if len(parts) > 1 else module_path
             attr_name = parts[-1] if len(parts) > 1 else None
             
@@ -215,15 +248,10 @@ class ModuleManager:
             
             method = getattr(obj, method_name)
             
-            # Пробуем вызвать с bot
             try:
                 await method(self.bot)
             except TypeError:
-                try:
-                    await method()
-                except TypeError as e:
-                    print(f"❌ [MODULE] Не удалось вызвать {method_name}: {e}")
-                    return
+                await method()
             
             print(f"✅ [MODULE] {module_path}.{method_name}() вызван")
             
