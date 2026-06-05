@@ -211,6 +211,30 @@ class AFKInitializer:
                         )
                         break
 
+    async def enable(self):
+        """Включить систему AFK (восстановить embed без создания дубликата)"""
+        print("🛌 [AFK] Включение системы AFK...")
+        
+        settings = afk_manager.get_settings()
+        channel_id = settings.get('afk_channel')
+        
+        if not channel_id:
+            return
+        
+        channel = self.bot.get_channel(int(channel_id))
+        if not channel:
+            return
+        
+        # Ищем существующий embed бота
+        async for msg in channel.history(limit=50):
+            if msg.author == self.bot.user and msg.embeds:
+                # Если есть embed с заглушкой — удаляем его
+                if "⛔ **Система отключена**" in msg.embeds[0].description:
+                    await msg.delete()
+                break
+        
+        # Вызываем полную инициализацию (создаст новый embed, если нет старого)
+        await self.initialize_all()
 
 # Глобальный экземпляр
 initializer = None

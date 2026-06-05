@@ -767,5 +767,10 @@ class CaptRegistrationManager:
                             )
                             break
 
+    async def enable(self):
+        """Включить систему CAPT"""
+        print("🎯 [CAPT] Включение системы CAPT...")
+        await self.initialize_buttons(self.bot)
+
 # Глобальный экземпляр
 capt_reg_manager = CaptRegistrationManager()

@@ -247,6 +247,24 @@ class TierInitializer:
                             )
                             break
 
+    async def enable(self):
+        """Включить систему TIER"""
+        print("🌟 [TIER] Включение системы TIER...")
+        
+        settings = tier_manager.get_settings()
+        for channel_key in ['tier_submit_channel', 'tier_applications_channel']:
+            channel_id = settings.get(channel_key)
+            if channel_id:
+                channel = self.bot.get_channel(int(channel_id))
+                if channel:
+                    async for msg in channel.history(limit=50):
+                        if msg.author == self.bot.user and msg.embeds:
+                            if "⛔ **Система отключена**" in msg.embeds[0].description:
+                                await msg.delete()
+                                break
+        
+        await self.initialize_all()
+
 # Глобальный экземпляр
 initializer = None
 

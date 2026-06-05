@@ -63,6 +63,11 @@ class StatsInitializer:
         collector = get_collector()
         if collector and hasattr(collector, 'stop'):
             await collector.stop()
+    
+    async def enable(self):
+        """Включить систему статистики"""
+        print("📊 [STATS] Включение системы статистики...")
+        await self.initialize_all()
 
 
 # Глобальный экземпляр

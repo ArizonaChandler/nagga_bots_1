@@ -236,6 +236,23 @@ class ApplicationsInitializer:
                         )
                         break
 
+    async def enable(self):
+        """Включить систему заявок"""
+        print("📝 [APPLICATIONS] Включение системы заявок...")
+        
+        settings = app_manager.get_settings()
+        channel_id = settings.get('submit_channel')
+        
+        if channel_id:
+            channel = self.bot.get_channel(int(channel_id))
+            if channel:
+                async for msg in channel.history(limit=50):
+                    if msg.author == self.bot.user and msg.embeds:
+                        if "⛔ **Система отключена**" in msg.embeds[0].description:
+                            await msg.delete()
+                            break
+        
+        await self.initialize_all()
 
 # Глобальный экземпляр
 initializer = None
