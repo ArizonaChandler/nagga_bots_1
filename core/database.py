@@ -1728,13 +1728,13 @@ class Database:
                 VALUES (?, ?, ?, ?)
             ''', (application_id, channel_id, message_id, user_id))
             conn.commit()
-    
+
     def get_all_vacation_application_messages(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT vm.application_id, vm.channel_id, vm.message_id, vm.user_id,
-                       va.status, va.user_id as applicant_id, va.user_name
+                    va.status, va.user_id as applicant_id, va.user_name
                 FROM vacation_application_messages vm
                 JOIN vacation_applications va ON vm.application_id = va.id
                 WHERE va.status = 'pending'
@@ -1742,7 +1742,7 @@ class Database:
             columns = [description[0] for description in cursor.description]
             rows = cursor.fetchall()
             return [dict(zip(columns, row)) for row in rows]
-    
+
     def delete_vacation_application_message(self, application_id: int):
         with self.get_connection() as conn:
             cursor = conn.cursor()
