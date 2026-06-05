@@ -111,8 +111,8 @@ MODULES = {
         "enabled": False,
         "channels": ["stats_channel"],
         "settings_channels": ["stats_settings_channel"],
-        "initializer": "server_stats.global_collector",
-        "initialize_method": "set_collector",
+        "initializer": "server_stats.initializer",
+        "initialize_method": "setup",
         "toggleable": True
     },
     "files": {
