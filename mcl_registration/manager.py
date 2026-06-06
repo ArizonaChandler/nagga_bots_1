@@ -239,7 +239,7 @@ class MCLRegistrationManager:
         
         await channel.send(content="@everyone", embed=embed)
 
-    async def _update_views(self, active: bool):
+    async def _update_views(self, session_active: bool):
         from mcl_registration.embeds import create_registration_embed
         from mcl_registration.views import ModerationView, PublicView
         
@@ -253,18 +253,17 @@ class MCLRegistrationManager:
                 channel = self.bot.get_channel(int(self.main_channel_id))
                 if channel:
                     msg = await channel.fetch_message(int(self.main_message_id))
-                    if active:
+                    if session_active:
                         embed = create_registration_embed(main_list, reserve_list, self.session_info)
                         view = ModerationView()
                         view.update_buttons(True)
                         await msg.edit(embed=embed, view=view)
                     else:
-                        embed = discord.Embed(
-                            title="⛔ 🎯 MCL/ВЗМ Регистрация",
-                            description="**Система отключена администратором**\nОбратитесь к администрации для включения.",
-                            color=0x808080
-                        )
-                        await msg.edit(embed=embed, view=None)
+                        # Сессия не активна, но модуль включён — показываем пустой embed с активными кнопками "Начать"
+                        embed = create_registration_embed(main_list, reserve_list, None)
+                        view = ModerationView()
+                        view.update_buttons(False)  # Кнопки "Начать" активна, остальные нет
+                        await msg.edit(embed=embed, view=view)
             except Exception as e:
                 print(f"❌ [MCL] Ошибка обновления main канала: {e}")
         
@@ -273,25 +272,52 @@ class MCLRegistrationManager:
                 channel = self.bot.get_channel(int(self.reserve_channel_id))
                 if channel:
                     msg = await channel.fetch_message(int(self.reserve_message_id))
-                    if active:
+                    if session_active:
                         embed = create_registration_embed(main_list, reserve_list, self.session_info)
                         view = PublicView()
                         view.set_registration_active(True)
                         await msg.edit(embed=embed, view=view)
                     else:
-                        embed = discord.Embed(
-                            title="⛔ 🎯 MCL/ВЗМ Регистрация",
-                            description="**Система отключена администратором**\nОбратитесь к администрации для включения.",
-                            color=0x808080
-                        )
-                        await msg.edit(embed=embed, view=None)
+                        embed = create_registration_embed(main_list, reserve_list, None)
+                        view = PublicView()
+                        view.set_registration_active(False)
+                        await msg.edit(embed=embed, view=view)
             except Exception as e:
                 print(f"❌ [MCL] Ошибка обновления reserve канала: {e}")
 
     async def stop(self):
-        """Остановить систему MCL"""
+        """Остановить систему MCL (выключаем модуль полностью)"""
         print("🎯 [MCL] Остановка системы MCL...")
-        await self._update_views(active=False)
+        # При выключении модуля — заменяем на заглушку
+        from mcl_registration.embeds import create_registration_embed
+        
+        if self.main_channel_id and self.main_message_id:
+            try:
+                channel = self.bot.get_channel(int(self.main_channel_id))
+                if channel:
+                    msg = await channel.fetch_message(int(self.main_message_id))
+                    embed = discord.Embed(
+                        title="⛔ 🎯 MCL/ВЗМ Регистрация",
+                        description="**Система отключена администратором**\nОбратитесь к администрации для включения.",
+                        color=0x808080
+                    )
+                    await msg.edit(embed=embed, view=None)
+            except:
+                pass
+        
+        if self.reserve_channel_id and self.reserve_message_id:
+            try:
+                channel = self.bot.get_channel(int(self.reserve_channel_id))
+                if channel:
+                    msg = await channel.fetch_message(int(self.reserve_message_id))
+                    embed = discord.Embed(
+                        title="⛔ 🎯 MCL/ВЗМ Регистрация",
+                        description="**Система отключена администратором**\nОбратитесь к администрации для включения.",
+                        color=0x808080
+                    )
+                    await msg.edit(embed=embed, view=None)
+            except:
+                pass
 
 
 mcl_manager = MCLRegistrationManager()
