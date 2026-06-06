@@ -127,11 +127,13 @@ class ModerationView(PermanentView):
 class PublicView(PermanentView):
     def __init__(self):
         super().__init__()
-        self.set_active(False)
+        self.set_registration_active(False)
     
-    def set_active(self, active: bool):
+    def set_registration_active(self, active: bool):
+        """Активировать/деактивировать кнопки"""
         for child in self.children:
-            child.disabled = not active
+            if child.custom_id in ["mcl_join", "mcl_leave"]:
+                child.disabled = not active
     
     @discord.ui.button(label="✅ ПРИСОЕДИНИТЬСЯ", style=discord.ButtonStyle.success, row=0, disabled=True, custom_id="mcl_join")
     async def join(self, interaction: discord.Interaction, button: discord.ui.Button):

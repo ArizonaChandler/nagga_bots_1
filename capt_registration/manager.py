@@ -69,27 +69,28 @@ class CaptRegistrationManager:
         self._load_config()
         
         if not self.main_channel_id or not self.reserve_channel_id:
+            print(f"⚠️ [CAPT] Каналы не настроены: main={self.main_channel_id}, reserve={self.reserve_channel_id}")
             return False
         
         try:
             main_channel = bot.get_channel(int(self.main_channel_id))
             reserve_channel = bot.get_channel(int(self.reserve_channel_id))
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as e:
+            print(f"❌ [CAPT] Ошибка получения каналов: {e}")
             return False
         
         if not main_channel or not reserve_channel:
+            print(f"❌ [CAPT] Каналы не найдены: main={main_channel}, reserve={reserve_channel}")
             return False
         
-        # Удаляем старые сообщения бота
+        # Удаляем ВСЕ сообщения бота в каналах
         async for msg in main_channel.history(limit=50):
-            if msg.author == bot.user and msg.embeds:
+            if msg.author == bot.user:
                 await msg.delete()
-                break
         
         async for msg in reserve_channel.history(limit=50):
-            if msg.author == bot.user and msg.embeds:
+            if msg.author == bot.user:
                 await msg.delete()
-                break
         
         self._load_message_ids()
         
@@ -100,13 +101,12 @@ class CaptRegistrationManager:
         reserve_list = db.capt_get_registrations('reserve')
         embed = create_registration_embed(main_list, reserve_list, None)
         
-        # Создаём view
+        # Создаём view с НЕАКТИВНЫМИ кнопками (ждём старта)
         mod_view = ModerationView()
-        pub_view = PublicView()
+        mod_view.update_buttons(False)
         
-        # АКТИВИРУЕМ кнопки (показываем их, но без активной сессии)
-        mod_view.update_buttons(False)  # ← False, потому что сессии нет
-        pub_view.set_registration_active(False)  # ← False, кнопки видны но неактивны? ИЛИ True?
+        pub_view = PublicView()
+        pub_view.set_registration_active(False)
         
         main_msg = await main_channel.send(embed=embed, view=mod_view)
         reserve_msg = await reserve_channel.send(embed=embed, view=pub_view)
@@ -114,6 +114,7 @@ class CaptRegistrationManager:
         self.main_message_id = str(main_msg.id)
         self.reserve_message_id = str(reserve_msg.id)
         
+        print(f"✅ [CAPT] Инициализирован: main={main_channel.name}, reserve={reserve_channel.name}")
         return True
 
     def get_lists(self):
@@ -144,7 +145,6 @@ class CaptRegistrationManager:
         
         db.capt_clear_all()
         
-        # ← ЭТО ДОЛЖНО АКТИВИРОВАТЬ КНОПКИ
         await self._update_views(active=True)
         await self._send_announcement(event_name, event_time, additional_info)
         
@@ -247,7 +247,6 @@ class CaptRegistrationManager:
             return
         
         main_list, reserve_list = self.get_lists()
-        embed = create_registration_embed(main_list, reserve_list, self.session_info if active else None)
         
         if self.main_channel_id and self.main_message_id:
             try:
@@ -255,14 +254,20 @@ class CaptRegistrationManager:
                 if channel:
                     msg = await channel.fetch_message(int(self.main_message_id))
                     if active:
+                        embed = create_registration_embed(main_list, reserve_list, self.session_info)
                         view = ModerationView()
-                        view.update_buttons(active)
+                        view.update_buttons(True)
                         await msg.edit(embed=embed, view=view)
                     else:
-                        # При выключении — просто убираем всё
+                        # Заглушка при выключении модуля
+                        embed = discord.Embed(
+                            title="⛔ 🎯 CAPT Регистрация",
+                            description="**Система отключена администратором**\nОбратитесь к администрации для включения.",
+                            color=0x808080
+                        )
                         await msg.edit(embed=embed, view=None)
-            except:
-                pass
+            except Exception as e:
+                print(f"❌ [CAPT] Ошибка обновления main канала: {e}")
         
         if self.reserve_channel_id and self.reserve_message_id:
             try:
@@ -270,18 +275,24 @@ class CaptRegistrationManager:
                 if channel:
                     msg = await channel.fetch_message(int(self.reserve_message_id))
                     if active:
+                        embed = create_registration_embed(main_list, reserve_list, self.session_info)
                         view = PublicView()
-                        view.set_active(active)
+                        view.set_registration_active(True)
                         await msg.edit(embed=embed, view=view)
                     else:
+                        embed = discord.Embed(
+                            title="⛔ 🎯 CAPT Регистрация",
+                            description="**Система отключена администратором**\nОбратитесь к администрации для включения.",
+                            color=0x808080
+                        )
                         await msg.edit(embed=embed, view=None)
-            except:
-                pass
+            except Exception as e:
+                print(f"❌ [CAPT] Ошибка обновления reserve канала: {e}")
 
     async def stop(self):
         """Остановить систему CAPT"""
         print("🎯 [CAPT] Остановка системы CAPT...")
-        pass
+        await self._update_views(active=False)
 
 
 capt_reg_manager = CaptRegistrationManager()

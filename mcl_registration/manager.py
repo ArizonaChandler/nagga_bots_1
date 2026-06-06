@@ -3,6 +3,7 @@ import discord
 from datetime import datetime
 from core.database import db
 from core.config import CONFIG, save_config
+from server_stats.global_collector import get_collector
 
 
 class MCLRegistrationManager:
@@ -65,27 +66,28 @@ class MCLRegistrationManager:
         self._load_config()
         
         if not self.main_channel_id or not self.reserve_channel_id:
+            print(f"⚠️ [MCL] Каналы не настроены: main={self.main_channel_id}, reserve={self.reserve_channel_id}")
             return False
         
         try:
             main_channel = bot.get_channel(int(self.main_channel_id))
             reserve_channel = bot.get_channel(int(self.reserve_channel_id))
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as e:
+            print(f"❌ [MCL] Ошибка получения каналов: {e}")
             return False
         
         if not main_channel or not reserve_channel:
+            print(f"❌ [MCL] Каналы не найдены: main={main_channel}, reserve={reserve_channel}")
             return False
         
-        # Удаляем старые сообщения бота
+        # Удаляем ВСЕ сообщения бота в каналах
         async for msg in main_channel.history(limit=50):
-            if msg.author == bot.user and msg.embeds:
+            if msg.author == bot.user:
                 await msg.delete()
-                break
         
         async for msg in reserve_channel.history(limit=50):
-            if msg.author == bot.user and msg.embeds:
+            if msg.author == bot.user:
                 await msg.delete()
-                break
         
         self._load_message_ids()
         
@@ -94,14 +96,14 @@ class MCLRegistrationManager:
         
         main_list = db.mcl_get_registrations('main')
         reserve_list = db.mcl_get_registrations('reserve')
-        embed = create_registration_embed(main_list, reserve_list, None)  # ← None
+        embed = create_registration_embed(main_list, reserve_list, None)
         
-        # Создаём view с АКТИВНЫМИ кнопками
+        # Создаём view с НЕАКТИВНЫМИ кнопками (ждём старта)
         mod_view = ModerationView()
-        mod_view.update_buttons(True)  # ← АКТИВИРУЕМ
+        mod_view.update_buttons(False)
         
         pub_view = PublicView()
-        pub_view.set_active(True)  # ← АКТИВИРУЕМ
+        pub_view.set_registration_active(False)
         
         main_msg = await main_channel.send(embed=embed, view=mod_view)
         reserve_msg = await reserve_channel.send(embed=embed, view=pub_view)
@@ -109,6 +111,7 @@ class MCLRegistrationManager:
         self.main_message_id = str(main_msg.id)
         self.reserve_message_id = str(reserve_msg.id)
         
+        print(f"✅ [MCL] Инициализирован: main={main_channel.name}, reserve={reserve_channel.name}")
         return True
 
     def get_lists(self):
@@ -117,8 +120,9 @@ class MCLRegistrationManager:
     def is_active(self) -> bool:
         return self.active_session is not None
 
-    async def start_registration(self, user_id: str, user_name: str, event_name: str, event_time: str, additional_info: str = None):
+    async def start_registration(self, user_id: str, user_name: str, bot, event_name: str, event_time: str, additional_info: str = None):
         self._load_config()
+        self.bot = bot
         
         if self.active_session:
             db.mcl_end_session(self.active_session, user_id)
@@ -138,9 +142,12 @@ class MCLRegistrationManager:
         
         db.mcl_clear_all()
         
-        # Обновляем существующие сообщения (активируем кнопки)
         await self._update_views(active=True)
         await self._send_announcement(event_name, event_time, additional_info)
+
+        collector = get_collector()
+        if collector:
+            collector.increment_mcl_registration()
         
         db.log_action(user_id, "MCL_REG_START", f"Session {session_id}")
         return True
@@ -153,7 +160,6 @@ class MCLRegistrationManager:
         self.session_info = None
         db.mcl_clear_all()
         
-        # Удаляем все сообщения в каналах, кроме embed с кнопками
         for channel_id in [self.main_channel_id, self.reserve_channel_id]:
             if channel_id:
                 channel = self.bot.get_channel(int(channel_id))
@@ -241,7 +247,6 @@ class MCLRegistrationManager:
             return
         
         main_list, reserve_list = self.get_lists()
-        embed = create_registration_embed(main_list, reserve_list, self.session_info if active else None)
         
         if self.main_channel_id and self.main_message_id:
             try:
@@ -249,13 +254,19 @@ class MCLRegistrationManager:
                 if channel:
                     msg = await channel.fetch_message(int(self.main_message_id))
                     if active:
+                        embed = create_registration_embed(main_list, reserve_list, self.session_info)
                         view = ModerationView()
-                        view.update_buttons(active)
+                        view.update_buttons(True)
                         await msg.edit(embed=embed, view=view)
                     else:
+                        embed = discord.Embed(
+                            title="⛔ 🎯 MCL/ВЗМ Регистрация",
+                            description="**Система отключена администратором**\nОбратитесь к администрации для включения.",
+                            color=0x808080
+                        )
                         await msg.edit(embed=embed, view=None)
-            except:
-                pass
+            except Exception as e:
+                print(f"❌ [MCL] Ошибка обновления main канала: {e}")
         
         if self.reserve_channel_id and self.reserve_message_id:
             try:
@@ -263,18 +274,24 @@ class MCLRegistrationManager:
                 if channel:
                     msg = await channel.fetch_message(int(self.reserve_message_id))
                     if active:
+                        embed = create_registration_embed(main_list, reserve_list, self.session_info)
                         view = PublicView()
-                        view.set_active(active)
+                        view.set_registration_active(True)
                         await msg.edit(embed=embed, view=view)
                     else:
+                        embed = discord.Embed(
+                            title="⛔ 🎯 MCL/ВЗМ Регистрация",
+                            description="**Система отключена администратором**\nОбратитесь к администрации для включения.",
+                            color=0x808080
+                        )
                         await msg.edit(embed=embed, view=None)
-            except:
-                pass
+            except Exception as e:
+                print(f"❌ [MCL] Ошибка обновления reserve канала: {e}")
 
     async def stop(self):
         """Остановить систему MCL"""
         print("🎯 [MCL] Остановка системы MCL...")
-        pass
+        await self._update_views(active=False)
 
 
 mcl_manager = MCLRegistrationManager()
