@@ -320,6 +320,73 @@ async def fix_tier_app(interaction: discord.Interaction, application_id: int):
     
     await interaction.response.send_message(f"✅ Заявка {application_id} восстановлена", ephemeral=True)
 
+@bot.tree.command(name="restore_tier_apps", description="СРОЧНО восстановить заявки TIER")
+@commands.has_permissions(administrator=True)
+async def restore_tier_apps(interaction: discord.Interaction):
+    """Принудительное восстановление заявок TIER"""
+    
+    from tier.views import TierModerationView
+    from tier.manager import tier_manager
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    # Получаем все ожидающие заявки из БД напрямую
+    import sqlite3
+    conn = sqlite3.connect('bot_data.db')
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id, user_id, user_name, nickname, arena_link, screenshots, additional FROM tier_applications WHERE status = 'pending'")
+    apps = cursor.fetchall()
+    conn.close()
+    
+    if not apps:
+        await interaction.followup.send("❌ Нет ожидающих заявок TIER в БД", ephemeral=True)
+        return
+    
+    settings = tier_manager.get_settings()
+    channel_id = settings.get('tier_applications_channel')
+    
+    if not channel_id:
+        await interaction.followup.send("❌ Канал анкет не настроен", ephemeral=True)
+        return
+    
+    channel = interaction.guild.get_channel(int(channel_id))
+    if not channel:
+        await interaction.followup.send("❌ Канал не найден", ephemeral=True)
+        return
+    
+    restored = 0
+    for app in apps:
+        app_id, user_id, user_name, nickname, arena_link, screenshots, additional = app
+        
+        embed = discord.Embed(
+            title="🌟 НОВАЯ ЗАЯВКА НА TIER",
+            color=0xffa500,
+            timestamp=datetime.now()
+        )
+        embed.add_field(name="👤 Отправитель", value=f"<@{user_id}>", inline=True)
+        embed.add_field(name="🎮 Игровой ник", value=nickname, inline=True)
+        embed.add_field(name="🏆 Откат с арены", value=arena_link, inline=False)
+        embed.add_field(name="📸 Скриншоты", value=screenshots[:200], inline=False)
+        embed.add_field(name="📝 Дополнительно", value=additional or "Нет", inline=False)
+        embed.set_footer(text=f"Заявка ID: {app_id}")
+        
+        sent = await channel.send(embed=embed, view=TierModerationView(app_id))
+        
+        # Обновляем запись о сообщении
+        conn = sqlite3.connect('bot_data.db')
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO tier_application_messages (application_id, channel_id, message_id, user_id)
+            VALUES (?, ?, ?, ?)
+        """, (app_id, str(channel.id), str(sent.id), user_id))
+        conn.commit()
+        conn.close()
+        
+        restored += 1
+    
+    await interaction.followup.send(f"✅ Восстановлено {restored} заявок TIER", ephemeral=True)
+
 # ========== ЗАПУСК ==========
 async def main():
     async with bot:
