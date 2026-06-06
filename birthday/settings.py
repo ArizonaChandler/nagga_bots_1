@@ -31,6 +31,28 @@ class BirthdaySettingsView(AdminOnlyView):
         stats_btn = discord.ui.Button(label="📊 СТАТИСТИКА", style=discord.ButtonStyle.secondary, emoji="📊", row=1, custom_id="birthday_stats")
         stats_btn.callback = self.show_stats
         self.add_item(stats_btn)
+        
+    def _add_back_button(self):
+        back_btn = discord.ui.Button(
+            label="◀ Назад в главное меню",
+            style=discord.ButtonStyle.secondary,
+            emoji="◀",
+            row=1,
+            custom_id="games_back_to_global"
+        )
+        
+        async def back_callback(interaction: discord.Interaction):
+            from core.settings_panel import GlobalSettingsPanel
+            embed = discord.Embed(
+                title="⚙️ **ЦЕНТР УПРАВЛЕНИЯ СИСТЕМАМИ**",
+                description="Настройка всех модулей бота.\n\n"
+                            "Здесь отображаются кнопки только для **включённых** систем.",
+                color=0x7289da
+            )
+            await interaction.response.edit_message(embed=embed, view=GlobalSettingsPanel(interaction.client))
+        
+        back_btn.callback = back_callback
+        self.add_item(back_btn)
 
     async def toggle_system(self, interaction: discord.Interaction):
         if not await is_super_admin(str(interaction.user.id)):

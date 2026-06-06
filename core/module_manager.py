@@ -300,6 +300,34 @@ class ModuleManager:
         )
         await channel.send(embed=embed, view=GlobalSettingsPanel(self.bot))
 
+    async def restore_global_settings_panel(self):
+        """Восстановить глобальную панель настроек после перезапуска"""
+        channel_id = db.get_setting('global_settings_channel_id')
+        message_id = db.get_setting('global_settings_message_id')
+        
+        if not channel_id or not message_id or channel_id == 'null' or message_id == 'null':
+            return
+        
+        channel = self.bot.get_channel(int(channel_id))
+        if not channel:
+            return
+        
+        try:
+            message = await channel.fetch_message(int(message_id))
+            
+            from core.settings_panel import GlobalSettingsPanel
+            embed = discord.Embed(
+                title="⚙️ **ЦЕНТР УПРАВЛЕНИЯ СИСТЕМАМИ**",
+                description="Настройка всех модулей бота.\n\n"
+                            "Здесь отображаются кнопки только для **включённых** систем.\n"
+                            "Чтобы включить/выключить модуль, используйте 🎛️ Управление модулями в !settings.",
+                color=0x7289da
+            )
+            await message.edit(embed=embed, view=GlobalSettingsPanel(self.bot))
+            print("✅ Восстановлена глобальная панель настроек")
+        except Exception as e:
+            print(f"⚠️ Не удалось восстановить панель настроек: {e}")
+
 
 module_manager = None
 
@@ -307,4 +335,5 @@ async def setup(bot):
     global module_manager
     module_manager = ModuleManager(bot)
     await module_manager.initialize_all_enabled_modules()
+    await module_manager.restore_global_settings_panel()
     return module_manager

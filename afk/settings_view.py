@@ -33,6 +33,28 @@ class AFKSettingsView(AdminOnlyView):
         show_btn.callback = self.show_settings
         self.add_item(show_btn)
 
+    def _add_back_button(self):
+        back_btn = discord.ui.Button(
+            label="◀ Назад в главное меню",
+            style=discord.ButtonStyle.secondary,
+            emoji="◀",
+            row=2,
+            custom_id="afk_back_to_global"
+        )
+        
+        async def back_callback(interaction: discord.Interaction):
+            from core.settings_panel import GlobalSettingsPanel
+            embed = discord.Embed(
+                title="⚙️ **ЦЕНТР УПРАВЛЕНИЯ СИСТЕМАМИ**",
+                description="Настройка всех модулей бота.\n\n"
+                            "Здесь отображаются кнопки только для **включённых** систем.",
+                color=0x7289da
+            )
+            await interaction.response.edit_message(embed=embed, view=GlobalSettingsPanel(interaction.client))
+        
+        back_btn.callback = back_callback
+        self.add_item(back_btn)
+
     async def set_afk_channel(self, interaction: discord.Interaction):
         if not await is_admin(str(interaction.user.id)):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)

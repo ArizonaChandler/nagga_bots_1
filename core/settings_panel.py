@@ -3,6 +3,7 @@ import discord
 from core.admin_views import AdminOnlyView
 from core.module_manager import MODULES, module_manager
 from core.utils import is_admin
+from core.database import db
 
 
 class GlobalSettingsPanel(AdminOnlyView):
@@ -23,11 +24,9 @@ class GlobalSettingsPanel(AdminOnlyView):
             if module_key == "files":
                 continue
             
-            # Показываем кнопки ТОЛЬКО для включённых модулей
             if not module["enabled"]:
                 continue
             
-            # Кнопка настройки модуля (ведёт в его панель настроек)
             btn = discord.ui.Button(
                 label=f"⚙️ {module['name']}",
                 style=discord.ButtonStyle.primary,
@@ -44,7 +43,6 @@ class GlobalSettingsPanel(AdminOnlyView):
 
     def _create_callback(self, module_key: str):
         async def callback(interaction: discord.Interaction):
-            # Проверка прав — доступ у всех админов БД
             if not await is_admin(str(interaction.user.id)):
                 await interaction.response.send_message(
                     "❌ **Доступ запрещён**\nТолько администраторы бота могут настраивать модули.",
@@ -52,11 +50,13 @@ class GlobalSettingsPanel(AdminOnlyView):
                 )
                 return
             
-            # Открываем панель настроек конкретного модуля
-            module = MODULES[module_key]
+            # Сохраняем ID сообщения для восстановления
+            db.set_setting('global_settings_message_id', str(interaction.message.id), str(interaction.user.id))
+            db.set_setting('global_settings_channel_id', str(interaction.channel.id), str(interaction.user.id))
             
-            # Импортируем панель настроек модуля
+            module = MODULES[module_key]
             settings_view = None
+            
             if module_key == "capt":
                 from capt_registration.settings_view import CaptSettingsView
                 settings_view = CaptSettingsView()
