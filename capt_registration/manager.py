@@ -122,7 +122,7 @@ class CaptRegistrationManager:
     def is_active(self) -> bool:
         return self.active_session is not None
 
-    async def start_registration(self, user_id: str, user_name: str, bot, event_name: str, event_time: str, additional_info: str = None):
+    async def start_registration(self, user_id: str, user_name: str, bot, enemy: str, event_time: str, additional_info: str = None):
         self._load_config()
         self.bot = bot
         
@@ -131,12 +131,12 @@ class CaptRegistrationManager:
         
         session_id = db.capt_create_session(
             user_id, self.main_channel_id, self.reserve_channel_id,
-            event_name, event_time, additional_info
+            enemy, event_time, additional_info
         )
         
         self.active_session = session_id
         self.session_info = {
-            'event_name': event_name,
+            'enemy': enemy,
             'event_time': event_time,
             'additional_info': additional_info or "",
             'started_by_name': f"<@{user_id}>"
@@ -145,7 +145,7 @@ class CaptRegistrationManager:
         db.capt_clear_all()
         
         await self._update_views(active=True)
-        await self._send_announcement(event_name, event_time, additional_info)
+        await self._send_announcement(enemy, event_time, additional_info)
         
         db.log_action(user_id, "CAPT_REG_START", f"Session {session_id}")
         return True
@@ -240,7 +240,7 @@ class CaptRegistrationManager:
         from capt_registration.capt_core import capt_core
         await capt_core.send_bulk(interaction, members, event_name, event_time, message)
 
-    async def _send_announcement(self, event_name: str, event_time: str, additional_info: str = None):
+    async def _send_announcement(self, enemy: str, event_time: str, additional_info: str = None):
         channel_id = self.announcement_channel_id
         if not channel_id:
             print("⚠️ [CAPT] Канал для @everyone не настроен")
@@ -254,13 +254,12 @@ class CaptRegistrationManager:
         reserve_channel_mention = f"<#{self.reserve_channel_id}>" if self.reserve_channel_id else "канал регистрации"
         
         embed = discord.Embed(
-            title=f"🎯 НАБОР НА {event_name}",
-            description=f"Для участия нажмите кнопку **ПРИСОЕДИНИТЬСЯ** в канале {reserve_channel_mention}",
+            title=f"🎯 НАБОР НА CAPT",
+            description=f"Противник: **{enemy}**\nДля участия нажмите кнопку **ПРИСОЕДИНИТЬСЯ** в канале {reserve_channel_mention}",
             color=0xffa500,
             timestamp=datetime.now()
         )
         embed.add_field(name="⏰ Время сбора", value=f"{event_time} МСК", inline=True)
-        embed.add_field(name="📋 Мероприятие", value=event_name, inline=True)
         if additional_info:
             embed.add_field(name="📝 Дополнительно", value=additional_info, inline=False)
         embed.set_footer(text="Регистрация активна")

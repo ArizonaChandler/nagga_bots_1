@@ -56,7 +56,7 @@ def create_registration_embed(main_list: list, reserve_list: list, session_info:
     )
     
     if session_info:
-        info_text = f"👊 {session_info.get('event_name', 'Не указано')} | ⏰ {session_info.get('event_time', 'Не указано')} | 👤 {session_info.get('started_by_name', 'Организатор')}"
+        info_text = f"👊 {session_info.get('enemy', 'Не указано')} | ⏰ {session_info.get('event_time', 'Не указано')} | 👤 {session_info.get('started_by_name', 'Организатор')}"
         if session_info.get('additional_info') and session_info['additional_info'] != "Нет":
             info_text += f"\n📝 {session_info['additional_info']}"
         embed.description = info_text
