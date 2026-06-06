@@ -44,9 +44,12 @@ class GlobalSettingsPanel(AdminOnlyView):
 
     def _create_callback(self, module_key: str):
         async def callback(interaction: discord.Interaction):
-            # Проверка прав
-            if not await is_super_admin(str(interaction.user.id)):
-                await interaction.response.send_message("❌ Только супер-администратор!", ephemeral=True)
+            # Проверка прав — доступ у всех админов БД
+            if not await is_admin(str(interaction.user.id)):
+                await interaction.response.send_message(
+                    "❌ **Доступ запрещён**\nТолько администраторы бота могут настраивать модули.",
+                    ephemeral=True
+                )
                 return
             
             # Открываем панель настроек конкретного модуля
@@ -84,9 +87,6 @@ class GlobalSettingsPanel(AdminOnlyView):
             elif module_key == "advertising":
                 from advertising.settings_view import AdSettingsView
                 settings_view = AdSettingsView()
-            elif module_key == "server_stats":
-                from server_stats.settings_view import StatsSettingsView
-                settings_view = StatsSettingsView()
             
             if settings_view:
                 embed = discord.Embed(
