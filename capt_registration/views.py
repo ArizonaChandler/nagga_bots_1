@@ -305,36 +305,28 @@ class ConfirmMoveAllView(discord.ui.View):
         self.count = count
     
     @discord.ui.button(label="✅ Да, переместить всех", style=discord.ButtonStyle.success)
-    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Сразу отвечаем, чтобы не было ошибки
-        await interaction.response.defer(ephemeral=True)
-        
-        try:
-            success, msg = await capt_reg_manager.move_all_to_main(
-                str(interaction.user.id),
-                interaction.client
-            )
+        async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await interaction.response.defer(ephemeral=True)
             
-            # Логируем
-            if success:
-                main_list, reserve_list = capt_reg_manager.get_lists()
-                users_list = ", ".join([f"<@{uid}>" for _, uid, _ in main_list])
-                await capt_reg_manager.log_action(
-                    interaction.client,
-                    "⏫ ВСЕХ В ОСНОВНОЙ",
-                    str(interaction.user.id),
-                    interaction.user.display_name,
-                    f"Перемещены все пользователи из резерва в основной: {users_list}"
+            try:
+                success, msg = await capt_reg_manager.move_all_to_main()
+                
+                # Логируем через db напрямую
+                if success:
+                    db.log_action(
+                        str(interaction.user.id),
+                        "CAPT_MOVE_ALL_TO_MAIN",
+                        f"Перемещены все {self.count} участников из резерва в основной"
+                    )
+                
+                await interaction.followup.send(msg, ephemeral=True)
+                await interaction.edit_original_response(
+                    content=f"✅ {msg}",
+                    view=None
                 )
-            
-            await interaction.followup.send(msg, ephemeral=True)
-            await interaction.edit_original_response(
-                content=f"✅ {msg}",
-                view=None
-            )
-        except Exception as e:
-            logger.error(f"Ошибка: {e}", exc_info=True)
-            await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
+            except Exception as e:
+                logger.error(f"Ошибка: {e}", exc_info=True)
+                await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
     
     @discord.ui.button(label="❌ Отмена", style=discord.ButtonStyle.secondary)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
