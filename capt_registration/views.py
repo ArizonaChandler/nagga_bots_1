@@ -707,7 +707,6 @@ class PublicView(PermanentView):
             await interaction.response.send_message("❌ Регистрация ещё не начата", ephemeral=True)
             return
         
-        # Добавляем immediate response, чтобы избежать таймаута
         await interaction.response.defer(ephemeral=True)
         
         try:
@@ -716,12 +715,12 @@ class PublicView(PermanentView):
                 interaction.user.display_name
             )
             
+            # Простой лог в БД
             if success:
-                await capt_reg_manager.log_action(
-                    interaction.client,
-                    "✅ ПРИСОЕДИНЕНИЕ К РЕГИСТРАЦИИ",
+                db.log_action(
                     str(interaction.user.id),
-                    interaction.user.display_name
+                    "CAPT_JOIN",
+                    f"Присоединился к регистрации"
                 )
             
             await interaction.followup.send(msg, ephemeral=True)

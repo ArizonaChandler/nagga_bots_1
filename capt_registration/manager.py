@@ -31,7 +31,9 @@ class CaptRegistrationManager:
         self.reserve_channel_id = CONFIG.get('capt_reg_reserve_channel')
         self.error_channel_id = CONFIG.get('capt_error_channel')
         self.role_id = CONFIG.get('capt_role_id')
-        self.announcement_channel_id = CONFIG.get('capt_announcement_channel')
+        self.announcement_channel_id = CONFIG.get('capt_alert_channel')
+        
+        print(f"🔍 [CAPT] _load_config: announcement_channel_id = {self.announcement_channel_id}")
         
         for attr in ['main_channel_id', 'reserve_channel_id', 'error_channel_id', 'role_id', 'announcement_channel_id']:
             value = getattr(self, attr)
@@ -174,6 +176,29 @@ class CaptRegistrationManager:
         db.log_action(user_id, "CAPT_REG_END")
         return True
 
+    async def log_action(self, bot, action: str, user_id: str, user_name: str, details: str = None, target_user_id: str = None):
+        """Логирование действий в канал логов CAPT"""
+        log_channel_id = CONFIG.get('capt_log_channel')
+        if not log_channel_id:
+            return
+        
+        channel = bot.get_channel(int(log_channel_id))
+        if not channel:
+            return
+        
+        embed = discord.Embed(
+            title=f"📋 {action}",
+            color=0x00ff00 if "ПРИСОЕДИНЕНИЕ" in action else 0xffa500,
+            timestamp=datetime.now()
+        )
+        embed.add_field(name="👤 Пользователь", value=f"<@{user_id}>")
+        embed.add_field(name="👤 Действие", value=action)
+        
+        if details:
+            embed.add_field(name="📝 Детали", value=details, inline=False)
+        
+        await channel.send(embed=embed)
+
     async def add_participant(self, user_id: str, user_name: str):
         if not self.active_session:
             return False, "❌ Регистрация не активна"
@@ -246,10 +271,12 @@ class CaptRegistrationManager:
     async def _send_announcement(self, event_name: str, event_time: str, additional_info: str = None):
         channel_id = self.announcement_channel_id
         if not channel_id:
+            print("⚠️ [CAPT] Канал для @everyone не настроен")
             return
         
         channel = self.bot.get_channel(int(channel_id))
         if not channel:
+            print(f"❌ [CAPT] Канал {channel_id} не найден")
             return
         
         reserve_channel_mention = f"<#{self.reserve_channel_id}>" if self.reserve_channel_id else "канал регистрации"
@@ -266,7 +293,9 @@ class CaptRegistrationManager:
             embed.add_field(name="📝 Дополнительно", value=additional_info, inline=False)
         embed.set_footer(text="Регистрация активна")
         
+        # Отправляем с @everyone
         await channel.send(content="@everyone", embed=embed)
+        print(f"✅ [CAPT] Отправлен @everyone в канал #{channel.name}")
 
     async def _update_views(self, active: bool):
         from capt_registration.embeds import create_registration_embed
