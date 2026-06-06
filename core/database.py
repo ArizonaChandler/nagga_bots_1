@@ -1683,10 +1683,16 @@ class Database:
             return cursor.fetchall()
 
     def capt_add_registration(self, user_id: str, user_name: str, list_type: str) -> bool:
+        """Добавить участника в список CAPT"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            # Сначала удаляем старую запись, если есть
             cursor.execute('DELETE FROM capt_registrations WHERE user_id = ?', (user_id,))
-            cursor.execute('INSERT INTO capt_registrations (user_id, user_name, list_type, is_active) VALUES (?, ?, ?, 1)', (user_id, user_name, list_type))
+            # Затем добавляем новую
+            cursor.execute('''
+                INSERT INTO capt_registrations (user_id, user_name, list_type, is_active)
+                VALUES (?, ?, ?, 1)
+            ''', (user_id, user_name, list_type))
             conn.commit()
             return cursor.rowcount > 0
 

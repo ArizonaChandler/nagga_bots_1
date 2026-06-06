@@ -707,22 +707,29 @@ class PublicView(PermanentView):
             await interaction.response.send_message("❌ Регистрация ещё не начата", ephemeral=True)
             return
         
-        success, msg = await capt_reg_manager.add_participant(
-            str(interaction.user.id),
-            interaction.user.display_name,
-            interaction.client
-        )
+        # Добавляем immediate response, чтобы избежать таймаута
+        await interaction.response.defer(ephemeral=True)
         
-        # Логируем
-        if success:
-            await capt_reg_manager.log_action(
-                interaction.client,
-                "✅ ПРИСОЕДИНЕНИЕ К РЕГИСТРАЦИИ",
+        try:
+            success, msg = await capt_reg_manager.add_participant(
                 str(interaction.user.id),
                 interaction.user.display_name
             )
-        
-        await interaction.response.send_message(msg, ephemeral=True)
+            
+            if success:
+                await capt_reg_manager.log_action(
+                    interaction.client,
+                    "✅ ПРИСОЕДИНЕНИЕ К РЕГИСТРАЦИИ",
+                    str(interaction.user.id),
+                    interaction.user.display_name
+                )
+            
+            await interaction.followup.send(msg, ephemeral=True)
+        except Exception as e:
+            print(f"❌ Ошибка в join: {e}")
+            import traceback
+            traceback.print_exc()
+            await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
     
     @discord.ui.button(
         label="❌ ОТСОЕДИНИТЬСЯ", 

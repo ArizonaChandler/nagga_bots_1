@@ -178,21 +178,47 @@ class CaptRegistrationManager:
         if not self.active_session:
             return False, "❌ Регистрация не активна"
         
-        existing = db.capt_get_registrations()
-        for reg in existing:
-            if reg[1] == user_id:
-                return False, "❌ Вы уже зарегистрированы"
+        # Проверяем, не зарегистрирован ли уже пользователь
+        main_list, reserve_list = self.get_lists()
         
+        for reg in main_list:
+            if reg[1] == user_id:  # reg[1] это user_id
+                return False, "❌ Вы уже в основном списке"
+        
+        for reg in reserve_list:
+            if reg[1] == user_id:
+                return False, "❌ Вы уже в резерве"
+        
+        # Добавляем в резерв
         if db.capt_add_registration(user_id, user_name, 'reserve'):
             await self._update_views(active=True)
             return True, "✅ Вы добавлены в резерв"
+        
         return False, "❌ Ошибка при регистрации"
 
     async def remove_participant(self, user_id: str):
+        # Проверяем, зарегистрирован ли пользователь
+        main_list, reserve_list = self.get_lists()
+        
+        found = False
+        for reg in main_list:
+            if reg[1] == user_id:
+                found = True
+                break
+        if not found:
+            for reg in reserve_list:
+                if reg[1] == user_id:
+                    found = True
+                    break
+        
+        if not found:
+            return False, "❌ Вы не были зарегистрированы"
+        
         if db.capt_remove_registration(user_id):
             await self._update_views(active=True)
             return True, "✅ Вы удалены из регистрации"
-        return False, "❌ Вы не были зарегистрированы"
+        
+        return False, "❌ Ошибка при удалении"
 
     async def move_to_main(self, reg_id: int):
         if db.capt_move_to_main(reg_id):
