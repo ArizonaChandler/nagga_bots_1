@@ -6,6 +6,7 @@ from mcl_registration.mcl_core import mcl_core
 from mcl_registration.manager import mcl_manager
 from core.database import db
 from core.config import CONFIG
+from server_stats.global_collector import get_collector
 
 
 class StartModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИСТРАЦИЮ"):
@@ -14,14 +15,24 @@ class StartModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИСТРАЦИ
     additional_info = discord.ui.TextInput(label="Дополнительно", required=False, max_length=500, style=discord.TextStyle.paragraph)
     
     async def on_submit(self, interaction: discord.Interaction):
+        
         if not re.match(r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$', self.event_time.value):
             await interaction.response.send_message("❌ Неверный формат времени", ephemeral=True)
             return
         
+        # ПЕРЕДАЁМ interaction.client
         await mcl_manager.start_registration(
-            str(interaction.user.id), interaction.user.display_name,
-            self.event_name.value, self.event_time.value, self.additional_info.value
+            str(interaction.user.id), 
+            interaction.user.display_name,
+            interaction.client,  # ← ВАЖНО: передаём client
+            self.event_name.value, 
+            self.event_time.value, 
+            self.additional_info.value
         )
+        
+        collector = get_collector()
+        if collector:
+            collector.increment_mcl_registration()
         
         await interaction.response.send_message(
             f"✅ Регистрация начата!\n📋 {self.event_name.value} в {self.event_time.value}",

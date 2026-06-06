@@ -3,7 +3,6 @@ import discord
 from datetime import datetime
 from core.database import db
 from core.config import CONFIG, save_config
-from server_stats.global_collector import get_collector
 
 
 class MCLRegistrationManager:
@@ -150,11 +149,6 @@ class MCLRegistrationManager:
         # Обновляем существующие сообщения (активируем кнопки)
         await self._update_views(active=True)
         await self._send_announcement(event_name, event_time, additional_info)
-
-        collector = get_collector()
-        if collector:
-            collector.increment_mcl_registration()
-            print(f"📊 +1 регистрация MCL")
         
         db.log_action(user_id, "MCL_REG_START", f"Session {session_id}")
         return True

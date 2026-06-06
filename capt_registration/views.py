@@ -42,6 +42,7 @@ class StartRegistrationModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИ
     )
     
     async def on_submit(self, interaction: discord.Interaction):
+        
         # Проверяем формат времени
         if not re.match(r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$', self.teleport_time.value):
             await interaction.response.send_message(
@@ -59,32 +60,21 @@ class StartRegistrationModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИ
             'started_by_name': interaction.user.display_name
         }
         
-        # Запускаем регистрацию
+        # Запускаем регистрацию — ПЕРЕДАЁМ interaction.client
         await capt_reg_manager.start_registration(
             str(interaction.user.id),
             interaction.user.display_name,
-            interaction.client,
+            interaction.client,  # ← ВАЖНО: передаём client
             self.enemy.value,
             self.teleport_time.value,
             self.additional_info.value
         )
         
-        # Логируем
-        await capt_reg_manager.log_action(
-            interaction.client,
-            "▶️ НАЧАЛО РЕГИСТРАЦИИ",
-            str(interaction.user.id),
-            interaction.user.display_name,
-            f"Противник: {self.enemy.value}, Время: {self.teleport_time.value}"
-        )
-        
         # В систему статистики
-        from server_stats.global_collector import get_collector
-
         collector = get_collector()
         if collector:
             collector.increment_capt_registrations()
-
+        
         # Отправляем подтверждение
         await interaction.response.send_message(
             f"✅ Регистрация начата!\n"
