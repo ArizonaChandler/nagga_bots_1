@@ -1598,6 +1598,42 @@ class Database:
         today = datetime.now(msk_tz).date().isoformat()
         return self.get_stats_for_date(today)
 
+    def get_total_mp_takes(self) -> int:
+        """Получить общее количество взятых МП за всё время"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM event_takes WHERE is_cancelled = 0')
+            return cursor.fetchone()[0]
+
+    def get_today_mp_takes(self) -> int:
+        """Получить количество взятых МП сегодня"""
+        from datetime import datetime
+        import pytz
+        msk_tz = pytz.timezone('Europe/Moscow')
+        today = datetime.now(msk_tz).date().isoformat()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM event_takes WHERE event_date = ? AND is_cancelled = 0', (today,))
+            return cursor.fetchone()[0]
+
+    def get_total_mcl_registrations(self) -> int:
+        """Получить общее количество регистраций на MCL/ВЗМ"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM mcl_registrations')
+            return cursor.fetchone()[0]
+
+    def get_today_mcl_registrations(self) -> int:
+        """Получить количество регистраций на MCL/ВЗМ сегодня"""
+        from datetime import datetime
+        import pytz
+        msk_tz = pytz.timezone('Europe/Moscow')
+        today = datetime.now(msk_tz).date().isoformat()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM mcl_registrations WHERE date(registered_at) = ?', (today,))
+            return cursor.fetchone()[0]
+
     # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ОТПУСКОВ =====
     
     def get_vacation_setting(self, key: str) -> str:

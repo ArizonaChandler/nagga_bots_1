@@ -23,7 +23,14 @@ class StatsManager:
         CONFIG[key] = value
     
     def save_daily_stats(self, stats_data: dict):
-        """Сохранить дневную статистику в БД"""
+        """Сохранить дневную статистику"""
+        if 'date' not in stats_data:
+            stats_data['date'] = datetime.now(MSK_TZ).date().isoformat()
+        
+        # Добавляем новые поля
+        stats_data.setdefault('mp_takes', 0)
+        stats_data.setdefault('mcl_registrations', 0)
+        
         db.save_daily_stats(stats_data)
     
     def get_today_stats(self):

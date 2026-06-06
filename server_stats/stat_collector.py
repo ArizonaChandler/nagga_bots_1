@@ -75,6 +75,8 @@ class StatsCollector:
                 'accepted_applications': 0,
                 'max_voice_online': 0,
                 'capt_registrations': 0,
+                'mp_takes': 0,
+                'mcl_registrations': 0,
             }
         
         embed = discord.Embed(
@@ -87,15 +89,15 @@ class StatsCollector:
         embed.add_field(
             name="👥 ПОЛЬЗОВАТЕЛИ",
             value=f"└ 🟢 Новых: **{today_stats.get('new_members', 0)}**\n"
-                  f"└ 🔴 Ушло: **{today_stats.get('left_members', 0)}**\n"
-                  f"└ 📈 Всего в войсе (макс): **{today_stats.get('max_voice_online', 0)}**",
+                f"└ 🔴 Ушло: **{today_stats.get('left_members', 0)}**\n"
+                f"└ 📈 Всего в войсе (макс): **{today_stats.get('max_voice_online', 0)}**",
             inline=False
         )
         
         embed.add_field(
             name="📝 ЗАЯВКИ",
             value=f"└ 📋 Новых: **{today_stats.get('new_applications', 0)}**\n"
-                  f"└ ✅ Принято: **{today_stats.get('accepted_applications', 0)}**",
+                f"└ ✅ Принято: **{today_stats.get('accepted_applications', 0)}**",
             inline=False
         )
         
@@ -105,16 +107,22 @@ class StatsCollector:
             inline=False
         )
         
+        embed.add_field(
+            name="🎯 MCL/ВЗМ",
+            value=f"└ 📨 Регистраций: **{today_stats.get('mcl_registrations', 0)}**",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📅 МЕРОПРИЯТИЯ",
+            value=f"└ 🎮 Взято МП: **{today_stats.get('mp_takes', 0)}**",
+            inline=False
+        )
+        
         embed.set_footer(text="Статистика за сегодня")
         
         await channel.send(embed=embed)
         logger.info(f"✅ Отчёт статистики отправлен в #{channel.name}")
-        
-        backup_path = create_backup()
-        if backup_path and settings.get('stats_backup_enabled', True):
-            await self.send_backup_to_admin(backup_path)
-        
-        # Не сбрасываем статистику! Она остаётся в БД
     
     async def send_backup_to_admin(self, backup_path: str):
         """Отправить бекап супер-админу"""
@@ -158,6 +166,37 @@ class StatsCollector:
     def increment_capt_registrations(self):
         stats_manager.increment_stat('capt_registrations')
         print(f"📊 +1 регистрация CAPT")
+
+    async def update_mp_stats(self):
+        """Обновить статистику по МП"""
+        total_takes = db.get_total_mp_takes()
+        today_takes = db.get_today_mp_takes()
+        
+        # Сохраняем в БД для ежедневного отчёта
+        stats = stats_manager.get_today_stats() or {}
+        stats['mp_takes'] = today_takes
+        stats_manager.save_daily_stats(stats)
+
+    async def update_mcl_stats(self):
+        """Обновить статистику по MCL/ВЗМ"""
+        total_reg = db.get_total_mcl_registrations()
+        today_reg = db.get_today_mcl_registrations()
+        
+        stats = stats_manager.get_today_stats() or {}
+        stats['mcl_registrations'] = today_reg
+        stats_manager.save_daily_stats(stats)
+
+    def increment_mp_take(self):
+        """Увеличить счётчик взятых МП (вызывать при взятии МП)"""
+        stats = stats_manager.get_today_stats() or {}
+        stats['mp_takes'] = stats.get('mp_takes', 0) + 1
+        stats_manager.save_daily_stats(stats)
+
+    def increment_mcl_registration(self):
+        """Увеличить счётчик регистраций MCL (вызывать при регистрации)"""
+        stats = stats_manager.get_today_stats() or {}
+        stats['mcl_registrations'] = stats.get('mcl_registrations', 0) + 1
+        stats_manager.save_daily_stats(stats)
 
     async def stop(self):
         """Остановить сбор статистики"""

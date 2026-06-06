@@ -3,6 +3,7 @@ import discord
 from datetime import datetime
 from core.database import db
 from core.config import CONFIG, save_config
+from server_stats.global_collector import get_collector
 
 
 class MCLRegistrationManager:
@@ -76,11 +77,19 @@ class MCLRegistrationManager:
         if not main_channel or not reserve_channel:
             return False
         
-        # Очищаем старые сообщения бота
-        for channel in [main_channel, reserve_channel]:
-            async for msg in channel.history(limit=50):
-                if msg.author == bot.user:
-                    await msg.delete()
+        # Ищем существующие сообщения бота
+        main_msg = None
+        reserve_msg = None
+        
+        async for msg in main_channel.history(limit=50):
+            if msg.author == bot.user and msg.embeds:
+                main_msg = msg
+                break
+        
+        async for msg in reserve_channel.history(limit=50):
+            if msg.author == bot.user and msg.embeds:
+                reserve_msg = msg
+                break
         
         self._load_message_ids()
         
@@ -91,14 +100,23 @@ class MCLRegistrationManager:
         reserve_list = db.mcl_get_registrations('reserve')
         embed = create_registration_embed(main_list, reserve_list, self.session_info)
         
-        main_msg = await main_channel.send(embed=embed, view=ModerationView())
-        reserve_msg = await reserve_channel.send(embed=embed, view=PublicView())
-        
-        self.main_message_id = str(main_msg.id)
-        self.reserve_message_id = str(reserve_msg.id)
+        if main_msg and reserve_msg:
+            await main_msg.edit(embed=embed, view=ModerationView())
+            await reserve_msg.edit(embed=embed, view=PublicView())
+            self.main_message_id = str(main_msg.id)
+            self.reserve_message_id = str(reserve_msg.id)
+        else:
+            main_msg = await main_channel.send(embed=embed, view=ModerationView())
+            reserve_msg = await reserve_channel.send(embed=embed, view=PublicView())
+            self.main_message_id = str(main_msg.id)
+            self.reserve_message_id = str(reserve_msg.id)
         
         if self.active_session:
             db.mcl_update_session_messages(self.active_session, self.main_message_id, self.reserve_message_id)
+        
+        # Если нет активной сессии — деактивируем кнопки
+        if not self.active_session:
+            await self._update_views(active=False)
         
         return True
 
@@ -129,38 +147,14 @@ class MCLRegistrationManager:
         
         db.mcl_clear_all()
         
-        # Принудительно пересоздаём сообщения с кнопками
-        if self.main_channel_id and self.reserve_channel_id:
-            try:
-                main_channel = self.bot.get_channel(int(self.main_channel_id))
-                reserve_channel = self.bot.get_channel(int(self.reserve_channel_id))
-                
-                if main_channel and reserve_channel:
-                    # Удаляем старые сообщения
-                    for channel in [main_channel, reserve_channel]:
-                        async for msg in channel.history(limit=50):
-                            if msg.author == self.bot.user:
-                                await msg.delete()
-                    
-                    # Создаём новые
-                    from mcl_registration.embeds import create_registration_embed
-                    from mcl_registration.views import ModerationView, PublicView
-                    
-                    main_list, reserve_list = self.get_lists()
-                    embed = create_registration_embed(main_list, reserve_list, self.session_info)
-                    
-                    main_msg = await main_channel.send(embed=embed, view=ModerationView())
-                    reserve_msg = await reserve_channel.send(embed=embed, view=PublicView())
-                    
-                    self.main_message_id = str(main_msg.id)
-                    self.reserve_message_id = str(reserve_msg.id)
-                    
-                    db.mcl_update_session_messages(self.active_session, self.main_message_id, self.reserve_message_id)
-            except Exception as e:
-                print(f"Ошибка создания сообщений MCL: {e}")
-        
+        # Обновляем существующие сообщения (активируем кнопки)
         await self._update_views(active=True)
         await self._send_announcement(event_name, event_time, additional_info)
+
+        collector = get_collector()
+        if collector:
+            collector.increment_mcl_registration()
+            print(f"📊 +1 регистрация MCL")
         
         db.log_action(user_id, "MCL_REG_START", f"Session {session_id}")
         return True
@@ -172,6 +166,20 @@ class MCLRegistrationManager:
         self.active_session = None
         self.session_info = None
         db.mcl_clear_all()
+        
+        # Удаляем все сообщения в каналах, кроме embed с кнопками
+        for channel_id in [self.main_channel_id, self.reserve_channel_id]:
+            if channel_id:
+                channel = self.bot.get_channel(int(channel_id))
+                if channel:
+                    async for msg in channel.history(limit=100):
+                        if msg.author == self.bot.user and msg.components:
+                            continue
+                        try:
+                            await msg.delete()
+                        except:
+                            pass
+        
         await self._update_views(active=False)
         db.log_action(user_id, "MCL_REG_END")
         return True
@@ -274,7 +282,6 @@ class MCLRegistrationManager:
     async def stop(self):
         """Остановить систему MCL"""
         print("🎯 [MCL] Остановка системы MCL...")
-        # Не редактируем сообщения здесь — это делает _disable_all_embeds
         pass
 
 

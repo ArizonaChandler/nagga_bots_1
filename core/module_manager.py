@@ -105,16 +105,6 @@ MODULES = {
         "initialize_method": "setup",
         "toggleable": True
     },
-    "server_stats": {
-        "name": "📊 Статистика сервера",
-        "description": "Сбор и отображение статистики",
-        "enabled": False,
-        "channels": ["stats_channel"],
-        "settings_channels": ["stats_settings_channel"],
-        "initializer": "server_stats.initializer.initializer",
-        "initialize_method": "setup",
-        "toggleable": True
-    },
     "files": {
         "name": "📁 Полезные файлы",
         "description": "Хранилище файлов для участников",
@@ -167,10 +157,12 @@ class ModuleManager:
         else:
             await self._disable_module(module_key)
 
+        # Обновляем единую панель настроек
+        await self.update_settings_panel()
+
         return True, f"Модуль **{MODULES[module_key]['name']}** {'включён' if enabled else 'выключен'}"
 
     async def _enable_module(self, module_key: str):
-        """Включить модуль — полная инициализация"""
         module = MODULES[module_key]
         initializer_path = module.get("initializer")
         
@@ -178,7 +170,6 @@ class ModuleManager:
             print(f"⚠️ [MODULE] {module['name']} не имеет инициализатора")
             return
         
-        # Пробуем получить объект
         parts = initializer_path.split('.')
         module_name = '.'.join(parts[:-1]) if len(parts) > 1 else initializer_path
         attr_name = parts[-1] if len(parts) > 1 else None
@@ -195,111 +186,49 @@ class ModuleManager:
                 print(f"❌ [MODULE] Не найден объект для {module['name']}")
                 return
             
-            # Для CAPT и MCL используем initialize_buttons напрямую
             if module_key in ['capt', 'mcl']:
                 if hasattr(obj, 'initialize_buttons'):
                     await obj.initialize_buttons(self.bot)
-                    print(f"✅ [MODULE] {module['name']} инициализирован (initialize_buttons)")
-                else:
-                    print(f"❌ [MODULE] У {module['name']} нет initialize_buttons")
+                    print(f"✅ [MODULE] {module['name']} инициализирован")
             else:
-                # Для остальных модулей
-                if hasattr(obj, 'enable'):
-                    await obj.enable()
-                    print(f"✅ [MODULE] {module['name']} включён (enable)")
-                elif hasattr(obj, 'initialize_all'):
+                if hasattr(obj, 'initialize_all'):
                     await obj.initialize_all()
-                    print(f"✅ [MODULE] {module['name']} инициализирован (initialize_all)")
+                    print(f"✅ [MODULE] {module['name']} инициализирован")
+                elif hasattr(obj, 'setup'):
+                    await obj.setup(self.bot)
+                    print(f"✅ [MODULE] {module['name']} инициализирован")
                 else:
-                    print(f"❌ [MODULE] У {module['name']} нет метода enable/initialize_all")
-                
+                    print(f"❌ [MODULE] У {module['name']} нет метода инициализации")
+                    
         except Exception as e:
             print(f"❌ [MODULE] Ошибка инициализации {module['name']}: {e}")
             import traceback
             traceback.print_exc()
 
     async def _disable_module(self, module_key: str):
-        """Выключить модуль"""
         module = MODULES[module_key]
         initializer_path = module.get("initializer")
         
-        # Пытаемся вызвать метод stop, если он есть
         if initializer_path:
-            print(f"🛑 [MODULE] Вызываю stop для {module_key}")
-            try:
-                await self._call_module_method(initializer_path, "stop")
-                print(f"✅ [MODULE] stop для {module_key} выполнен")
-            except Exception as e:
-                print(f"⚠️ [MODULE] stop для {module_key} не найден или ошибка: {e}")
-        
-        await self._disable_all_embeds(module_key)
-
-    async def _call_module_method(self, module_path: str, method_name: str):
-        try:
-            parts = module_path.split('.')
-            
-            # Если путь заканчивается на .initializer, значит это специальный случай
-            if len(parts) >= 2 and parts[-1] == 'initializer':
-                module_name = '.'.join(parts[:-1])  # модуль без .initializer
-                attr_name = parts[-1]  # 'initializer'
-                
-                # Импортируем модуль
-                imported = __import__(module_name, fromlist=[attr_name])
-                
-                # Получаем переменную initializer (пока None)
-                obj = getattr(imported, attr_name, None)
-                
-                if obj is None:
-                    # Если initializer None, значит setup ещё не вызывался
-                    # Вызываем setup
-                    setup_func = getattr(imported, 'setup', None)
-                    if setup_func:
-                        obj = await setup_func(self.bot)
-                
-                if obj is None:
-                    print(f"❌ [MODULE] Не удалось получить экземпляр для {module_path}")
-                    return
-                
-                # Теперь у obj есть метод stop
-                if hasattr(obj, method_name):
-                    method = getattr(obj, method_name)
-                    await method()
-                    print(f"✅ [MODULE] {module_path}.{method_name}() вызван")
-                else:
-                    print(f"❌ [MODULE] У {obj} нет метода {method_name}")
-                return
-            
-            # Обычный путь (без .initializer)
-            module_name = '.'.join(parts[:-1]) if len(parts) > 1 else module_path
+            parts = initializer_path.split('.')
+            module_name = '.'.join(parts[:-1]) if len(parts) > 1 else initializer_path
             attr_name = parts[-1] if len(parts) > 1 else None
             
-            imported = __import__(module_name, fromlist=[attr_name] if attr_name else [])
-            
-            if attr_name:
-                obj = getattr(imported, attr_name, None)
-                if obj is None:
-                    print(f"❌ [MODULE] В {module_name} нет атрибута {attr_name}")
-                    return
-            else:
-                obj = imported
-            
-            if not hasattr(obj, method_name):
-                print(f"❌ [MODULE] У {obj} нет метода {method_name}")
-                return
-            
-            method = getattr(obj, method_name)
-            
             try:
-                await method(self.bot)
-            except TypeError:
-                await method()
-            
-            print(f"✅ [MODULE] {module_path}.{method_name}() вызван")
-            
-        except Exception as e:
-            print(f"❌ [MODULE] Ошибка вызова {method_name} для {module_path}: {e}")
-            import traceback
-            traceback.print_exc()
+                imported = __import__(module_name, fromlist=[attr_name] if attr_name else [])
+                
+                if attr_name:
+                    obj = getattr(imported, attr_name, None)
+                else:
+                    obj = imported
+                
+                if obj and hasattr(obj, 'stop'):
+                    await obj.stop()
+                    print(f"✅ [MODULE] {module['name']} остановлен")
+            except Exception as e:
+                print(f"⚠️ [MODULE] Ошибка остановки {module['name']}: {e}")
+        
+        await self._disable_all_embeds(module_key)
 
     async def _disable_all_embeds(self, module_key: str):
         module = MODULES[module_key]
@@ -340,21 +269,36 @@ class ModuleManager:
         for module_key, module in MODULES.items():
             if module["enabled"]:
                 print(f"🔍 [MODULE] Пытаюсь инициализировать {module['name']}...")
-                initializer_path = module.get("initializer")
-                initialize_method = module.get("initialize_method", "initialize_all")
-                if initializer_path:
-                    try:
-                        await self._call_module_method(initializer_path, initialize_method)
-                        print(f"✅ [MODULE] {module['name']} инициализирован")
-                    except Exception as e:
-                        print(f"❌ [MODULE] Ошибка инициализации {module['name']}: {e}")
-                        import traceback
-                        traceback.print_exc()
-                else:
-                    print(f"⚠️ [MODULE] {module['name']} не имеет инициализатора")
+                await self._enable_module(module_key)
             else:
                 print(f"⏭️ [MODULE] {module['name']} выключен, пропускаем")
         print("📋 [MODULE] Инициализация завершена")
+
+    async def update_settings_panel(self):
+        """Обновить единую панель настроек (добавить/убрать кнопки модулей)"""
+        channel_id = db.get_setting('global_settings_channel')
+        if not channel_id:
+            return
+        
+        channel = self.bot.get_channel(int(channel_id))
+        if not channel:
+            return
+        
+        from core.settings_panel import GlobalSettingsPanel
+        
+        async for msg in channel.history(limit=50):
+            if msg.author == self.bot.user and msg.components:
+                await msg.edit(view=GlobalSettingsPanel(self.bot))
+                return
+        
+        embed = discord.Embed(
+            title="⚙️ **ЦЕНТР УПРАВЛЕНИЯ СИСТЕМАМИ**",
+            description="Настройка всех модулей бота.\n\n"
+                        "Здесь отображаются кнопки только для **включённых** систем.\n"
+                        "Чтобы включить/выключить модуль, используйте 🎛️ Управление модулями в !settings.",
+            color=0x7289da
+        )
+        await channel.send(embed=embed, view=GlobalSettingsPanel(self.bot))
 
 
 module_manager = None

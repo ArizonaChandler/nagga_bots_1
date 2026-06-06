@@ -313,9 +313,15 @@ class AutoAdvertiser:
             logger.error(f"❌ Критическая ошибка инициализации канала настроек: {e}", exc_info=True)
             return False
 
+    async def stop(self):
+        self.running = False
+        if self.task:
+            self.task.cancel()
+
 advertiser = None
 
 async def setup(bot):
     global advertiser
     advertiser = AutoAdvertiser(bot)
     await advertiser.start()
+    return advertiser

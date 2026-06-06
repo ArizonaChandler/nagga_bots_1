@@ -28,21 +28,10 @@ from commands.log import setup as setup_log
 # ========== МОДУЛИ ==========
 from files.core import file_manager
 from events.scheduler import setup as setup_scheduler
-from advertising.core import setup as setup_advertising
-from advertising.commands import setup as setup_ad_commands
-from applications import setup_applications
-from afk import setup_afk
-from tier import setup_tier
-from vacation import setup_vacation
-from games.initializer import setup as setup_games
-from birthday.initializer import setup as setup_birthday
-from mcl_registration.manager import mcl_manager
-from mcl_registration.initializer import setup as setup_mcl
 from core.module_manager import setup as setup_modules
 
 # ========== СТАТИСТИКА ==========
 from server_stats.global_collector import set_collector, get_collector
-from server_stats.initializer import setup as setup_stats_panel
 
 # ========== НАСТРОЙКА ==========
 load_dotenv()
@@ -71,52 +60,6 @@ setup_log(bot)
 setup_ad_commands(bot)
 
 
-# ========== ФУНКЦИИ ИНИЦИАЛИЗАЦИИ МОДУЛЕЙ ==========
-async def init_capt():
-    from capt_registration.manager import capt_reg_manager
-    await capt_reg_manager.initialize_buttons(bot)
-
-
-async def init_advertising():
-    from advertising.core import advertiser
-    if advertiser:
-        await advertiser.initialize_settings_channel(bot)
-
-
-async def init_events():
-    from events.scheduler import scheduler
-    if scheduler:
-        await scheduler.initialize_settings_channel(bot)
-
-
-async def init_stats():
-    set_collector(bot)
-    collector = get_collector()
-    if collector:
-        await collector.start()
-
-
-async def cleanup_vacation_on_leave(member):
-    from vacation.manager import vacation_manager
-    
-    vacation = vacation_manager.get_user_vacation(str(member.id))
-    if vacation:
-        vacation_manager.remove_user_from_vacation(str(member.id))
-        print(f"✅ {member.name} удалён из системы отпусков")
-        
-        log_channel_id = db.get_setting('vacation_log_channel')
-        if log_channel_id:
-            log_channel = bot.get_channel(int(log_channel_id))
-            if log_channel:
-                embed = discord.Embed(
-                    title="👋 УДАЛЁН ИЗ ОТПУСКА",
-                    description=f"Пользователь **{member.name}** покинул сервер",
-                    color=0x808080,
-                    timestamp=datetime.now()
-                )
-                await log_channel.send(embed=embed)
-
-
 # ========== СОБЫТИЯ ==========
 @bot.event
 async def on_ready():
@@ -128,22 +71,20 @@ async def on_ready():
     print(f"🌐 Серверов: {len(bot.guilds)}")
     print(f"📁 Файловое хранилище: {file_manager.storage_path}")
 
-    # ========== ИНИЦИАЛИЗАЦИЯ СИСТЕМЫ МОДУЛЕЙ ==========
+    # Инициализация системы модулей
     try:
-        from core.module_manager import setup as setup_modules
         print("🎛️ Инициализация системы модулей...")
         await setup_modules(bot)
     except Exception as e:
         print(f"❌ Ошибка инициализации модулей: {e}")
         traceback.print_exc()
 
-    # ========== ИНИЦИАЛИЗАЦИЯ СТАТИСТИКИ ==========
+    # Инициализация сборщика статистики
     try:
         print("📊 Инициализация сборщика статистики...")
         from server_stats.initializer import setup as setup_stats_panel
         await setup_stats_panel(bot)
         
-        from server_stats.global_collector import set_collector, get_collector
         set_collector(bot)
         collector = get_collector()
         if collector:
@@ -154,7 +95,14 @@ async def on_ready():
         print(f"❌ Ошибка инициализации статистики: {e}")
         traceback.print_exc()
 
-    # ========== СТАТУС БОТА ==========
+    # Создаём единую панель настроек (если канал настроен)
+    try:
+        from core.module_manager import module_manager
+        if module_manager:
+            await module_manager.update_settings_panel()
+    except Exception as e:
+        print(f"❌ Ошибка создания панели настроек: {e}")
+
     await bot.change_presence(activity=discord.Activity(
         type=discord.ActivityType.watching,
         name=f"{CONFIG.get('family_name', 'Семья')} | !info"
@@ -172,6 +120,7 @@ async def on_command_error(ctx, error):
 
 @bot.event
 async def on_member_join(member):
+    # В систему статистики
     collector = get_collector()
     if collector:
         collector.increment_new_members()
@@ -181,41 +130,44 @@ async def on_member_join(member):
         
         settings = app_manager.get_settings()
         welcome_message = settings.get('welcome_message')
+        
         if not welcome_message:
             return
-
+        
         welcome_channel_id = settings.get('welcome_channel')
         if not welcome_channel_id:
             return
-
+        
         welcome_channel = member.guild.get_channel(int(welcome_channel_id))
         if not welcome_channel:
             return
-
+        
         submit_channel_id = settings.get('submit_channel')
         submit_channel_mention = f"<#{submit_channel_id}>" if submit_channel_id else "канал подачи заявок"
-
+        
         welcome_text = welcome_message.format(
             user=member.mention,
             channel=submit_channel_mention,
             server=member.guild.name
         )
-
+        
         welcome_image = settings.get('welcome_image')
-
+        
         embed = discord.Embed(
             title="👋 ДОБРО ПОЖАЛОВАТЬ!",
             description=welcome_text,
             color=0x00ff00,
             timestamp=datetime.now()
         )
+        
         if welcome_image:
             embed.set_image(url=welcome_image)
+        
         embed.set_footer(text=member.guild.name)
-
+        
         await welcome_channel.send(content=member.mention, embed=embed)
         print(f"✅ Приветствие отправлено для {member.name} в #{welcome_channel.name}")
-
+        
     except Exception as e:
         print(f"❌ Ошибка при приветствии {member.name}: {e}")
 
@@ -254,10 +206,29 @@ async def on_member_remove(member):
                         break
 
         # Очистка отпусков
-        await cleanup_vacation_on_leave(member)
+        try:
+            from vacation.manager import vacation_manager
+            vacation = vacation_manager.get_user_vacation(str(member.id))
+            if vacation:
+                vacation_manager.remove_user_from_vacation(str(member.id))
+                print(f"✅ {member.name} удалён из системы отпусков")
+                
+                log_channel_id = db.get_setting('vacation_log_channel')
+                if log_channel_id:
+                    log_channel = bot.get_channel(int(log_channel_id))
+                    if log_channel:
+                        embed = discord.Embed(
+                            title="👋 УДАЛЁН ИЗ ОТПУСКА",
+                            description=f"Пользователь **{member.name}** покинул сервер",
+                            color=0x808080,
+                            timestamp=datetime.now()
+                        )
+                        await log_channel.send(embed=embed)
+        except Exception as e:
+            print(f"❌ Ошибка удаления из отпуска: {e}")
 
         # Очистка дней рождения
-        db.remove_birthday_on_leave(str(member.id))
+        db.remove_birthday(str(member.id))
         print(f"🗑️ [Birthday] {member.name} удалён из системы дней рождения")
 
     except Exception as e:
@@ -265,13 +236,10 @@ async def on_member_remove(member):
         traceback.print_exc()
 
 
-# ========== АДМИНИСТРАТИВНЫЕ КОМАНДЫ @bot.command ==========
-
 # ========== ЗАПУСК ==========
 async def main():
     async with bot:
         await setup_scheduler(bot)
-        await setup_advertising(bot)
         await bot.start(BOT_TOKEN)
 
 
