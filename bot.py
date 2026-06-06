@@ -235,6 +235,37 @@ async def on_member_remove(member):
         traceback.print_exc()
 
 
+@bot.command(name="fix_tier_message")
+@commands.has_permissions(administrator=True)
+async def fix_tier_message(ctx, application_id: int):
+    """Восстановить испорченное сообщение заявки"""
+    app = tier_manager.get_application(application_id)
+    if not app:
+        await ctx.send("❌ Заявка не найдена")
+        return
+    
+    from tier.views import TierModerationView
+    
+    embed = discord.Embed(
+        title="🌟 НОВАЯ ЗАЯВКА НА TIER",
+        color=0xffa500,
+        timestamp=datetime.now()
+    )
+    embed.add_field(name="👤 Отправитель", value=f"<@{app['user_id']}>", inline=True)
+    embed.add_field(name="🎮 Игровой ник", value=app['nickname'], inline=True)
+    embed.add_field(name="🏆 Откат с арены", value=app['arena_link'], inline=False)
+    embed.add_field(name="📸 Скриншоты", value=app['screenshots'][:200], inline=False)
+    embed.add_field(name="📝 Дополнительно", value=app.get('additional', 'Нет'), inline=False)
+    embed.set_footer(text=f"Заявка ID: {application_id}")
+    
+    settings = tier_manager.get_settings()
+    channel_id = settings.get('tier_applications_channel')
+    channel = ctx.guild.get_channel(int(channel_id))
+    
+    if channel:
+        await channel.send(embed=embed, view=TierModerationView(application_id))
+        await ctx.send(f"✅ Заявка {application_id} восстановлена")
+
 # ========== ЗАПУСК ==========
 async def main():
     async with bot:

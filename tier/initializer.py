@@ -198,32 +198,43 @@ class TierInitializer:
             return
         
         restored = 0
+        errors = 0
+        
         for msg_data in messages:
             try:
                 channel = self.bot.get_channel(int(msg_data['channel_id']))
                 if not channel:
                     print(f"❌ Канал {msg_data['channel_id']} не найден")
+                    errors += 1
                     continue
                 
                 try:
                     message = await channel.fetch_message(int(msg_data['message_id']))
                 except discord.NotFound:
-                    print(f"❌ Сообщение {msg_data['message_id']} не найдено")
+                    print(f"❌ Сообщение {msg_data['message_id']} не найдено, удаляем запись")
                     tier_manager.delete_application_message(msg_data['application_id'])
                     continue
                 
-                # Восстанавливаем view - передаём ТОЛЬКО application_id
-                # target_tier будет определён из данных заявки в самом view
-                view = TierModerationView(msg_data['application_id'])
+                # 🔥 ПРОВЕРКА: не испорчено ли сообщение?
+                if message.embeds and "⛔ **Система отключена**" in message.embeds[0].description:
+                    print(f"⚠️ Заявка {msg_data['application_id']} испорчена, удаляем и создаём новую?")
+                    # Удаляем испорченное сообщение
+                    await message.delete()
+                    tier_manager.delete_application_message(msg_data['application_id'])
+                    errors += 1
+                    continue
                 
+                # Восстанавливаем view
+                view = TierModerationView(msg_data['application_id'])
                 await message.edit(view=view)
                 restored += 1
-                print(f"✅ Восстановлена заявка TIER {msg_data['application_id']} от {msg_data.get('nickname', 'Unknown')} in #{channel.name}")
+                print(f"✅ Восстановлена заявка {msg_data['application_id']}")
                 
             except Exception as e:
-                print(f"❌ Ошибка восстановления заявки TIER {msg_data['application_id']}: {e}")
+                print(f"❌ Ошибка восстановления заявки {msg_data.get('application_id', 'unknown')}: {e}")
+                errors += 1
         
-        print(f"✅ Восстановлено {restored} заявок TIER")
+        print(f"✅ Восстановлено {restored} заявок, ошибок: {errors}")
 
     async def stop(self):
         """Остановить систему TIER"""

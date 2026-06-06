@@ -89,6 +89,13 @@ class TierModerationView(discord.ui.View):
         super().__init__(timeout=None)
         self.application_id = application_id
 
+        # 🔥 ПРОВЕРКА: существует ли заявка в БД?
+        app = tier_manager.get_application(application_id)
+        if not app:
+            # Если заявки нет в БД, отключаем все кнопки
+            for child in self.children:
+                child.disabled = True
+
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Проверка: только пользователи с ролью Tier Checker могут нажимать кнопки"""
         settings = tier_manager.get_settings()
