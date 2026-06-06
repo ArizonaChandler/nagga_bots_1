@@ -125,7 +125,7 @@ class CaptRegistrationManager:
 
     async def start_registration(self, user_id: str, user_name: str, bot, event_name: str, event_time: str, additional_info: str = None):
         self._load_config()
-        self.bot = bot
+        self.bot = bot  # ← сохраняем бота
         
         if self.active_session:
             db.capt_end_session(self.active_session, user_id)
@@ -259,13 +259,10 @@ class CaptRegistrationManager:
                         view.update_buttons(True)
                         await msg.edit(embed=embed, view=view)
                     else:
-                        # Заглушка при выключении модуля
-                        embed = discord.Embed(
-                            title="⛔ 🎯 CAPT Регистрация",
-                            description="**Система отключена администратором**\nОбратитесь к администрации для включения.",
-                            color=0x808080
-                        )
-                        await msg.edit(embed=embed, view=None)
+                        embed = create_registration_embed(main_list, reserve_list, None)
+                        view = ModerationView()
+                        view.update_buttons(False)
+                        await msg.edit(embed=embed, view=view)
             except Exception as e:
                 print(f"❌ [CAPT] Ошибка обновления main канала: {e}")
         
@@ -280,12 +277,10 @@ class CaptRegistrationManager:
                         view.set_registration_active(True)
                         await msg.edit(embed=embed, view=view)
                     else:
-                        embed = discord.Embed(
-                            title="⛔ 🎯 CAPT Регистрация",
-                            description="**Система отключена администратором**\nОбратитесь к администрации для включения.",
-                            color=0x808080
-                        )
-                        await msg.edit(embed=embed, view=None)
+                        embed = create_registration_embed(main_list, reserve_list, None)
+                        view = PublicView()
+                        view.set_registration_active(False)
+                        await msg.edit(embed=embed, view=view)
             except Exception as e:
                 print(f"❌ [CAPT] Ошибка обновления reserve канала: {e}")
 

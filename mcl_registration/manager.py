@@ -122,7 +122,7 @@ class MCLRegistrationManager:
 
     async def start_registration(self, user_id: str, user_name: str, bot, event_name: str, event_time: str, additional_info: str = None):
         self._load_config()
-        self.bot = bot
+        self.bot = bot  # ← сохраняем бота
         
         if self.active_session:
             db.mcl_end_session(self.active_session, user_id)
@@ -144,7 +144,8 @@ class MCLRegistrationManager:
         
         await self._update_views(active=True)
         await self._send_announcement(event_name, event_time, additional_info)
-
+        
+        from server_stats.global_collector import get_collector
         collector = get_collector()
         if collector:
             collector.increment_mcl_registration()

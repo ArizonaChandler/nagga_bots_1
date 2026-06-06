@@ -15,29 +15,34 @@ class StartModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИСТРАЦИ
     additional_info = discord.ui.TextInput(label="Дополнительно", required=False, max_length=500, style=discord.TextStyle.paragraph)
     
     async def on_submit(self, interaction: discord.Interaction):
+        import re
+        from mcl_registration.manager import mcl_manager
         
         if not re.match(r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$', self.event_time.value):
             await interaction.response.send_message("❌ Неверный формат времени", ephemeral=True)
             return
         
-        # ПЕРЕДАЁМ interaction.client
-        await mcl_manager.start_registration(
-            str(interaction.user.id), 
-            interaction.user.display_name,
-            interaction.client,  # ← ВАЖНО: передаём client
-            self.event_name.value, 
-            self.event_time.value, 
-            self.additional_info.value
-        )
+        await interaction.response.defer(ephemeral=True)
         
-        collector = get_collector()
-        if collector:
-            collector.increment_mcl_registration()
-        
-        await interaction.response.send_message(
-            f"✅ Регистрация начата!\n📋 {self.event_name.value} в {self.event_time.value}",
-            ephemeral=True
-        )
+        try:
+            await mcl_manager.start_registration(
+                str(interaction.user.id),
+                interaction.user.display_name,
+                interaction.client,  # ← передаём client как bot
+                self.event_name.value,
+                self.event_time.value,
+                self.additional_info.value
+            )
+            
+            await interaction.followup.send(
+                f"✅ Регистрация начата!\n📋 {self.event_name.value} в {self.event_time.value}",
+                ephemeral=True
+            )
+        except Exception as e:
+            print(f"❌ Ошибка в StartModal: {e}")
+            import traceback
+            traceback.print_exc()
+            await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
 
 
 class SendModal(discord.ui.Modal, title="📨 РАССЫЛКА В ЛС"):

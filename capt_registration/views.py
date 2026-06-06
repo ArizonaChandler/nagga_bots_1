@@ -15,22 +15,18 @@ logger = logging.getLogger(__name__)
 # ===== МОДАЛКА ДЛЯ НАЧАЛА РЕГИСТРАЦИИ =====
 
 class StartRegistrationModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИСТРАЦИЮ НА CAPT"):
-    """Модалка для ввода информации о CAPT"""
-    
     enemy = discord.ui.TextInput(
         label="Против кого играем",
         placeholder="Например: Cortez",
         max_length=100,
-        required=True,
-        style=discord.TextStyle.short
+        required=True
     )
     
     teleport_time = discord.ui.TextInput(
         label="Время телепорта (МСК)",
         placeholder="19:30",
         max_length=5,
-        required=True,
-        style=discord.TextStyle.short
+        required=True
     )
     
     additional_info = discord.ui.TextInput(
@@ -42,6 +38,8 @@ class StartRegistrationModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИ
     )
     
     async def on_submit(self, interaction: discord.Interaction):
+        import re
+        from capt_registration.manager import capt_reg_manager
         
         # Проверяем формат времени
         if not re.match(r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$', self.teleport_time.value):
@@ -51,37 +49,37 @@ class StartRegistrationModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИ
             )
             return
         
-        # Сохраняем информацию о CAPT в менеджере
-        capt_reg_manager.capt_info = {
-            'enemy': self.enemy.value,
-            'teleport_time': self.teleport_time.value,
-            'additional_info': self.additional_info.value or "Нет",
-            'started_by': interaction.user.mention,
-            'started_by_name': interaction.user.display_name
-        }
+        # Отвечаем сразу, чтобы не было таймаута
+        await interaction.response.defer(ephemeral=True)
         
-        # Запускаем регистрацию — ПЕРЕДАЁМ interaction.client
-        await capt_reg_manager.start_registration(
-            str(interaction.user.id),
-            interaction.user.display_name,
-            interaction.client,  # ← ВАЖНО: передаём client
-            self.enemy.value,
-            self.teleport_time.value,
-            self.additional_info.value
-        )
-        
-        # В систему статистики
-        collector = get_collector()
-        if collector:
-            collector.increment_capt_registrations()
-        
-        # Отправляем подтверждение
-        await interaction.response.send_message(
-            f"✅ Регистрация начата!\n"
-            f"🎯 Противник: {self.enemy.value}\n"
-            f"⏰ Телепорт в: {self.teleport_time.value} МСК",
-            ephemeral=True
-        )
+        try:
+            # Запускаем регистрацию
+            await capt_reg_manager.start_registration(
+                str(interaction.user.id),
+                interaction.user.display_name,
+                interaction.client,  # ← передаём client как bot
+                self.enemy.value,
+                self.teleport_time.value,
+                self.additional_info.value
+            )
+            
+            # В систему статистики
+            from server_stats.global_collector import get_collector
+            collector = get_collector()
+            if collector:
+                collector.increment_capt_registrations()
+            
+            await interaction.followup.send(
+                f"✅ Регистрация начата!\n"
+                f"🎯 Противник: {self.enemy.value}\n"
+                f"⏰ Телепорт в: {self.teleport_time.value} МСК",
+                ephemeral=True
+            )
+        except Exception as e:
+            print(f"❌ Ошибка в StartRegistrationModal: {e}")
+            import traceback
+            traceback.print_exc()
+            await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
 
 
 # ===== МОДАЛКА ДЛЯ ПЕРЕМЕЩЕНИЯ В ОСНОВНОЙ =====
