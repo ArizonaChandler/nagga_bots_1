@@ -237,32 +237,51 @@ class TierInitializer:
                 if channel:
                     async for msg in channel.history(limit=50):
                         if msg.author == self.bot.user and msg.embeds:
-                            await msg.edit(
-                                embed=discord.Embed(
-                                    title="🌟 **ПОДАЧА ЗАЯВОК НА TIER**",
-                                    description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
-                                    color=0x808080
-                                ),
-                                view=None
+                            # Изменяем embed, но НЕ удаляем сообщение
+                            embed = discord.Embed(
+                                title="🌟 **ПОДАЧА ЗАЯВОК НА TIER**",
+                                description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
+                                color=0x808080
                             )
+                            await msg.edit(embed=embed, view=None)
                             break
 
     async def enable(self):
         """Включить систему TIER"""
         print("🌟 [TIER] Включение системы TIER...")
         
+        # Получаем настройки
         settings = tier_manager.get_settings()
-        for channel_key in ['tier_submit_channel', 'tier_applications_channel']:
-            channel_id = settings.get(channel_key)
-            if channel_id:
-                channel = self.bot.get_channel(int(channel_id))
-                if channel:
-                    async for msg in channel.history(limit=50):
-                        if msg.author == self.bot.user and msg.embeds:
-                            if "⛔ **Система отключена**" in msg.embeds[0].description:
-                                await msg.delete()
-                                break
+        submit_channel_id = settings.get('tier_submit_channel')
         
+        if submit_channel_id:
+            channel = self.bot.get_channel(int(submit_channel_id))
+            if channel:
+                # Ищем и удаляем сообщение об отключении
+                async for msg in channel.history(limit=50):
+                    if msg.author == self.bot.user and msg.embeds:
+                        if "⛔ **Система отключена**" in msg.embeds[0].description:
+                            await msg.delete()
+                            break
+                
+                # СОЗДАЁМ НОВУЮ ПАНЕЛЬ (важно!)
+                from tier.views import TierSubmitView
+                embed = discord.Embed(
+                    title="🌟 **ПОДАЧА ЗАЯВОК НА TIER**",
+                    description=f"Перед подачей заявки ознакомьтесь с требованиями в канале <#{settings.get('tier_info_channel', 'tier-info')}>\n\n"
+                                f"**Как это работает:**\n"
+                                f"└ Система автоматически определит ваш текущий уровень\n"
+                                f"└ Вы подаёте заявку на следующий уровень\n"
+                                f"└ Заявку рассмотрит Tier Checker\n\n"
+                                f"**Уровни:**\n"
+                                f"└ 🟤 **Tier 3** → начальный уровень\n"
+                                f"└ ⚪ **Tier 2** → средний уровень\n"
+                                f"└ 🔴 **Tier 1** → высший уровень",
+                    color=0xffa500
+                )
+                await channel.send(embed=embed, view=TierSubmitView())
+        
+        # Переинициализируем остальные каналы
         await self.initialize_all()
 
 # Глобальный экземпляр

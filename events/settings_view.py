@@ -116,6 +116,7 @@ class EventsSettingsView(AdminOnlyView):
         if not await is_admin(str(interaction.user.id)):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
             return
+        await interaction.response.defer(ephemeral=True)
         await send_event_stats(interaction, interaction.guild)
 
 
@@ -552,4 +553,11 @@ async def send_event_stats(interaction, guild):
         embed.add_field(name="🏆 Топ организаторов", value="Нет данных за 30 дней", inline=False)
     embed.add_field(name="📅 Мероприятия", value=f"Всего: `{stats['total_events']}`\nАктивных: `{stats['active_events']}`", inline=True)
     embed.add_field(name="✅ Проведено", value=f"За всё время: `{stats['total_takes']}`\nЗа 30 дней: `{stats['takes_30d']}`\nСегодня: `{stats['takes_today']}`", inline=True)
-    await interaction.followup.send(embed=embed, ephemeral=True)
+    try:
+        await interaction.followup.send(embed=embed, ephemeral=True)
+    except discord.errors.NotFound as e:
+        if e.code == 10015:  # Unknown Webhook
+            # Отправляем новое сообщение вместо followup
+            await interaction.user.send("⏰ Время сессии истекло. Используйте команду заново.")
+        else:
+            raise
