@@ -93,7 +93,12 @@ class TierManager:
 
     def get_all_application_messages(self):
         """Получить все сохранённые сообщения с заявками"""
-        return db.get_all_tier_application_messages()
+        try:
+            return db.get_all_tier_application_messages()
+        except AttributeError as e:
+            print(f"❌ Ошибка доступа к БД: {e}")
+            # Возвращаем пустой список, если БД не инициализирована
+            return []
 
     def delete_application_message(self, application_id: int):
         """Удалить запись о сообщении"""

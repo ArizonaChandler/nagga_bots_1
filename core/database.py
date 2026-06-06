@@ -1519,25 +1519,44 @@ class Database:
 
     def get_all_tier_application_messages(self):
         """Получить все сохранённые сообщения с заявками"""
-        cursor = self.connection.cursor()
-        cursor.execute("""
-            SELECT application_id, channel_id, message_id, user_id 
-            FROM tier_application_messages 
-            WHERE application_id IN (SELECT id FROM tier_applications WHERE status = 'pending')
-        """)
-        rows = cursor.fetchall()
-        
-        # Защита от None
-        result = []
-        for row in rows:
-            if row and all(row):  # Проверяем, что все значения не None
-                result.append({
-                    'application_id': row[0],
-                    'channel_id': row[1],
-                    'message_id': row[2],
-                    'user_id': row[3]
-                })
-        return result
+        try:
+            # Пытаемся получить connection разными способами
+            conn = None
+            if hasattr(self, 'connection'):
+                conn = self.connection
+            elif hasattr(self, '_connection'):
+                conn = self._connection
+            elif hasattr(self, 'db'):
+                conn = self.db
+            elif hasattr(self, 'conn'):
+                conn = self.conn
+            
+            if not conn:
+                print("❌ Нет подключения к базе данных")
+                return []
+            
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT application_id, channel_id, message_id, user_id 
+                FROM tier_application_messages 
+                WHERE application_id IN (SELECT id FROM tier_applications WHERE status = 'pending')
+            """)
+            rows = cursor.fetchall()
+            
+            result = []
+            for row in rows:
+                if row and len(row) >= 4:
+                    result.append({
+                        'application_id': row[0],
+                        'channel_id': row[1],
+                        'message_id': row[2],
+                        'user_id': row[3]
+                    })
+            return result
+            
+        except Exception as e:
+            print(f"❌ Ошибка в get_all_tier_application_messages: {e}")
+            return []
 
     def delete_tier_application_message(self, application_id: int):
         with self.get_connection() as conn:
