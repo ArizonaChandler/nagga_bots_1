@@ -106,7 +106,6 @@ class AFKInitializer:
                 await asyncio.sleep(60)
     
     async def _init_afk_channel(self, settings):
-        """Инициализация канала с кнопками AFK"""
         channel_id = settings.get('afk_channel')
         if not channel_id:
             logger.warning("⚠️ Канал AFK не настроен")
@@ -117,40 +116,28 @@ class AFKInitializer:
             logger.error(f"❌ Канал AFK {channel_id} не найден")
             return
         
+        # === УДАЛЯЕМ СТАРОЕ СООБЩЕНИЕ БОТА ===
+        async for msg in channel.history(limit=50):
+            if msg.author == self.bot.user and msg.embeds:
+                await msg.delete()
+                break
+        
         from afk.views import AFKPublicView, update_afk_embed
         
         max_hours = int(settings.get('afk_max_hours', 24))
         
-        # Ищем существующее сообщение с кнопками AFK
-        message_exists = False
-        async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user:
-                if msg.components and len(msg.components) > 0:
-                    for component in msg.components:
-                        for button in component.children:
-                            if button.custom_id in ["afk_go", "afk_back"]:
-                                await msg.edit(view=AFKPublicView(self.bot, channel_id, max_hours))
-                                message_exists = True
-                                logger.info(f"✅ Обновлена панель AFK в #{channel.name}")
-                                break
-                        if message_exists:
-                            break
-                if message_exists:
-                    break
+        embed = discord.Embed(
+            title="🛌 **СИСТЕМА AFK**",
+            description="✨ **Никого нет в AFK**\n\nНажмите кнопку ниже, чтобы уйти в AFK",
+            color=0x2b2d31,
+            timestamp=datetime.now(MSK_TZ)
+        )
+        embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1302858797087854592.png?size=96")
+        embed.set_footer(text="• Статус: Активен •", icon_url=self.bot.user.avatar.url if self.bot.user.avatar else None)
         
-        if not message_exists:
-            embed = discord.Embed(
-                title="🛌 **СИСТЕМА AFK**",
-                description="✨ **Никого нет в AFK**\n\nНажмите кнопку ниже, чтобы уйти в AFK",
-                color=0x2b2d31,
-                timestamp=datetime.now(MSK_TZ)
-            )
-            embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1302858797087854592.png?size=96")
-            embed.set_footer(text="• Статус: Активен •", icon_url=self.bot.user.avatar.url if self.bot.user.avatar else None)
-            await channel.send(embed=embed, view=AFKPublicView(self.bot, channel_id, max_hours))
-            logger.info(f"✅ Создана панель AFK в #{channel.name}")
-        
+        await channel.send(embed=embed, view=AFKPublicView(self.bot, channel_id, max_hours))
         await update_afk_embed(self.bot, channel_id)
+        print(f"✅ Создана панель AFK в #{channel.name}")
     
     async def _init_settings_channel(self):
         """Инициализация канала настроек AFK"""
@@ -194,21 +181,21 @@ class AFKInitializer:
         if hasattr(self, 'embed_task') and self.embed_task:
             self.embed_task.cancel()
         
-        # Очищаем канал AFK
-        channel_id = afk_manager.get_settings().get('afk_channel')
+        # Отключаем канал AFK
+        settings = afk_manager.get_settings()
+        channel_id = settings.get('afk_channel')
         if channel_id:
             channel = self.bot.get_channel(int(channel_id))
             if channel:
                 async for msg in channel.history(limit=50):
                     if msg.author == self.bot.user and msg.embeds:
-                        await msg.edit(
-                            embed=discord.Embed(
-                                title="🛌 **СИСТЕМА AFK**",
-                                description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
-                                color=0x808080
-                            ),
-                            view=None
+                        embed = discord.Embed(
+                            title="🛌 **СИСТЕМА AFK**",
+                            description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
+                            color=0x808080
                         )
+                        await msg.edit(embed=embed, view=None)
+                        print(f"✅ [AFK] Отключён embed в #{channel.name}")
                         break
 
     async def enable(self):

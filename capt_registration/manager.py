@@ -80,18 +80,15 @@ class CaptRegistrationManager:
         if not main_channel or not reserve_channel:
             return False
         
-        # Ищем существующие сообщения бота
-        main_msg = None
-        reserve_msg = None
-        
+        # === УДАЛЯЕМ СТАРЫЕ СООБЩЕНИЯ БОТА ===
         async for msg in main_channel.history(limit=50):
             if msg.author == bot.user and msg.embeds:
-                main_msg = msg
+                await msg.delete()
                 break
         
         async for msg in reserve_channel.history(limit=50):
             if msg.author == bot.user and msg.embeds:
-                reserve_msg = msg
+                await msg.delete()
                 break
         
         self._load_message_ids()
@@ -103,21 +100,15 @@ class CaptRegistrationManager:
         reserve_list = db.capt_get_registrations('reserve')
         embed = create_registration_embed(main_list, reserve_list, self.session_info)
         
-        if main_msg and reserve_msg:
-            await main_msg.edit(embed=embed, view=ModerationView())
-            await reserve_msg.edit(embed=embed, view=PublicView())
-            self.main_message_id = str(main_msg.id)
-            self.reserve_message_id = str(reserve_msg.id)
-        else:
-            main_msg = await main_channel.send(embed=embed, view=ModerationView())
-            reserve_msg = await reserve_channel.send(embed=embed, view=PublicView())
-            self.main_message_id = str(main_msg.id)
-            self.reserve_message_id = str(reserve_msg.id)
+        main_msg = await main_channel.send(embed=embed, view=ModerationView())
+        reserve_msg = await reserve_channel.send(embed=embed, view=PublicView())
+        
+        self.main_message_id = str(main_msg.id)
+        self.reserve_message_id = str(reserve_msg.id)
         
         if self.active_session:
             db.capt_update_session_messages(self.active_session, self.main_message_id, self.reserve_message_id)
         
-        # Если нет активной сессии — деактивируем кнопки
         if not self.active_session:
             await self._update_views(active=False)
         
@@ -260,9 +251,13 @@ class CaptRegistrationManager:
                 channel = self.bot.get_channel(int(self.main_channel_id))
                 if channel:
                     msg = await channel.fetch_message(int(self.main_message_id))
-                    view = ModerationView()
-                    view.update_buttons(active)
-                    await msg.edit(embed=embed, view=view)
+                    if active:
+                        view = ModerationView()
+                        view.update_buttons(active)
+                        await msg.edit(embed=embed, view=view)
+                    else:
+                        # При выключении — просто убираем всё
+                        await msg.edit(embed=embed, view=None)
             except:
                 pass
         
@@ -271,9 +266,12 @@ class CaptRegistrationManager:
                 channel = self.bot.get_channel(int(self.reserve_channel_id))
                 if channel:
                     msg = await channel.fetch_message(int(self.reserve_message_id))
-                    view = PublicView()
-                    view.set_active(active)
-                    await msg.edit(embed=embed, view=view)
+                    if active:
+                        view = PublicView()
+                        view.set_active(active)
+                        await msg.edit(embed=embed, view=view)
+                    else:
+                        await msg.edit(embed=embed, view=None)
             except:
                 pass
 

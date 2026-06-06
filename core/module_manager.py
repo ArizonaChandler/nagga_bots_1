@@ -234,12 +234,20 @@ class ModuleManager:
 
     async def _disable_all_embeds(self, module_key: str):
         module = MODULES[module_key]
-        
-        # Все каналы, которые нужно очистить (и основные, и каналы настроек)
         all_keys = module.get("channels", []) + module.get("settings_channels", [])
         
         for channel_key in all_keys:
             channel_id = db.get_setting(channel_key)
+            
+            # === ОБРАБОТКА JSON-МАССИВА ===
+            if channel_id and channel_id.startswith('['):
+                try:
+                    import json
+                    channel_list = json.loads(channel_id)
+                    if channel_list:
+                        channel_id = channel_list[0]  # берём первый канал
+                except:
+                    pass
             
             if not channel_id or channel_id == 'null' or channel_id == '[]':
                 continue
