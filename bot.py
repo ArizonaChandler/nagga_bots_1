@@ -57,7 +57,6 @@ bot = commands.Bot(
 setup_info(bot)
 setup_settings(bot)
 setup_log(bot)
-setup_ad_commands(bot)
 
 
 # ========== СОБЫТИЯ ==========
