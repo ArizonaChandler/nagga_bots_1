@@ -76,7 +76,7 @@ class MCLRegistrationManager:
         if not main_channel or not reserve_channel:
             return False
         
-        # === УДАЛЯЕМ СТАРЫЕ СООБЩЕНИЯ БОТА ===
+        # Удаляем старые сообщения бота
         async for msg in main_channel.history(limit=50):
             if msg.author == bot.user and msg.embeds:
                 await msg.delete()
@@ -94,19 +94,20 @@ class MCLRegistrationManager:
         
         main_list = db.mcl_get_registrations('main')
         reserve_list = db.mcl_get_registrations('reserve')
-        embed = create_registration_embed(main_list, reserve_list, self.session_info)
+        embed = create_registration_embed(main_list, reserve_list, None)  # ← None
         
-        main_msg = await main_channel.send(embed=embed, view=ModerationView())
-        reserve_msg = await reserve_channel.send(embed=embed, view=PublicView())
+        # Создаём view с АКТИВНЫМИ кнопками
+        mod_view = ModerationView()
+        mod_view.update_buttons(True)  # ← АКТИВИРУЕМ
+        
+        pub_view = PublicView()
+        pub_view.set_active(True)  # ← АКТИВИРУЕМ
+        
+        main_msg = await main_channel.send(embed=embed, view=mod_view)
+        reserve_msg = await reserve_channel.send(embed=embed, view=pub_view)
         
         self.main_message_id = str(main_msg.id)
         self.reserve_message_id = str(reserve_msg.id)
-        
-        if self.active_session:
-            db.mcl_update_session_messages(self.active_session, self.main_message_id, self.reserve_message_id)
-        
-        if not self.active_session:
-            await self._update_views(active=False)
         
         return True
 

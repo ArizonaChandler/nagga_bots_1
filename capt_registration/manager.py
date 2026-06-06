@@ -80,7 +80,7 @@ class CaptRegistrationManager:
         if not main_channel or not reserve_channel:
             return False
         
-        # === УДАЛЯЕМ СТАРЫЕ СООБЩЕНИЯ БОТА ===
+        # Удаляем старые сообщения бота
         async for msg in main_channel.history(limit=50):
             if msg.author == bot.user and msg.embeds:
                 await msg.delete()
@@ -98,19 +98,21 @@ class CaptRegistrationManager:
         
         main_list = db.capt_get_registrations('main')
         reserve_list = db.capt_get_registrations('reserve')
-        embed = create_registration_embed(main_list, reserve_list, self.session_info)
+        embed = create_registration_embed(main_list, reserve_list, None)
         
-        main_msg = await main_channel.send(embed=embed, view=ModerationView())
-        reserve_msg = await reserve_channel.send(embed=embed, view=PublicView())
+        # Создаём view
+        mod_view = ModerationView()
+        pub_view = PublicView()
+        
+        # АКТИВИРУЕМ кнопки (показываем их, но без активной сессии)
+        mod_view.update_buttons(False)  # ← False, потому что сессии нет
+        pub_view.set_registration_active(False)  # ← False, кнопки видны но неактивны? ИЛИ True?
+        
+        main_msg = await main_channel.send(embed=embed, view=mod_view)
+        reserve_msg = await reserve_channel.send(embed=embed, view=pub_view)
         
         self.main_message_id = str(main_msg.id)
         self.reserve_message_id = str(reserve_msg.id)
-        
-        if self.active_session:
-            db.capt_update_session_messages(self.active_session, self.main_message_id, self.reserve_message_id)
-        
-        if not self.active_session:
-            await self._update_views(active=False)
         
         return True
 
@@ -120,8 +122,9 @@ class CaptRegistrationManager:
     def is_active(self) -> bool:
         return self.active_session is not None
 
-    async def start_registration(self, user_id: str, user_name: str, event_name: str, event_time: str, additional_info: str = None):
+    async def start_registration(self, user_id: str, user_name: str, bot, event_name: str, event_time: str, additional_info: str = None):
         self._load_config()
+        self.bot = bot
         
         if self.active_session:
             db.capt_end_session(self.active_session, user_id)
@@ -141,7 +144,7 @@ class CaptRegistrationManager:
         
         db.capt_clear_all()
         
-        # Обновляем существующие сообщения (активируем кнопки)
+        # ← ЭТО ДОЛЖНО АКТИВИРОВАТЬ КНОПКИ
         await self._update_views(active=True)
         await self._send_announcement(event_name, event_time, additional_info)
         

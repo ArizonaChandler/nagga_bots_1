@@ -360,15 +360,14 @@ class ModerationView(PermanentView):
         logger.debug("ModerationView создан")
     
     def update_buttons(self, registration_active: bool):
-        """Обновить состояние кнопок в зависимости от активности регистрации"""
+        """Обновить состояние кнопок"""
         for child in self.children:
-            # Кнопка "Начать регистрацию" всегда активна
             if child.custom_id == "capt_reg_start":
-                child.disabled = False
-            # Все остальные кнопки активны только когда регистрация идёт
+                child.disabled = False  # "Начать" всегда активна
+            elif child.custom_id == "capt_reg_end":
+                child.disabled = not registration_active  # "Завершить" только при активной сессии
             else:
-                child.disabled = not registration_active
-        logger.debug(f"Кнопки модерации {'активированы' if registration_active else 'деактивированы'}")
+                child.disabled = not registration_active  # Остальные кнопки активны только при сессии
     
     @discord.ui.button(
         label="▶️ НАЧАТЬ РЕГИСТРАЦИЮ", 
