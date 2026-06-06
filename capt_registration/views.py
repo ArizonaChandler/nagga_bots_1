@@ -41,7 +41,6 @@ class StartRegistrationModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИ
         import re
         from capt_registration.manager import capt_reg_manager
         
-        # Проверяем формат времени
         if not re.match(r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$', self.teleport_time.value):
             await interaction.response.send_message(
                 "❌ Неверный формат времени. Используйте ЧЧ:ММ (например 19:30)",
@@ -49,21 +48,18 @@ class StartRegistrationModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИ
             )
             return
         
-        # Отвечаем сразу, чтобы не было таймаута
         await interaction.response.defer(ephemeral=True)
         
         try:
-            # Запускаем регистрацию
             await capt_reg_manager.start_registration(
                 str(interaction.user.id),
                 interaction.user.display_name,
-                interaction.client,  # ← передаём client как bot
+                interaction.client,
                 self.enemy.value,
                 self.teleport_time.value,
                 self.additional_info.value
             )
             
-            # В систему статистики
             from server_stats.global_collector import get_collector
             collector = get_collector()
             if collector:

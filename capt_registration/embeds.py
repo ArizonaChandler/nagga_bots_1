@@ -34,42 +34,33 @@ def split_list_into_fields(name_prefix: str, items: list, emoji: str, max_length
     
     return fields
 
-def create_registration_embed(main_list: list, reserve_list: list, capt_info: dict = None) -> discord.Embed:
+def create_registration_embed(main_list: list, reserve_list: list, session_info: dict = None) -> discord.Embed:
     """Создать embed с тегами и номерами участников"""
     
-    # Основной список - с номерами
     if main_list:
-        main_lines = []
-        for i, (_, user_id, _) in enumerate(main_list, 1):
-            main_lines.append(f"`{i:02d}` <@{user_id}>")
+        main_lines = [f"`{i:02d}` <@{user_id}>" for i, (_, user_id, _) in enumerate(main_list, 1)]
         main_text = "\n".join(main_lines)
     else:
         main_text = "*Список пуст*"
     
-    # Резервный список - с номерами
     if reserve_list:
-        reserve_lines = []
-        for i, (_, user_id, _) in enumerate(reserve_list, 1):
-            reserve_lines.append(f"`{i:02d}` <@{user_id}>")
+        reserve_lines = [f"`{i:02d}` <@{user_id}>" for i, (_, user_id, _) in enumerate(reserve_list, 1)]
         reserve_text = "\n".join(reserve_lines)
     else:
         reserve_text = "*Список пуст*"
     
-    # Создаём embed
     embed = discord.Embed(
         title="🎯 **РЕГИСТРАЦИЯ НА CAPT**",
         color=0xff0000,
         timestamp=datetime.now()
     )
     
-    # Если есть информация о CAPT, добавляем её компактно
-    if capt_info:
-        info_text = f"👊 {capt_info['enemy']} | ⏰ {capt_info['teleport_time']} | 👤 {capt_info['started_by']}"
-        if capt_info['additional_info'] != "Нет":
-            info_text += f"\n📝 {capt_info['additional_info']}"
+    if session_info:
+        info_text = f"👊 {session_info.get('event_name', 'Не указано')} | ⏰ {session_info.get('event_time', 'Не указано')} | 👤 {session_info.get('started_by_name', 'Организатор')}"
+        if session_info.get('additional_info') and session_info['additional_info'] != "Нет":
+            info_text += f"\n📝 {session_info['additional_info']}"
         embed.description = info_text
     
-    # Проверяем длину основного списка
     if len(main_text) > 1000:
         main_fields = split_list_into_fields("ОСНОВНОЙ", main_list, "❌")
         for name, value in main_fields:
@@ -81,7 +72,6 @@ def create_registration_embed(main_list: list, reserve_list: list, capt_info: di
             inline=False
         )
     
-    # Проверяем длину резервного списка
     if len(reserve_text) > 1000:
         reserve_fields = split_list_into_fields("РЕЗЕРВ", reserve_list, "⏳")
         for name, value in reserve_fields:
@@ -93,10 +83,7 @@ def create_registration_embed(main_list: list, reserve_list: list, capt_info: di
             inline=False
         )
     
-    # Простой футер
     total = len(main_list) + len(reserve_list)
     family = CONFIG.get('family_name', 'Семья')
     embed.set_footer(text=f"👥 {total} • {family}")
-    return embed
-    
     return embed

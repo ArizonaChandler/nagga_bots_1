@@ -101,7 +101,6 @@ class CaptRegistrationManager:
         reserve_list = db.capt_get_registrations('reserve')
         embed = create_registration_embed(main_list, reserve_list, None)
         
-        # Создаём view с НЕАКТИВНЫМИ кнопками (ждём старта)
         mod_view = ModerationView()
         mod_view.update_buttons(False)
         
@@ -125,7 +124,7 @@ class CaptRegistrationManager:
 
     async def start_registration(self, user_id: str, user_name: str, bot, event_name: str, event_time: str, additional_info: str = None):
         self._load_config()
-        self.bot = bot  # ← сохраняем бота
+        self.bot = bot
         
         if self.active_session:
             db.capt_end_session(self.active_session, user_id)
@@ -159,7 +158,6 @@ class CaptRegistrationManager:
         self.session_info = None
         db.capt_clear_all()
         
-        # Удаляем все сообщения в каналах, кроме embed с кнопками
         for channel_id in [self.main_channel_id, self.reserve_channel_id]:
             if channel_id:
                 channel = self.bot.get_channel(int(channel_id))
@@ -180,10 +178,15 @@ class CaptRegistrationManager:
         if not self.active_session:
             return False, "❌ Регистрация не активна"
         
+        existing = db.capt_get_registrations()
+        for reg in existing:
+            if reg[1] == user_id:
+                return False, "❌ Вы уже зарегистрированы"
+        
         if db.capt_add_registration(user_id, user_name, 'reserve'):
             await self._update_views(active=True)
             return True, "✅ Вы добавлены в резерв"
-        return False, "❌ Вы уже зарегистрированы"
+        return False, "❌ Ошибка при регистрации"
 
     async def remove_participant(self, user_id: str):
         if db.capt_remove_registration(user_id):

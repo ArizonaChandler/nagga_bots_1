@@ -1674,34 +1674,23 @@ class Database:
     # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ CAPT =====
 
     def capt_get_registrations(self, list_type: str = None):
-        """Получить список зарегистрированных на CAPT"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             if list_type:
-                cursor.execute('''
-                    SELECT id, user_id, user_name FROM capt_registrations 
-                    WHERE is_active = 1 AND list_type = ? ORDER BY registered_at
-                ''', (list_type,))
+                cursor.execute('SELECT id, user_id, user_name FROM capt_registrations WHERE is_active = 1 AND list_type = ? ORDER BY registered_at', (list_type,))
             else:
-                cursor.execute('''
-                    SELECT id, user_id, user_name, list_type FROM capt_registrations 
-                    WHERE is_active = 1 ORDER BY list_type, registered_at
-                ''')
+                cursor.execute('SELECT id, user_id, user_name, list_type FROM capt_registrations WHERE is_active = 1 ORDER BY list_type, registered_at')
             return cursor.fetchall()
 
     def capt_add_registration(self, user_id: str, user_name: str, list_type: str) -> bool:
-        """Добавить участника в список CAPT"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('''
-                INSERT OR REPLACE INTO capt_registrations (user_id, user_name, list_type, is_active)
-                VALUES (?, ?, ?, 1)
-            ''', (user_id, user_name, list_type))
+            cursor.execute('DELETE FROM capt_registrations WHERE user_id = ?', (user_id,))
+            cursor.execute('INSERT INTO capt_registrations (user_id, user_name, list_type, is_active) VALUES (?, ?, ?, 1)', (user_id, user_name, list_type))
             conn.commit()
             return cursor.rowcount > 0
 
     def capt_remove_registration(self, user_id: str) -> bool:
-        """Удалить участника из списка CAPT"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM capt_registrations WHERE user_id = ?', (user_id,))
@@ -1709,47 +1698,33 @@ class Database:
             return cursor.rowcount > 0
 
     def capt_clear_all(self):
-        """Очистить все регистрации CAPT"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM capt_registrations')
             conn.commit()
 
     def capt_move_to_main(self, reg_id: int) -> bool:
-        """Переместить участника из резерва в основной список CAPT"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE capt_registrations SET list_type = 'main', registered_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND list_type = 'reserve'
-            ''', (reg_id,))
+            cursor.execute('UPDATE capt_registrations SET list_type = "main", registered_at = CURRENT_TIMESTAMP WHERE id = ? AND list_type = "reserve"', (reg_id,))
             conn.commit()
             return cursor.rowcount > 0
 
     def capt_move_to_reserve(self, reg_id: int) -> bool:
-        """Переместить участника из основного в резерв CAPT"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE capt_registrations SET list_type = 'reserve', registered_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND list_type = 'main'
-            ''', (reg_id,))
+            cursor.execute('UPDATE capt_registrations SET list_type = "reserve", registered_at = CURRENT_TIMESTAMP WHERE id = ? AND list_type = "main"', (reg_id,))
             conn.commit()
             return cursor.rowcount > 0
 
     def capt_move_all_to_main(self) -> int:
-        """Переместить всех из резерва в основной список CAPT"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE capt_registrations SET list_type = 'main', registered_at = CURRENT_TIMESTAMP
-                WHERE list_type = 'reserve'
-            ''')
+            cursor.execute('UPDATE capt_registrations SET list_type = "main", registered_at = CURRENT_TIMESTAMP WHERE list_type = "reserve"')
             conn.commit()
             return cursor.rowcount
 
     def capt_get_active_session(self):
-        """Получить активную сессию CAPT"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM capt_sessions WHERE is_active = 1 ORDER BY started_at DESC LIMIT 1')
@@ -1759,9 +1734,7 @@ class Database:
                 return dict(zip(columns, row))
             return None
 
-    def capt_create_session(self, started_by: str, main_channel_id: str, reserve_channel_id: str, 
-                            event_name: str, event_time: str, additional_info: str = None) -> int:
-        """Создать новую сессию CAPT"""
+    def capt_create_session(self, started_by: str, main_channel_id: str, reserve_channel_id: str, event_name: str, event_time: str, additional_info: str = None) -> int:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -1772,23 +1745,15 @@ class Database:
             return cursor.lastrowid
 
     def capt_end_session(self, session_id: int, ended_by: str):
-        """Завершить сессию CAPT"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE capt_sessions SET is_active = 0, ended_by = ?, ended_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            ''', (ended_by, session_id))
+            cursor.execute('UPDATE capt_sessions SET is_active = 0, ended_by = ?, ended_at = CURRENT_TIMESTAMP WHERE id = ?', (ended_by, session_id))
             conn.commit()
 
     def capt_update_session_messages(self, session_id: int, main_message_id: str, reserve_message_id: str):
-        """Обновить ID сообщений в сессии CAPT"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE capt_sessions SET main_message_id = ?, reserve_message_id = ?
-                WHERE id = ?
-            ''', (main_message_id, reserve_message_id, session_id))
+            cursor.execute('UPDATE capt_sessions SET main_message_id = ?, reserve_message_id = ? WHERE id = ?', (main_message_id, reserve_message_id, session_id))
             conn.commit()
 
     # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ОТПУСКОВ =====
