@@ -1518,18 +1518,26 @@ class Database:
             self.log_action(user_id, "SAVE_TIER_APP_MESSAGE", f"App {application_id}, Msg {message_id}")
 
     def get_all_tier_application_messages(self):
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT tam.application_id, tam.channel_id, tam.message_id, tam.user_id,
-                    ta.status, ta.user_id as applicant_id, ta.nickname, ta.target_tier
-                FROM tier_application_messages tam
-                JOIN tier_applications ta ON tam.application_id = ta.id
-                WHERE ta.status = 'pending'
-            ''')
-            columns = [description[0] for description in cursor.description]
-            rows = cursor.fetchall()
-            return [dict(zip(columns, row)) for row in rows]
+        """Получить все сохранённые сообщения с заявками"""
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            SELECT application_id, channel_id, message_id, user_id 
+            FROM tier_application_messages 
+            WHERE application_id IN (SELECT id FROM tier_applications WHERE status = 'pending')
+        """)
+        rows = cursor.fetchall()
+        
+        # Защита от None
+        result = []
+        for row in rows:
+            if row and all(row):  # Проверяем, что все значения не None
+                result.append({
+                    'application_id': row[0],
+                    'channel_id': row[1],
+                    'message_id': row[2],
+                    'user_id': row[3]
+                })
+        return result
 
     def delete_tier_application_message(self, application_id: int):
         with self.get_connection() as conn:

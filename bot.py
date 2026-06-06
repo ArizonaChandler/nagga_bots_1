@@ -266,6 +266,60 @@ async def fix_tier_message(ctx, application_id: int):
         await channel.send(embed=embed, view=TierModerationView(application_id))
         await ctx.send(f"✅ Заявка {application_id} восстановлена")
 
+@bot.tree.command(name="fix_tier_app", description="Восстановить испорченную заявку TIER")
+@commands.has_permissions(administrator=True)
+async def fix_tier_app(interaction: discord.Interaction, application_id: int):
+    """Восстановить испорченную заявку"""
+    
+    app = tier_manager.get_application(application_id)
+    if not app:
+        await interaction.response.send_message(f"❌ Заявка {application_id} не найдена", ephemeral=True)
+        return
+    
+    from tier.views import TierModerationView
+    from datetime import datetime
+    
+    # Создаём новый embed
+    embed = discord.Embed(
+        title="🌟 НОВАЯ ЗАЯВКА НА TIER",
+        color=0xffa500,
+        timestamp=datetime.now()
+    )
+    embed.add_field(name="👤 Отправитель", value=f"<@{app['user_id']}>", inline=True)
+    embed.add_field(name="🎮 Игровой ник", value=app['nickname'], inline=True)
+    embed.add_field(name="🏆 Откат с арены", value=app['arena_link'], inline=False)
+    embed.add_field(name="📸 Скриншоты", value=app['screenshots'][:200], inline=False)
+    embed.add_field(name="📝 Дополнительно", value=app.get('additional', 'Нет'), inline=False)
+    embed.set_footer(text=f"Заявка ID: {application_id}")
+    
+    settings = tier_manager.get_settings()
+    channel_id = settings.get('tier_applications_channel')
+    
+    if not channel_id:
+        await interaction.response.send_message("❌ Канал анкет не настроен", ephemeral=True)
+        return
+    
+    channel = interaction.guild.get_channel(int(channel_id))
+    if not channel:
+        await interaction.response.send_message("❌ Канал анкет не найден", ephemeral=True)
+        return
+    
+    # Удаляем старую запись о сообщении
+    tier_manager.delete_application_message(application_id)
+    
+    # Отправляем новое сообщение
+    sent_message = await channel.send(embed=embed, view=TierModerationView(application_id))
+    
+    # Сохраняем новую запись
+    tier_manager.save_application_message(
+        application_id=application_id,
+        channel_id=str(channel.id),
+        message_id=str(sent_message.id),
+        user_id=app['user_id']
+    )
+    
+    await interaction.response.send_message(f"✅ Заявка {application_id} восстановлена", ephemeral=True)
+
 # ========== ЗАПУСК ==========
 async def main():
     async with bot:

@@ -215,11 +215,19 @@ class TierInitializer:
                     tier_manager.delete_application_message(msg_data['application_id'])
                     continue
                 
-                # 🔥 ПРОВЕРКА: не испорчено ли сообщение?
-                if message.embeds and "⛔ **Система отключена**" in message.embeds[0].description:
-                    print(f"⚠️ Заявка {msg_data['application_id']} испорчена, удаляем и создаём новую?")
-                    # Удаляем испорченное сообщение
-                    await message.delete()
+                # 🔥 ИСПРАВЛЕНА ПРОВЕРКА с защитой от None
+                is_disabled_message = False
+                if message.embeds and len(message.embeds) > 0:
+                    embed = message.embeds[0]
+                    if embed.description and "⛔ **Система отключена**" in embed.description:
+                        is_disabled_message = True
+                
+                if is_disabled_message:
+                    print(f"⚠️ Заявка {msg_data['application_id']} испорчена, удаляем")
+                    try:
+                        await message.delete()
+                    except:
+                        pass
                     tier_manager.delete_application_message(msg_data['application_id'])
                     errors += 1
                     continue
