@@ -317,6 +317,7 @@ class ApplicationsCombinedPanel(AdminOnlyView):
     def __init__(self):
         super().__init__()
         self._add_buttons()
+        self._add_back_button()
 
     def _add_buttons(self):
         # Ряд 0: каналы (3 кнопки)

@@ -13,6 +13,7 @@ class MCLSettingsView(AdminOnlyView):
     def __init__(self):
         super().__init__()
         self._add_buttons()
+        self._add_back_button()
 
     def _add_buttons(self):
         self.clear_items()
