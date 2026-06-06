@@ -11,7 +11,7 @@ MODULES = {
         "enabled": False,
         "channels": ["capt_reg_main_channel", "capt_reg_reserve_channel", "capt_alert_channel", "capt_log_channel"],
         "settings_channels": ["capt_settings_channel"],
-        "initializer": "capt_registration.manager.capt_reg_manager",
+        "initializer": "capt_registration.manager",
         "initialize_method": "initialize_buttons",
         "toggleable": True
     },
@@ -21,7 +21,7 @@ MODULES = {
         "enabled": False,
         "channels": ["mcl_reg_main_channel", "mcl_reg_reserve_channel", "mcl_error_channel", "mcl_announcement_channel"],
         "settings_channels": ["mcl_settings_channel"],
-        "initializer": "mcl_registration.manager.mcl_manager",
+        "initializer": "mcl_registration.manager",
         "initialize_method": "initialize_buttons",
         "toggleable": True
     },
@@ -31,7 +31,7 @@ MODULES = {
         "enabled": False,
         "channels": ["submit_channel", "applications_channel", "applications_log_channel"],
         "settings_channels": ["applications_settings_channel"],
-        "initializer": "applications.initializer.initializer",
+        "initializer": "applications.initializer",
         "initialize_method": "setup",
         "toggleable": True
     },
@@ -41,7 +41,7 @@ MODULES = {
         "enabled": False,
         "channels": ["alarm_channels", "announce_channels"],
         "settings_channels": ["events_settings_channel"],
-        "initializer": "events.scheduler.scheduler",
+        "initializer": "events.scheduler",
         "initialize_method": "setup",
         "toggleable": True
     },
@@ -51,7 +51,7 @@ MODULES = {
         "enabled": False,
         "channels": ["afk_channel", "afk_log_channel"],
         "settings_channels": ["afk_settings_channel"],
-        "initializer": "afk.initializer.initializer",
+        "initializer": "afk.initializer",
         "initialize_method": "setup",
         "toggleable": True
     },
@@ -61,7 +61,7 @@ MODULES = {
         "enabled": False,
         "channels": ["tier_submit_channel", "tier_applications_channel", "tier_log_channel", "tier_info_channel"],
         "settings_channels": ["tier_settings_channel"],
-        "initializer": "tier.initializer.initializer",
+        "initializer": "tier.initializer",
         "initialize_method": "setup",
         "toggleable": True
     },
@@ -71,7 +71,7 @@ MODULES = {
         "enabled": False,
         "channels": ["vacation_public_channel", "vacation_applications_channel", "vacation_log_channel"],
         "settings_channels": ["vacation_settings_channel"],
-        "initializer": "vacation.initializer.initializer",
+        "initializer": "vacation.initializer",
         "initialize_method": "setup",
         "toggleable": True
     },
@@ -81,7 +81,7 @@ MODULES = {
         "enabled": False,
         "channels": ["games_rules_channel", "games_lobby_channel", "games_log_channel", "games_category_id"],
         "settings_channels": ["games_settings_channel"],
-        "initializer": "games.manager.game_manager",
+        "initializer": "games.initializer",
         "initialize_method": "setup",
         "toggleable": True
     },
@@ -91,7 +91,7 @@ MODULES = {
         "enabled": False,
         "channels": ["birthday_channel", "birthday_greeting_channel"],
         "settings_channels": ["birthday_settings_channel"],
-        "initializer": "birthday.initializer.initializer",
+        "initializer": "birthday.initializer",
         "initialize_method": "setup",
         "toggleable": True
     },

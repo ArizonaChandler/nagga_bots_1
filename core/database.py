@@ -1634,6 +1634,27 @@ class Database:
             cursor.execute('SELECT COUNT(*) FROM mcl_registrations WHERE date(registered_at) = ?', (today,))
             return cursor.fetchone()[0]
 
+    def capt_get_active_session(self):
+        """Получить активную сессию CAPT"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM capt_sessions WHERE is_active = 1 ORDER BY started_at DESC LIMIT 1')
+            row = cursor.fetchone()
+            if row:
+                columns = [description[0] for description in cursor.description]
+                return dict(zip(columns, row))
+            return None
+
+    def capt_update_session_messages(self, session_id: int, main_message_id: str, reserve_message_id: str):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE capt_sessions 
+                SET main_message_id = ?, reserve_message_id = ?
+                WHERE id = ?
+            ''', (main_message_id, reserve_message_id, session_id))
+            conn.commit()
+
     # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ ОТПУСКОВ =====
     
     def get_vacation_setting(self, key: str) -> str:
