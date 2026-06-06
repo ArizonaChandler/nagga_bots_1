@@ -28,7 +28,7 @@ class StartModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИСТРАЦИ
             await mcl_manager.start_registration(
                 str(interaction.user.id),
                 interaction.user.display_name,
-                interaction.client,  # ← передаём client как bot
+                interaction.client,
                 self.event_name.value,
                 self.event_time.value,
                 self.additional_info.value
