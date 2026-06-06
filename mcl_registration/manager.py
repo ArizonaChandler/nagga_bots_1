@@ -142,7 +142,7 @@ class MCLRegistrationManager:
         
         db.mcl_clear_all()
         
-        await self._update_views(session_active=True)  # ← меняем active на session_active
+        await self._update_views(session_active=True)
         await self._send_announcement(event_name, event_time, additional_info)
         
         from server_stats.global_collector import get_collector
@@ -173,7 +173,7 @@ class MCLRegistrationManager:
                         except:
                             pass
         
-        await self._update_views(session_active=False)  # ← меняем
+        await self._update_views(session_active=False)
         db.log_action(user_id, "MCL_REG_END")
         return True
 
@@ -184,11 +184,10 @@ class MCLRegistrationManager:
         # Проверяем, не зарегистрирован ли уже
         existing = db.mcl_get_registrations()
         for reg in existing:
-            if reg[1] == user_id:  # reg[1] это user_id
+            if reg[1] == user_id:
                 return False, "❌ Вы уже зарегистрированы"
         
         if db.mcl_add_registration(user_id, user_name, 'reserve'):
-            # Принудительно обновляем оба канала
             await self._update_views(session_active=True)
             return True, "✅ Вы добавлены в резерв"
         return False, "❌ Ошибка при регистрации"
@@ -200,21 +199,24 @@ class MCLRegistrationManager:
         return False, "❌ Вы не были зарегистрированы"
 
     async def move_to_main(self, reg_id: int):
+        """Переместить участника из резерва в основной"""
         if db.mcl_move_to_main(reg_id):
-            await self._update_views(active=True)
+            await self._update_views(session_active=True)
             return True, "✅ Участник перемещён в основной список"
         return False, "❌ Не найден или уже в основном"
 
     async def move_to_reserve(self, reg_id: int):
+        """Переместить участника из основного в резерв"""
         if db.mcl_move_to_reserve(reg_id):
-            await self._update_views(active=True)
+            await self._update_views(session_active=True)
             return True, "✅ Участник переведён в резерв"
         return False, "❌ Не найден или уже в резерве"
 
     async def move_all_to_main(self):
+        """Переместить всех из резерва в основной"""
         moved = db.mcl_move_all_to_main()
         if moved > 0:
-            await self._update_views(active=True)
+            await self._update_views(session_active=True)
             return True, f"✅ {moved} участников перемещено в основной список"
         return False, "❌ В резерве нет участников"
 
@@ -254,7 +256,7 @@ class MCLRegistrationManager:
         if not self.bot:
             return
         
-        # Получаем актуальные списки ПРЯМО СЕЙЧАС
+        # Получаем свежие списки ПРЯМО ИЗ БД
         main_list = db.mcl_get_registrations('main')
         reserve_list = db.mcl_get_registrations('reserve')
         
@@ -263,16 +265,17 @@ class MCLRegistrationManager:
                 channel = self.bot.get_channel(int(self.main_channel_id))
                 if channel:
                     msg = await channel.fetch_message(int(self.main_message_id))
-                    if session_active:
+                    
+                    # Создаём embed с актуальными списками
+                    if session_active and self.session_info:
                         embed = create_registration_embed(main_list, reserve_list, self.session_info)
-                        view = ModerationView()
-                        view.update_buttons(True)
-                        await msg.edit(embed=embed, view=view)
                     else:
                         embed = create_registration_embed(main_list, reserve_list, None)
-                        view = ModerationView()
-                        view.update_buttons(False)
-                        await msg.edit(embed=embed, view=view)
+                    
+                    view = ModerationView()
+                    view.update_buttons(session_active)
+                    await msg.edit(embed=embed, view=view)
+                    print(f"✅ [MCL] Обновлён main канал: основной={len(main_list)}, резерв={len(reserve_list)}")
             except Exception as e:
                 print(f"❌ [MCL] Ошибка обновления main канала: {e}")
         
@@ -281,23 +284,23 @@ class MCLRegistrationManager:
                 channel = self.bot.get_channel(int(self.reserve_channel_id))
                 if channel:
                     msg = await channel.fetch_message(int(self.reserve_message_id))
-                    if session_active:
+                    
+                    # Создаём embed с актуальными списками
+                    if session_active and self.session_info:
                         embed = create_registration_embed(main_list, reserve_list, self.session_info)
-                        view = PublicView()
-                        view.set_registration_active(True)
-                        await msg.edit(embed=embed, view=view)
                     else:
                         embed = create_registration_embed(main_list, reserve_list, None)
-                        view = PublicView()
-                        view.set_registration_active(False)
-                        await msg.edit(embed=embed, view=view)
+                    
+                    view = PublicView()
+                    view.set_registration_active(session_active)
+                    await msg.edit(embed=embed, view=view)
+                    print(f"✅ [MCL] Обновлён reserve канал: основной={len(main_list)}, резерв={len(reserve_list)}")
             except Exception as e:
                 print(f"❌ [MCL] Ошибка обновления reserve канала: {e}")
 
     async def stop(self):
         """Остановить систему MCL (выключаем модуль полностью)"""
         print("🎯 [MCL] Остановка системы MCL...")
-        # При выключении модуля — заменяем на заглушку
         from mcl_registration.embeds import create_registration_embed
         
         if self.main_channel_id and self.main_message_id:
