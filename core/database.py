@@ -170,7 +170,7 @@ class Database:
                     is_active BOOLEAN DEFAULT 1
                 )
             ''')
-            
+
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS capt_sessions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -182,12 +182,25 @@ class Database:
                     main_message_id TEXT,
                     reserve_message_id TEXT,
                     main_channel_id TEXT,
-                    reserve_channel_id TEXT,
-                    event_name TEXT,
-                    event_time TEXT,
-                    additional_info TEXT
+                    reserve_channel_id TEXT
                 )
             ''')
+
+            # Миграция: добавляем колонки для event_name, event_time, additional_info
+            try:
+                cursor.execute('ALTER TABLE capt_sessions ADD COLUMN event_name TEXT')
+            except sqlite3.OperationalError:
+                pass
+
+            try:
+                cursor.execute('ALTER TABLE capt_sessions ADD COLUMN event_time TEXT')
+            except sqlite3.OperationalError:
+                pass
+
+            try:
+                cursor.execute('ALTER TABLE capt_sessions ADD COLUMN additional_info TEXT')
+            except sqlite3.OperationalError:
+                pass
 
             # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ ЗАЯВОК =====
             cursor.execute('''
@@ -2175,16 +2188,21 @@ class Database:
     # ===== МЕТОДЫ ДЛЯ MCL СИСТЕМЫ =====
 
     def mcl_add_registration(self, user_id: str, user_name: str, list_type: str) -> bool:
+        """Добавить участника в список MCL"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            # Сначала удаляем старую запись, если есть
+            cursor.execute('DELETE FROM mcl_registrations WHERE user_id = ?', (user_id,))
+            # Затем добавляем новую
             cursor.execute('''
-                INSERT OR REPLACE INTO mcl_registrations (user_id, user_name, list_type, is_active)
+                INSERT INTO mcl_registrations (user_id, user_name, list_type, is_active)
                 VALUES (?, ?, ?, 1)
             ''', (user_id, user_name, list_type))
             conn.commit()
             return cursor.rowcount > 0
 
     def mcl_remove_registration(self, user_id: str) -> bool:
+        """Удалить участника из списка MCL"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM mcl_registrations WHERE user_id = ?', (user_id,))

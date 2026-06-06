@@ -181,14 +181,21 @@ class MCLRegistrationManager:
         if not self.active_session:
             return False, "❌ Регистрация не активна"
         
+        # Проверяем, не зарегистрирован ли уже
+        existing = db.mcl_get_registrations()
+        for reg in existing:
+            if reg[1] == user_id:  # reg[1] это user_id
+                return False, "❌ Вы уже зарегистрированы"
+        
         if db.mcl_add_registration(user_id, user_name, 'reserve'):
-            await self._update_views(active=True)
+            # Принудительно обновляем оба канала
+            await self._update_views(session_active=True)
             return True, "✅ Вы добавлены в резерв"
-        return False, "❌ Вы уже зарегистрированы"
+        return False, "❌ Ошибка при регистрации"
 
     async def remove_participant(self, user_id: str):
         if db.mcl_remove_registration(user_id):
-            await self._update_views(active=True)
+            await self._update_views(session_active=True)
             return True, "✅ Вы удалены из регистрации"
         return False, "❌ Вы не были зарегистрированы"
 
@@ -247,7 +254,9 @@ class MCLRegistrationManager:
         if not self.bot:
             return
         
-        main_list, reserve_list = self.get_lists()
+        # Получаем актуальные списки ПРЯМО СЕЙЧАС
+        main_list = db.mcl_get_registrations('main')
+        reserve_list = db.mcl_get_registrations('reserve')
         
         if self.main_channel_id and self.main_message_id:
             try:
