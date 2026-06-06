@@ -76,7 +76,7 @@ class TierSettingsView(AdminOnlyView):
             label="◀ Назад в главное меню",
             style=discord.ButtonStyle.secondary,
             emoji="◀",
-            row=5,
+            row=4,
             custom_id="tier_back_to_global"
         )
         

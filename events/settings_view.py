@@ -383,28 +383,123 @@ class SetAnnounceRolesSettingsModal(discord.ui.Modal, title="📢 РОЛИ ДЛ�
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
 
-class AddEventSettingsModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕРОПРИЯТИЕ"):
-    event_name = discord.ui.TextInput(label="Название мероприятия", placeholder="Например: Arena", max_length=100, required=True)
-    weekday = discord.ui.TextInput(label="День недели (0-6, где 0 - Пн)", placeholder="0", max_length=1, required=True)
-    event_time = discord.ui.TextInput(label="Время (ЧЧ:ММ)", placeholder="19:30", max_length=5, required=True)
+class AddEventSettingsModal(discord.ui.Modal, title="➕ ДОБАВИТЬ МЕРОПРИЯТИЯ"):
+    event_name = discord.ui.TextInput(
+        label="Название мероприятия",
+        placeholder="Например: Arena",
+        max_length=100,
+        required=True
+    )
+    
+    weekdays = discord.ui.TextInput(
+        label="Дни недели (0-6 через запятую или диапазон)",
+        placeholder="0,2,4,6  или  0-6",
+        max_length=20,
+        required=True
+    )
+    
+    event_times = discord.ui.TextInput(
+        label="Время (ЧЧ:ММ через запятую)",
+        placeholder="14:20, 19:30, 21:00",
+        max_length=50,
+        required=True
+    )
+    
     async def on_submit(self, interaction: discord.Interaction):
         if not await is_admin(str(interaction.user.id)):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
             return
+        
         try:
-            day = int(self.weekday.value)
-            if day < 0 or day > 6:
-                await interaction.response.send_message("❌ День недели должен быть от 0 до 6", ephemeral=True)
+            # Парсим дни недели
+            weekdays = []
+            days_input = self.weekdays.value.replace(' ', '')
+            
+            if not days_input:
+                await interaction.response.send_message("❌ Укажите дни недели", ephemeral=True)
                 return
-            datetime.strptime(self.event_time.value, "%H:%M")
-            event_id = db.add_event(name=self.event_name.value, weekday=day, event_time=self.event_time.value, created_by=str(interaction.user.id))
+            
+            # Поддержка диапазона (например 0-6)
+            if '-' in days_input and ',' not in days_input:
+                parts = days_input.split('-')
+                if len(parts) == 2:
+                    start = int(parts[0])
+                    end = int(parts[1])
+                    weekdays = list(range(start, end + 1))
+                else:
+                    await interaction.response.send_message("❌ Неверный формат диапазона", ephemeral=True)
+                    return
+            else:
+                # Разбираем через запятую
+                for d in days_input.split(','):
+                    try:
+                        day = int(d)
+                        if 0 <= day <= 6:
+                            weekdays.append(day)
+                        else:
+                            await interaction.response.send_message(f"❌ День {day} должен быть от 0 до 6", ephemeral=True)
+                            return
+                    except ValueError:
+                        await interaction.response.send_message(f"❌ Неверный день: {d}", ephemeral=True)
+                        return
+            
+            weekdays = sorted(set(weekdays))
+            
+            # Парсим время
+            times = []
+            times_input = self.event_times.value.replace(' ', '')
+            
+            for t in times_input.split(','):
+                try:
+                    datetime.strptime(t, "%H:%M")
+                    times.append(t)
+                except ValueError:
+                    await interaction.response.send_message(f"❌ Неверный формат времени: {t}", ephemeral=True)
+                    return
+            
+            times = sorted(set(times))
+            
+            # Создаём мероприятия
+            created_count = 0
+            days_names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+            created_ids = []
+            
+            for day in weekdays:
+                for time in times:
+                    event_id = db.add_event(
+                        name=self.event_name.value,
+                        weekday=day,
+                        event_time=time,
+                        created_by=str(interaction.user.id)
+                    )
+                    created_count += 1
+                    created_ids.append(event_id)
+            
+            # Генерируем расписание
             db.generate_schedule(days_ahead=14)
-            days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-            await interaction.response.send_message(f"✅ Мероприятие добавлено!\n📌 {self.event_name.value}\n📅 {days[day]} в {self.event_time.value}", ephemeral=True)
-        except ValueError:
-            await interaction.response.send_message("❌ Неверный формат времени", ephemeral=True)
+            
+            days_str = ', '.join([days_names[d] for d in weekdays])
+            times_str = ', '.join(times)
+            
+            embed = discord.Embed(
+                title="✅ Мероприятия добавлены",
+                description=f"Создано **{created_count}** мероприятий",
+                color=0x00ff00,
+                timestamp=datetime.now()
+            )
+            embed.add_field(name="📌 Название", value=self.event_name.value, inline=True)
+            embed.add_field(name="📅 Дни", value=days_str, inline=True)
+            embed.add_field(name="⏰ Времена", value=times_str, inline=False)
+            
+            if created_ids:
+                db.log_event_action(created_ids[0], "created", str(interaction.user.id), 
+                                   f"Название: {self.event_name.value}, Дни: {days_str}, Времена: {times_str}")
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            
         except Exception as e:
-            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+            print(f"Ошибка в AddEventSettingsModal: {e}")
+            await interaction.response.send_message(f"❌ Ошибка: {str(e)}", ephemeral=True)
 
 
 class EditEventSettingsModal(discord.ui.Modal, title="✏️ РЕДАКТИРОВАТЬ МЕРОПРИЯТИЕ"):

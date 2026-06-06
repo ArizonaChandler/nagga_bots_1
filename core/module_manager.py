@@ -209,6 +209,7 @@ class ModuleManager:
         module = MODULES[module_key]
         initializer_path = module.get("initializer")
         
+        # 1. Останавливаем фоновые задачи
         if initializer_path:
             parts = initializer_path.split('.')
             module_name = '.'.join(parts[:-1]) if len(parts) > 1 else initializer_path
@@ -228,10 +229,13 @@ class ModuleManager:
             except Exception as e:
                 print(f"⚠️ [MODULE] Ошибка остановки {module['name']}: {e}")
         
+        # 2. Отключаем все embed в каналах модуля
         await self._disable_all_embeds(module_key)
 
     async def _disable_all_embeds(self, module_key: str):
         module = MODULES[module_key]
+        
+        # Все каналы, которые нужно очистить (и основные, и каналы настроек)
         all_keys = module.get("channels", []) + module.get("settings_channels", [])
         
         for channel_key in all_keys:
@@ -250,19 +254,48 @@ class ModuleManager:
             
             try:
                 async for msg in channel.history(limit=50):
-                    if msg.author == self.bot.user and msg.embeds:
-                        if not msg.components or len(msg.components) == 0:
-                            await msg.edit(
-                                embed=discord.Embed(
-                                    title=f"{module['name']}",
-                                    description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
+                    if msg.author == self.bot.user:
+                        # Если есть embed — заменяем его на сообщение об отключении
+                        if msg.embeds:
+                            # Проверяем, что это наше сообщение (содержит кнопки или специфичный заголовок)
+                            if msg.components or self._is_module_embed(msg, module_key):
+                                embed = discord.Embed(
+                                    title=f"⛔ {module['name']}",
+                                    description="**Система отключена администратором**\nОбратитесь к администрации для включения.",
                                     color=0x808080
-                                ),
-                                view=None
-                            )
-                            break
+                                )
+                                await msg.edit(embed=embed, view=None)
+                                print(f"✅ [MODULE] Отключён embed в #{channel.name} ({channel_key})")
+                                break
             except Exception as e:
                 print(f"❌ [MODULE] Ошибка отключения {channel_key}: {e}")
+
+    def _is_module_embed(self, msg, module_key: str) -> bool:
+        """Проверяет, относится ли embed к данному модулю"""
+        if not msg.embeds:
+            return False
+        
+        title = msg.embeds[0].title or ""
+        
+        # Карта заголовков для каждого модуля
+        module_titles = {
+            "capt": ["РЕГИСТРАЦИЯ НА CAPT", "CAPT"],
+            "mcl": ["РЕГИСТРАЦИЯ НА MCL", "MCL", "ВЗМ"],
+            "applications": ["ПОДАЧА ЗАЯВОК", "ЗАЯВКИ В СЕМЬЮ", "ЗАЯВКА"],
+            "events": ["МЕРОПРИЯТИЯ", "МП", "НАПОМИНАНИЕ"],
+            "afk": ["AFK", "СИСТЕМА AFK"],
+            "tier": ["TIER", "СИСТЕМА TIER", "ЗАЯВКИ НА TIER"],
+            "vacation": ["ОТПУСК", "СИСТЕМА ОТПУСКОВ"],
+            "games": ["МОРСКОЙ БОЙ", "ИГРЫ"],
+            "birthday": ["ДНИ РОЖДЕНИЯ", "BIRTHDAY"],
+            "advertising": ["АВТО-РЕКЛАМА", "РЕКЛАМА"]
+        }
+        
+        titles = module_titles.get(module_key, [])
+        for t in titles:
+            if t in title:
+                return True
+        return False
 
     async def initialize_all_enabled_modules(self):
         print("📋 [MODULE] Инициализация включённых модулей...")
