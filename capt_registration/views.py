@@ -8,7 +8,9 @@ from core.utils import has_access
 from capt_registration.manager import capt_reg_manager
 from capt_registration.capt_core import capt_core
 from core.config import CONFIG
+from core.database import db
 from server_stats.stat_collector import collector
+from server_stats.global_collector import get_collector
 
 logger = logging.getLogger(__name__)
 
@@ -385,35 +387,24 @@ class ModerationView(PermanentView):
         """Завершить регистрацию"""
         logger.info(f"Нажата кнопка 'Завершить регистрацию' от {interaction.user}")
         
+        await interaction.response.defer(ephemeral=True)
+        
         try:
-            await interaction.response.send_message(
-                "🧹 Завершение регистрации и очистка чата...",
-                ephemeral=True
-            )
+            await capt_reg_manager.end_registration(str(interaction.user.id))
             
-            await capt_reg_manager.end_registration(str(interaction.user.id), interaction.client)
-            
-            # Логируем
-            await capt_reg_manager.log_action(
-                interaction.client,
-                "⏹️ ЗАВЕРШЕНИЕ РЕГИСТРАЦИИ",
+            db.log_action(
                 str(interaction.user.id),
-                interaction.user.display_name
+                "CAPT_REG_END",
+                "Регистрация завершена"
             )
             
-            self.update_buttons(registration_active=False)
-            await interaction.message.edit(view=self)
-            
-            await interaction.edit_original_response(
-                content="✅ Регистрация завершена! Чат очищен."
-            )
+            await interaction.followup.send("✅ Регистрация завершена! Чат очищен.", ephemeral=True)
             
         except Exception as e:
-            logger.error(f"Ошибка при завершении: {e}", exc_info=True)
-            try:
-                await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
-            except:
-                pass
+            print(f"❌ Ошибка при завершении: {e}")
+            import traceback
+            traceback.print_exc()
+            await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
     
     @discord.ui.button(
         label="➕ ДОБАВИТЬ В ОСНОВНОЙ", 
@@ -715,7 +706,6 @@ class PublicView(PermanentView):
                 interaction.user.display_name
             )
             
-            # Простой лог в БД
             if success:
                 db.log_action(
                     str(interaction.user.id),
@@ -729,7 +719,7 @@ class PublicView(PermanentView):
             import traceback
             traceback.print_exc()
             await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
-    
+
     @discord.ui.button(
         label="❌ ОТСОЕДИНИТЬСЯ", 
         style=discord.ButtonStyle.danger,
@@ -741,18 +731,21 @@ class PublicView(PermanentView):
         """Отсоединиться от регистрации"""
         logger.info(f"Нажата кнопка 'Отсоединиться' от {interaction.user}")
         
-        success, msg = await capt_reg_manager.remove_participant(
-            str(interaction.user.id),
-            interaction.client
-        )
+        await interaction.response.defer(ephemeral=True)
         
-        # Логируем
-        if success:
-            await capt_reg_manager.log_action(
-                interaction.client,
-                "❌ ОТСОЕДИНЕНИЕ ОТ РЕГИСТРАЦИИ",
-                str(interaction.user.id),
-                interaction.user.display_name
-            )
-        
-        await interaction.response.send_message(msg, ephemeral=True)
+        try:
+            success, msg = await capt_reg_manager.remove_participant(str(interaction.user.id))
+            
+            if success:
+                db.log_action(
+                    str(interaction.user.id),
+                    "CAPT_LEAVE",
+                    f"Отсоединился от регистрации"
+                )
+            
+            await interaction.followup.send(msg, ephemeral=True)
+        except Exception as e:
+            print(f"❌ Ошибка в leave: {e}")
+            import traceback
+            traceback.print_exc()
+            await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
