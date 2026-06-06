@@ -182,7 +182,10 @@ class Database:
                     main_message_id TEXT,
                     reserve_message_id TEXT,
                     main_channel_id TEXT,
-                    reserve_channel_id TEXT
+                    reserve_channel_id TEXT,
+                    event_name TEXT,
+                    event_time TEXT,
+                    additional_info TEXT
                 )
             ''')
 

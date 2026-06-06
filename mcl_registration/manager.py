@@ -122,7 +122,7 @@ class MCLRegistrationManager:
 
     async def start_registration(self, user_id: str, user_name: str, bot, event_name: str, event_time: str, additional_info: str = None):
         self._load_config()
-        self.bot = bot  # ← сохраняем бота
+        self.bot = bot
         
         if self.active_session:
             db.mcl_end_session(self.active_session, user_id)
@@ -142,7 +142,7 @@ class MCLRegistrationManager:
         
         db.mcl_clear_all()
         
-        await self._update_views(active=True)
+        await self._update_views(session_active=True)  # ← меняем active на session_active
         await self._send_announcement(event_name, event_time, additional_info)
         
         from server_stats.global_collector import get_collector
@@ -173,7 +173,7 @@ class MCLRegistrationManager:
                         except:
                             pass
         
-        await self._update_views(active=False)
+        await self._update_views(session_active=False)  # ← меняем
         db.log_action(user_id, "MCL_REG_END")
         return True
 
@@ -240,7 +240,7 @@ class MCLRegistrationManager:
         
         await channel.send(content="@everyone", embed=embed)
 
-    async def _update_views(self, session_active: bool):
+    async def _update_views(self, session_active: bool = False):
         from mcl_registration.embeds import create_registration_embed
         from mcl_registration.views import ModerationView, PublicView
         
@@ -260,10 +260,9 @@ class MCLRegistrationManager:
                         view.update_buttons(True)
                         await msg.edit(embed=embed, view=view)
                     else:
-                        # Сессия не активна, но модуль включён — показываем пустой embed с активными кнопками "Начать"
                         embed = create_registration_embed(main_list, reserve_list, None)
                         view = ModerationView()
-                        view.update_buttons(False)  # Кнопки "Начать" активна, остальные нет
+                        view.update_buttons(False)
                         await msg.edit(embed=embed, view=view)
             except Exception as e:
                 print(f"❌ [MCL] Ошибка обновления main канала: {e}")
