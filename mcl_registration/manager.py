@@ -155,6 +155,29 @@ class MCLRegistrationManager:
 
     async def end_registration(self, user_id: str):
         if self.active_session:
+            # ========== НАЧИСЛЕНИЕ БАЛЛОВ УЧАСТНИКАМ (только если модуль включён) ==========
+            from core.module_manager import MODULES
+            
+            # Проверяем, включён ли модуль экономики
+            if MODULES.get("economy", {}).get("enabled", False):
+                from economy.manager import economy_manager
+                
+                main_list, reserve_list = self.get_lists()
+                
+                # Начисляем баллы участникам основного списка
+                for reg in main_list:
+                    _, uid, _ = reg
+                    await economy_manager.award_mcl(int(uid), is_main=True)
+                
+                # Начисляем баллы участникам резервного списка
+                for reg in reserve_list:
+                    _, uid, _ = reg
+                    await economy_manager.award_mcl(int(uid), is_main=False)
+                
+                print(f"💰 [MCL] Начислены баллы: основной={len(main_list)}, резерв={len(reserve_list)}")
+            else:
+                print(f"⚠️ [MCL] Модуль экономики выключен, баллы не начислены")
+            
             db.mcl_end_session(self.active_session, user_id)
         
         self.active_session = None

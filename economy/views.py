@@ -1,39 +1,57 @@
 """КНОПКИ для магазина (никаких команд!)"""
 import discord
+from datetime import datetime
 from economy.base import PermanentView, ConfirmView
 from economy.manager import economy_manager
 from core.database import db
+from core.config import CONFIG
 from core.utils import is_admin
 
 
 class EconomyPanelView(PermanentView):
-    """Главная панель магазина (в публичном канале)"""
+    """Главная панель магазина (в публичном канале) - товары прямо в embed"""
     
     def __init__(self):
         super().__init__()
     
-    @discord.ui.button(label="🛒 Список товаров", style=discord.ButtonStyle.primary, row=0, custom_id="eco_shop_list")
-    async def show_shop(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Показать все товары"""
+    async def get_shop_embed(self) -> discord.Embed:
+        """Создать embed с актуальным списком товаров"""
         items = economy_manager.get_shop_items()
         
+        embed = discord.Embed(
+            title="💰 МАГАЗИН БАЛЛОВ",
+            color=0xffa500
+        )
+        
+        embed.description = "**Как заработать баллы:**\n"
+        embed.description += "• 🎙️ Нахождение в голосовом канале\n"
+        embed.description += "• 🎯 Участие в CAPT (основной/резерв)\n"
+        embed.description += "• 🎯 Участие в MCL/ВЗМ (основной/резерв)\n"
+        embed.description += "• 📅 Взятие мероприятия (МП)\n"
+        embed.description += "• 📝 Принятие заявки в семью\n"
+        embed.description += "• 🌟 Повышение Tier\n"
+        embed.description += "• 🎁 Ежедневный бонус\n\n"
+        
         if not items:
-            embed = discord.Embed(title="🛒 МАГАЗИН", description="В магазине пока нет товаров", color=0xffa500)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
-        
-        embed = discord.Embed(title="🛒 МАГАЗИН БАЛЛОВ", color=0xffa500)
-        
-        for item in items:
-            stock = f" (осталось: {item['limited_quantity'] - item['sold_count']})" if item['limited_quantity'] > 0 else ""
-            embed.add_field(
-                name=f"{item['emoji']} **{item['name']}** {stock}",
-                value=f"💰 Цена: `{item['price']}` баллов\n📝 {item['description'][:50]}\n`ID: {item['id']}`",
-                inline=False
-            )
+            embed.add_field(name="🛒 ТОВАРЫ", value="*В магазине пока нет товаров*", inline=False)
+        else:
+            embed.add_field(name="🛒 ДОСТУПНЫЕ ТОВАРЫ", value="━━━━━━━━━━━━━━━━━━━━━", inline=False)
+            for item in items:
+                stock = f" (осталось: {item['limited_quantity'] - item['sold_count']})" if item['limited_quantity'] > 0 else ""
+                embed.add_field(
+                    name=f"{item['emoji']} **{item['name']}** {stock}",
+                    value=f"💰 Цена: `{item['price']}` баллов\n📝 {item['description'][:60]}\n`ID: {item['id']}`",
+                    inline=False
+                )
         
         embed.set_footer(text="Используйте кнопку «Купить» и введите ID товара")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return embed
+    
+    @discord.ui.button(label="🔄 Обновить", style=discord.ButtonStyle.secondary, row=0, custom_id="eco_refresh")
+    async def refresh_shop(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Обновить список товаров"""
+        embed = await self.get_shop_embed()
+        await interaction.response.edit_message(embed=embed)
     
     @discord.ui.button(label="💰 Купить товар", style=discord.ButtonStyle.success, row=0, custom_id="eco_buy")
     async def buy_item(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -110,7 +128,6 @@ class AdminEconomyView(PermanentView):
     
     @discord.ui.button(label="➕ Выдать баллы", style=discord.ButtonStyle.success, row=0, custom_id="eco_admin_give")
     async def give_points(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Выдать баллы пользователю"""
         if not await is_admin(str(interaction.user.id)):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
             return
@@ -118,7 +135,6 @@ class AdminEconomyView(PermanentView):
     
     @discord.ui.button(label="📤 Снять баллы", style=discord.ButtonStyle.danger, row=0, custom_id="eco_admin_remove")
     async def remove_points(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Снять баллы у пользователя"""
         if not await is_admin(str(interaction.user.id)):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
             return
@@ -126,7 +142,6 @@ class AdminEconomyView(PermanentView):
     
     @discord.ui.button(label="🛒 Управление товарами", style=discord.ButtonStyle.primary, row=1, custom_id="eco_admin_shop")
     async def manage_shop(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Управление магазином"""
         if not await is_admin(str(interaction.user.id)):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
             return
@@ -143,9 +158,29 @@ class AdminEconomyView(PermanentView):
         view = ShopManageView()
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
     
+    @discord.ui.button(label="📊 Текущие настройки", style=discord.ButtonStyle.secondary, row=1, custom_id="eco_admin_settings")
+    async def show_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Показать текущие настройки начислений"""
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        
+        settings = economy_manager.settings
+        
+        embed = discord.Embed(title="📊 ТЕКУЩИЕ НАСТРОЙКИ ЭКОНОМИКИ", color=0x00ff00)
+        embed.add_field(name="🎙️ Голосовой канал (балл/мин)", value=f"`{settings['voice_points_per_minute']}`", inline=True)
+        embed.add_field(name="📊 Максимум баллов в день за войс", value=f"`{settings['voice_max_per_day']}`", inline=True)
+        embed.add_field(name="🎯 CAPT (основной/резерв)", value=f"`{settings['capt_main_points']}` / `{settings['capt_reserve_points']}`", inline=True)
+        embed.add_field(name="🎯 MCL/ВЗМ (основной/резерв)", value=f"`{settings['mcl_main_points']}` / `{settings['mcl_reserve_points']}`", inline=True)
+        embed.add_field(name="📅 Взятие МП", value=f"`{settings['event_points']}`", inline=True)
+        embed.add_field(name="📝 Принятие заявки", value=f"`{settings['application_points']}`", inline=True)
+        embed.add_field(name="🌟 Повышение Tier", value=f"T3: `{settings['tier3_points']}` | T2: `{settings['tier2_points']}` | T1: `{settings['tier1_points']}`", inline=False)
+        embed.add_field(name="📅 Ежедневный бонус", value=f"База: `{settings['daily_bonus_base']}` | +`{settings['daily_bonus_increment']}`/2дня | Лимит: `{settings['daily_bonus_limit']}`", inline=False)
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
     @discord.ui.button(label="📊 Баланс пользователя", style=discord.ButtonStyle.secondary, row=2, custom_id="eco_admin_balance")
     async def check_balance(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Проверить баланс пользователя"""
         if not await is_admin(str(interaction.user.id)):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
             return
@@ -153,7 +188,6 @@ class AdminEconomyView(PermanentView):
     
     @discord.ui.button(label="📋 Логи операций", style=discord.ButtonStyle.secondary, row=2, custom_id="eco_admin_logs")
     async def show_logs(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Показать логи операций"""
         if not await is_admin(str(interaction.user.id)):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
             return
@@ -239,6 +273,75 @@ class BuyItemModal(discord.ui.Modal, title="🛒 ПОКУПКА"):
             await interaction.response.send_message("❌ Введите число", ephemeral=True)
 
 
+class AddItemModal(discord.ui.Modal, title="➕ ДОБАВИТЬ ТОВАР"):
+    name = discord.ui.TextInput(label="Название", max_length=100, required=True)
+    price = discord.ui.TextInput(label="Цена", required=True)
+    emoji = discord.ui.TextInput(label="Эмодзи", max_length=10, required=False, default="🛒")
+    desc = discord.ui.TextInput(label="Описание", required=False, max_length=200, style=discord.TextStyle.paragraph)
+    limit = discord.ui.TextInput(label="Лимит (0=безлимит)", required=False, default="0")
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            price = int(self.price.value)
+            if price <= 0:
+                await interaction.response.send_message("❌ Цена > 0", ephemeral=True)
+                return
+            limit = int(self.limit.value) if self.limit.value else 0
+            if limit < 0:
+                await interaction.response.send_message("❌ Лимит >= 0", ephemeral=True)
+                return
+            
+            success, msg = await economy_manager.add_shop_item(
+                self.name.value, self.desc.value or "Нет описания", price,
+                self.emoji.value or "🛒", limit, str(interaction.user.id)
+            )
+            await interaction.response.send_message(msg, ephemeral=True)
+            
+            if success:
+                await self.update_shop_embed(interaction)
+        except ValueError:
+            await interaction.response.send_message("❌ Числа", ephemeral=True)
+    
+    async def update_shop_embed(self, interaction: discord.Interaction):
+        channel_id = CONFIG.get("economy_channel")
+        if channel_id and channel_id != "null":
+            channel = interaction.client.get_channel(int(channel_id))
+            if channel:
+                async for msg in channel.history(limit=50):
+                    if msg.author == interaction.client.user and msg.embeds:
+                        view = EconomyPanelView()
+                        embed = await view.get_shop_embed()
+                        await msg.edit(embed=embed)
+                        break
+
+
+class RemoveItemModal(discord.ui.Modal, title="🗑️ УДАЛИТЬ ТОВАР"):
+    item_id = discord.ui.TextInput(label="ID товара", required=True)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            item_id = int(self.item_id.value)
+            success, msg = await economy_manager.remove_shop_item(item_id)
+            await interaction.response.send_message(msg, ephemeral=True)
+            
+            if success:
+                await self.update_shop_embed(interaction)
+        except ValueError:
+            await interaction.response.send_message("❌ Число", ephemeral=True)
+    
+    async def update_shop_embed(self, interaction: discord.Interaction):
+        channel_id = CONFIG.get("economy_channel")
+        if channel_id and channel_id != "null":
+            channel = interaction.client.get_channel(int(channel_id))
+            if channel:
+                async for msg in channel.history(limit=50):
+                    if msg.author == interaction.client.user and msg.embeds:
+                        view = EconomyPanelView()
+                        embed = await view.get_shop_embed()
+                        await msg.edit(embed=embed)
+                        break
+
+
 class AdminGiveModal(discord.ui.Modal, title="➕ ВЫДАТЬ БАЛЛЫ"):
     user_id = discord.ui.TextInput(label="ID пользователя", placeholder="123456789012345678", required=True)
     amount = discord.ui.TextInput(label="Количество", placeholder="100", required=True)
@@ -310,42 +413,3 @@ class AdminBalanceModal(discord.ui.Modal, title="📊 ПРОВЕРКА БАЛА�
             await interaction.response.send_message(embed=embed, ephemeral=True)
         except ValueError:
             await interaction.response.send_message("❌ Ошибка", ephemeral=True)
-
-
-class AddItemModal(discord.ui.Modal, title="➕ ДОБАВИТЬ ТОВАР"):
-    name = discord.ui.TextInput(label="Название", max_length=100, required=True)
-    price = discord.ui.TextInput(label="Цена", required=True)
-    emoji = discord.ui.TextInput(label="Эмодзи", max_length=10, required=False, default="🛒")
-    desc = discord.ui.TextInput(label="Описание", required=False, max_length=200, style=discord.TextStyle.paragraph)
-    limit = discord.ui.TextInput(label="Лимит (0=безлимит)", required=False, default="0")
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        try:
-            price = int(self.price.value)
-            if price <= 0:
-                await interaction.response.send_message("❌ Цена > 0", ephemeral=True)
-                return
-            limit = int(self.limit.value) if self.limit.value else 0
-            if limit < 0:
-                await interaction.response.send_message("❌ Лимит >= 0", ephemeral=True)
-                return
-            
-            success, msg = await economy_manager.add_shop_item(
-                self.name.value, self.desc.value or "Нет описания", price,
-                self.emoji.value or "🛒", limit, str(interaction.user.id)
-            )
-            await interaction.response.send_message(msg, ephemeral=True)
-        except ValueError:
-            await interaction.response.send_message("❌ Числа", ephemeral=True)
-
-
-class RemoveItemModal(discord.ui.Modal, title="🗑️ УДАЛИТЬ ТОВАР"):
-    item_id = discord.ui.TextInput(label="ID товара", required=True)
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        try:
-            item_id = int(self.item_id.value)
-            success, msg = await economy_manager.remove_shop_item(item_id)
-            await interaction.response.send_message(msg, ephemeral=True)
-        except ValueError:
-            await interaction.response.send_message("❌ Число", ephemeral=True)

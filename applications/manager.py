@@ -44,7 +44,19 @@ class ApplicationManager:
     
     def accept_application(self, app_id: int, reviewer_id: str):
         """Принять заявку"""
-        return db.accept_application(app_id, reviewer_id)
+        result = db.accept_application(app_id, reviewer_id)
+        
+        if result:
+            # ===== НАЧИСЛЕНИЕ БАЛЛОВ =====
+            from core.module_manager import MODULES
+            if MODULES.get("economy", {}).get("enabled", False):
+                from economy.manager import economy_manager
+                app = self.get_application(app_id)
+                if app:
+                    import asyncio
+                    asyncio.create_task(economy_manager.award_application(int(app['user_id'])))
+        
+        return result
     
     def reject_application(self, app_id: int, reviewer_id: str, reason: str):
         """Отклонить заявку"""

@@ -171,6 +171,24 @@ class EconomyManager:
         
         if db.purchase_item(str(user_id), item_id, item['price']):
             await self.remove_points(user_id, item['price'], f"Покупка: {item['name']}")
+            
+            # ========== ЛОГ ПОКУПКИ В ОТДЕЛЬНЫЙ КАНАЛ ==========
+            logs_channel_id = CONFIG.get("economy_logs_channel")
+            if logs_channel_id and logs_channel_id != "null" and self.bot:
+                channel = self.bot.get_channel(int(logs_channel_id))
+                if channel:
+                    embed = discord.Embed(
+                        title="🛒 НОВАЯ ПОКУПКА",
+                        color=0x00ff00,
+                        timestamp=datetime.now()
+                    )
+                    embed.add_field(name="👤 Покупатель", value=f"<@{user_id}>", inline=True)
+                    embed.add_field(name="🛍️ Товар", value=f"{item['emoji']} **{item['name']}**", inline=True)
+                    embed.add_field(name="💰 Цена", value=f"{item['price']} баллов", inline=True)
+                    embed.add_field(name="📦 Осталось", value=f"{item['limited_quantity'] - (item['sold_count'] + 1)}" if item['limited_quantity'] > 0 else "∞", inline=True)
+                    embed.set_footer(text=f"ID товара: {item_id}")
+                    await channel.send(embed=embed)
+            
             return True, f"✅ Вы купили {item['emoji']} **{item['name']}** за {item['price']} баллов!"
         return False, "❌ Ошибка при покупке"
     

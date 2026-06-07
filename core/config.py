@@ -79,6 +79,7 @@ CONFIG = {
     'economy_channel': None,           # Канал с панелью магазина
     'economy_admin_channel': None,     # Канал с админ-панелью
     'economy_settings_channel': None,  # Канал настроек экономики
+    'economy_logs_channel': None,      # Канал логов покупок
     
     # Настройки начисления баллов
     'eco_voice_points': '1',           # Баллов за минуту в голосовом канале

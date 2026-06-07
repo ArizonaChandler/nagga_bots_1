@@ -389,7 +389,14 @@ class TakeEventModal(discord.ui.Modal, title="🎮 ВЗЯТЬ МЕРОПРИЯТ
         )
         
         db.log_event_action(self.event_id, "taken", str(interaction.user.id),
-                           f"Группа: {self.group_code.value}, Место: {self.meeting_place.value}")
+                        f"Группа: {self.group_code.value}, Место: {self.meeting_place.value}")
+        
+        # ===== НАЧИСЛЕНИЕ БАЛЛОВ ЗА ВЗЯТИЕ МП =====
+        from core.module_manager import MODULES
+        if MODULES.get("economy", {}).get("enabled", False):
+            from economy.manager import economy_manager
+            await economy_manager.award_event(interaction.user.id)
+            print(f"💰 [EVENTS] Начислены баллы пользователю {interaction.user.id} за взятие МП: {self.event_name}")
         
         # Получаем список каналов для оповещений
         announce_channels = CONFIG.get('announce_channels', [])

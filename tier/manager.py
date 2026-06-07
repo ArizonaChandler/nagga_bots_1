@@ -52,7 +52,20 @@ class TierManager:
     
     def approve_application(self, app_id: int, reviewer_id: str, target_tier: str):
         """Одобрить заявку и выдать роль"""
-        return db.approve_tier_application(app_id, reviewer_id, target_tier)
+        result = db.approve_tier_application(app_id, reviewer_id, target_tier)
+        
+        if result:
+            # ===== НАЧИСЛЕНИЕ БАЛЛОВ =====
+            from core.module_manager import MODULES
+            if MODULES.get("economy", {}).get("enabled", False):
+                from economy.manager import economy_manager
+                app = self.get_application(app_id)
+                if app:
+                    # Получаем пользователя и начисляем баллы
+                    import asyncio
+                    asyncio.create_task(economy_manager.award_tier(int(app['user_id']), target_tier))
+        
+        return result
     
     def reject_application(self, app_id: int, reviewer_id: str, reason: str):
         """Отклонить заявку"""
