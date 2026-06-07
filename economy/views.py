@@ -9,33 +9,25 @@ from core.utils import is_admin
 
 
 class EconomyPanelView(PermanentView):
-    """Главная панель магазина (в публичном канале) - товары прямо в embed"""
+    """Главная панель магазина (в публичном канале) - товары прямо в embed, без кнопки Обновить"""
+    
+    bot = None  # Будет установлен из module_manager
     
     def __init__(self):
         super().__init__()
     
     async def get_shop_embed(self) -> discord.Embed:
-        """Создать embed с актуальным списком товаров"""
+        """Создать embed с актуальным списком товаров (только товары, без инструкций)"""
         items = economy_manager.get_shop_items()
         
         embed = discord.Embed(
-            title="💰 МАГАЗИН БАЛЛОВ",
+            title="🛒 МАГАЗИН БАЛЛОВ",
             color=0xffa500
         )
         
-        embed.description = "**Как заработать баллы:**\n"
-        embed.description += "• 🎙️ Нахождение в голосовом канале\n"
-        embed.description += "• 🎯 Участие в CAPT (основной/резерв)\n"
-        embed.description += "• 🎯 Участие в MCL/ВЗМ (основной/резерв)\n"
-        embed.description += "• 📅 Взятие мероприятия (МП)\n"
-        embed.description += "• 📝 Принятие заявки в семью\n"
-        embed.description += "• 🌟 Повышение Tier\n"
-        embed.description += "• 🎁 Ежедневный бонус\n\n"
-        
         if not items:
-            embed.add_field(name="🛒 ТОВАРЫ", value="*В магазине пока нет товаров*", inline=False)
+            embed.description = "*В магазине пока нет товаров*"
         else:
-            embed.add_field(name="🛒 ДОСТУПНЫЕ ТОВАРЫ", value="━━━━━━━━━━━━━━━━━━━━━", inline=False)
             for item in items:
                 stock = f" (осталось: {item['limited_quantity'] - item['sold_count']})" if item['limited_quantity'] > 0 else ""
                 embed.add_field(
@@ -47,18 +39,12 @@ class EconomyPanelView(PermanentView):
         embed.set_footer(text="Используйте кнопку «Купить» и введите ID товара")
         return embed
     
-    @discord.ui.button(label="🔄 Обновить", style=discord.ButtonStyle.secondary, row=0, custom_id="eco_refresh")
-    async def refresh_shop(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Обновить список товаров"""
-        embed = await self.get_shop_embed()
-        await interaction.response.edit_message(embed=embed)
-    
     @discord.ui.button(label="💰 Купить товар", style=discord.ButtonStyle.success, row=0, custom_id="eco_buy")
     async def buy_item(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Открыть меню покупки"""
         await interaction.response.send_modal(BuyItemModal(interaction.user.id))
     
-    @discord.ui.button(label="💰 Мой баланс", style=discord.ButtonStyle.secondary, row=1, custom_id="eco_balance")
+    @discord.ui.button(label="💰 Мой баланс", style=discord.ButtonStyle.secondary, row=0, custom_id="eco_balance")
     async def show_balance(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Показать баланс"""
         balance = await economy_manager.get_balance(interaction.user.id)
@@ -85,7 +71,7 @@ class EconomyPanelView(PermanentView):
         else:
             await interaction.response.send_message(msg, ephemeral=True)
     
-    @discord.ui.button(label="📜 История покупок", style=discord.ButtonStyle.secondary, row=2, custom_id="eco_history")
+    @discord.ui.button(label="📜 История покупок", style=discord.ButtonStyle.secondary, row=1, custom_id="eco_history")
     async def purchase_history(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Показать историю покупок"""
         purchases = economy_manager.get_user_purchases(interaction.user.id, 10)
@@ -118,6 +104,14 @@ class EconomyPanelView(PermanentView):
             embed.description = "Нет данных"
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    async def update_shop_embed(self, channel):
+        """Обновить embed магазина (вызывается при изменении товаров)"""
+        async for msg in channel.history(limit=10):
+            if msg.author == self.bot and msg.embeds:
+                embed = await self.get_shop_embed()
+                await msg.edit(embed=embed)
+                return
 
 
 class AdminEconomyView(PermanentView):
@@ -299,15 +293,17 @@ class AddItemModal(discord.ui.Modal, title="➕ ДОБАВИТЬ ТОВАР"):
             
             if success:
                 await self.update_shop_embed(interaction)
+                
         except ValueError:
             await interaction.response.send_message("❌ Числа", ephemeral=True)
     
     async def update_shop_embed(self, interaction: discord.Interaction):
+        """Обновить embed магазина в публичном канале"""
         channel_id = CONFIG.get("economy_channel")
         if channel_id and channel_id != "null":
             channel = interaction.client.get_channel(int(channel_id))
             if channel:
-                async for msg in channel.history(limit=50):
+                async for msg in channel.history(limit=10):
                     if msg.author == interaction.client.user and msg.embeds:
                         view = EconomyPanelView()
                         embed = await view.get_shop_embed()
@@ -326,15 +322,17 @@ class RemoveItemModal(discord.ui.Modal, title="🗑️ УДАЛИТЬ ТОВАР
             
             if success:
                 await self.update_shop_embed(interaction)
+                
         except ValueError:
             await interaction.response.send_message("❌ Число", ephemeral=True)
     
     async def update_shop_embed(self, interaction: discord.Interaction):
+        """Обновить embed магазина в публичном канале"""
         channel_id = CONFIG.get("economy_channel")
         if channel_id and channel_id != "null":
             channel = interaction.client.get_channel(int(channel_id))
             if channel:
-                async for msg in channel.history(limit=50):
+                async for msg in channel.history(limit=10):
                     if msg.author == interaction.client.user and msg.embeds:
                         view = EconomyPanelView()
                         embed = await view.get_shop_embed()

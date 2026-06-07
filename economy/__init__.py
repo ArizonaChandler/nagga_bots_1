@@ -13,3 +13,8 @@ __all__ = [
     'AdminEconomyView',
     'EconomySettingsView'
 ]
+
+
+def set_bot_for_views(bot):
+    """Передать бота во view для обновления embed"""
+    EconomyPanelView.bot = bot
