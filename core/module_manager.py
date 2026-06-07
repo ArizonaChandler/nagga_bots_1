@@ -113,7 +113,18 @@ MODULES = {
         "settings_channels": [],
         "initializer": None,
         "toggleable": False
-    }
+    },
+    # ========== НОВЫЙ МОДУЛЬ ЭКОНОМИКИ ==========
+    "economy": {
+        "name": "💰 Экономика и магазин",
+        "description": "Балловая система, начисления за активности, магазин товаров",
+        "enabled": False,
+        "channels": ["economy_channel", "economy_admin_channel"],
+        "settings_channels": ["economy_settings_channel"],
+        "initializer": "economy.manager",
+        "initialize_method": "initialize_buttons",
+        "toggleable": True
+    },
 }
 
 
@@ -230,6 +241,54 @@ class ModuleManager:
                 await setup_ad(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
+            # ========== ЭКОНОМИКА (НОВАЯ) ==========
+            elif module_key == 'economy':
+                from economy import economy_manager
+                from economy.views import EconomyPanelView, AdminEconomyView
+                from economy.events import setup_economy_events
+                from economy.integration import setup_integration
+                
+                economy_manager.set_bot(self.bot)
+                await setup_economy_events(self.bot)
+                setup_integration(self.bot)
+                
+                # Отправляем панель магазина в публичный канал
+                channel_id = CONFIG.get("economy_channel")
+                if channel_id and channel_id != "null":
+                    channel = self.bot.get_channel(int(channel_id))
+                    if channel:
+                        # Удаляем старые сообщения бота
+                        async for msg in channel.history(limit=50):
+                            if msg.author == self.bot.user:
+                                await msg.delete()
+                        
+                        embed = discord.Embed(
+                            title="💰 МАГАЗИН БАЛЛОВ",
+                            description="Нажми на кнопки ниже для управления",
+                            color=0xffa500
+                        )
+                        await channel.send(embed=embed, view=EconomyPanelView())
+                        print(f"✅ [MODULE] {module['name']} панель магазина отправлена в #{channel.name}")
+                
+                # Отправляем админ-панель
+                admin_channel_id = CONFIG.get("economy_admin_channel")
+                if admin_channel_id and admin_channel_id != "null":
+                    channel = self.bot.get_channel(int(admin_channel_id))
+                    if channel:
+                        async for msg in channel.history(limit=50):
+                            if msg.author == self.bot.user:
+                                await msg.delete()
+                        
+                        embed = discord.Embed(
+                            title="⚙️ АДМИН-ПАНЕЛЬ ЭКОНОМИКИ",
+                            description="Управление баллами и магазином",
+                            color=0x7289da
+                        )
+                        await channel.send(embed=embed, view=AdminEconomyView())
+                        print(f"✅ [MODULE] {module['name']} админ-панель отправлена в #{channel.name}")
+                
+                print(f"✅ [MODULE] {module['name']} инициализирован")
+            
             # Для остальных модулей (если добавятся)
             else:
                 initializer_path = module.get("initializer")
@@ -339,6 +398,13 @@ class ModuleManager:
                     await advertiser.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
+            # ========== ЭКОНОМИКА (НОВАЯ) ==========
+            elif module_key == 'economy':
+                from economy.manager import economy_manager
+                if hasattr(economy_manager, 'stop'):
+                    await economy_manager.stop()
+                print(f"✅ [MODULE] {module['name']} остановлен")
+            
             # Для остальных модулей
             else:
                 initializer_path = module.get("initializer")
@@ -424,7 +490,8 @@ class ModuleManager:
             "vacation": ["ОТПУСК", "СИСТЕМА ОТПУСКОВ"],
             "games": ["МОРСКОЙ БОЙ", "ИГРЫ"],
             "birthday": ["ДНИ РОЖДЕНИЯ", "BIRTHDAY"],
-            "advertising": ["АВТО-РЕКЛАМА", "РЕКЛАМА"]
+            "advertising": ["АВТО-РЕКЛАМА", "РЕКЛАМА"],
+            "economy": ["МАГАЗИН БАЛЛОВ", "ЭКОНОМИКА", "АДМИН-ПАНЕЛЬ ЭКОНОМИКИ"]
         }
         
         titles = module_titles.get(module_key, [])

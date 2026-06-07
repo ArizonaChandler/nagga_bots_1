@@ -73,15 +73,39 @@ CONFIG = {
     'mcl_settings_channel': None,
     'mcl_announcement_channel': None,
     'global_settings_channel': None,
+    
+    # ========== НОВАЯ СИСТЕМА ЭКОНОМИКИ ==========
+    # Каналы
+    'economy_channel': None,           # Канал с панелью магазина
+    'economy_admin_channel': None,     # Канал с админ-панелью
+    'economy_settings_channel': None,  # Канал настроек экономики
+    
+    # Настройки начисления баллов
+    'eco_voice_points': '1',           # Баллов за минуту в голосовом канале
+    'eco_voice_max_per_day': '100',    # Максимум баллов в день за войс
+    'eco_capt_main_points': '50',      # Баллов за CAPT (основной)
+    'eco_capt_reserve_points': '25',   # Баллов за CAPT (резерв)
+    'eco_mcl_main_points': '75',       # Баллов за MCL/ВЗМ (основной)
+    'eco_mcl_reserve_points': '35',    # Баллов за MCL/ВЗМ (резерв)
+    'eco_event_points': '30',          # Баллов за взятие МП
+    'eco_application_points': '100',   # Баллов за принятие заявки
+    'eco_tier3_points': '50',          # Баллов за повышение до Tier 3
+    'eco_tier2_points': '100',         # Баллов за повышение до Tier 2
+    'eco_tier1_points': '200',         # Баллов за повышение до Tier 1
+    
+    # Ежедневный бонус
+    'eco_daily_bonus': '25',           # Базовая награда
+    'eco_daily_increment': '5',        # Прирост за 2 дня серии
+    'eco_daily_limit': '30',           # Лимит серии (дней)
 }
 
 def load_config():
-    from core.database import db  # ← ТОЛЬКО ТАК, НИКАК ИНАЧЕ
+    from core.database import db
     settings = db.get_all_settings()
     for key, value in settings.items():
         if key in CONFIG:
             if value and value.lower() != 'null':
-                if key in ['alarm_channels', 'announce_channels', 'reminder_roles', 'announce_roles']:
+                if key in ['alarm_channels', 'announce_channels', 'reminder_roles', 'announce_roles', 'vacation_approve_roles']:
                     try:
                         CONFIG[key] = json.loads(value) if value else []
                     except:
@@ -89,14 +113,19 @@ def load_config():
                 else:
                     CONFIG[key] = value
             else:
-                if key in ['alarm_channels', 'announce_channels', 'reminder_roles', 'announce_roles']:
+                if key in ['alarm_channels', 'announce_channels', 'reminder_roles', 'announce_roles', 'vacation_approve_roles']:
                     CONFIG[key] = []
                 else:
                     CONFIG[key] = None
         else:
-            if key in ['capt_reg_main_channel', 'capt_reg_reserve_channel', 'capt_alert_channel', 
-                       'capt_role_id', 'capt_settings_channel', 'ad_settings_channel', 
-                       'events_settings_channel', 'applications_settings_channel', 'family_name']:
+            # Добавляем новые ключи экономики в CONFIG
+            if key in ['economy_channel', 'economy_admin_channel', 'economy_settings_channel',
+                       'eco_voice_points', 'eco_voice_max_per_day',
+                       'eco_capt_main_points', 'eco_capt_reserve_points',
+                       'eco_mcl_main_points', 'eco_mcl_reserve_points',
+                       'eco_event_points', 'eco_application_points',
+                       'eco_tier3_points', 'eco_tier2_points', 'eco_tier1_points',
+                       'eco_daily_bonus', 'eco_daily_increment', 'eco_daily_limit']:
                 CONFIG[key] = value if value and value.lower() != 'null' else None
     
     db.load_application_settings()
@@ -105,12 +134,10 @@ def load_config():
     db.load_vacation_settings()
 
 def save_config(updated_by: str = None):
-    from core.database import db  # ← ТОЛЬКО ТАК
+    from core.database import db
     for key, value in CONFIG.items():
         if key not in ['user_token_1', 'user_token_2', 'super_admin_id']:
-            if key in ['alarm_channels', 'announce_channels', 'reminder_roles', 'announce_roles']:
+            if key in ['alarm_channels', 'announce_channels', 'reminder_roles', 'announce_roles', 'vacation_approve_roles']:
                 db.set_setting(key, json.dumps(value) if value else '[]', updated_by)
             else:
                 db.set_setting(key, str(value) if value is not None else 'null', updated_by)
-
-# ❌ НЕТ db = Database() ЗДЕСЬ! НЕТ НИКАКОГО ИМПОРТА database.py!

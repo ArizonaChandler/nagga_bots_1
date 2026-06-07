@@ -577,6 +577,55 @@ class Database:
                 )
             ''')
 
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_balance (
+                    user_id TEXT PRIMARY KEY,
+                    balance INTEGER DEFAULT 0,
+                    total_earned INTEGER DEFAULT 0,
+                    total_spent INTEGER DEFAULT 0,
+                    daily_streak INTEGER DEFAULT 0,
+                    last_daily TIMESTAMP
+                );
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS economy_transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    amount INTEGER NOT NULL,
+                    reason TEXT,
+                    action TEXT CHECK(action IN ('earn', 'spend')),
+                    operator TEXT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS shop_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    price INTEGER NOT NULL,
+                    emoji TEXT DEFAULT '🛒',
+                    limited_quantity INTEGER DEFAULT 0,
+                    sold_count INTEGER DEFAULT 0,
+                    is_active BOOLEAN DEFAULT 1,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_purchases (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    item_id INTEGER NOT NULL,
+                    price INTEGER NOT NULL,
+                    purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (item_id) REFERENCES shop_items(id)
+                );
+            ''')
+
             conn.commit()
 
         # ===== АВТОМАТИЧЕСКОЕ ДОБАВЛЕНИЕ СТАНДАРТНЫХ ПОЛЕЙ ЗАЯВКИ =====
@@ -2298,5 +2347,151 @@ class Database:
                 VALUES (?, ?)
             ''', (module_key, enabled))
             conn.commit()
+
+    # ===== ЭКОНОМИКА =====
+
+    def init_user_balance(self, user_id: str):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('INSERT OR IGNORE INTO user_balance (user_id) VALUES (?)', (user_id,))
+            conn.commit()
+
+    def get_user_balance(self, user_id: str) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT balance FROM user_balance WHERE user_id = ?', (user_id,))
+            r = cursor.fetchone()
+            return r[0] if r else None
+
+    def add_user_balance(self, user_id: str, amount: int, reason: str, awarded_by: str = None) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO user_balance (user_id, balance, total_earned) VALUES (?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET balance = balance + ?, total_earned = total_earned + ?
+            ''', (user_id, amount, amount, amount, amount))
+            cursor.execute('INSERT INTO economy_transactions (user_id, amount, reason, action, operator) VALUES (?, ?, ?, "earn", ?)',
+                        (user_id, amount, reason, awarded_by))
+            conn.commit()
+            cursor.execute('SELECT balance FROM user_balance WHERE user_id = ?', (user_id,))
+            return cursor.fetchone()[0]
+
+    def remove_user_balance(self, user_id: str, amount: int, reason: str, removed_by: str = None) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE user_balance SET balance = balance - ?, total_spent = total_spent + ? WHERE user_id = ? AND balance >= ?',
+                        (amount, amount, user_id, amount))
+            if cursor.rowcount == 0:
+                return None
+            cursor.execute('INSERT INTO economy_transactions (user_id, amount, reason, action, operator) VALUES (?, ?, ?, "spend", ?)',
+                        (user_id, amount, reason, removed_by))
+            conn.commit()
+            cursor.execute('SELECT balance FROM user_balance WHERE user_id = ?', (user_id,))
+            return cursor.fetchone()[0]
+
+    def get_user_total_earned(self, user_id: str) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT total_earned FROM user_balance WHERE user_id = ?', (user_id,))
+            r = cursor.fetchone()
+            return r[0] if r else 0
+
+    def get_user_total_spent(self, user_id: str) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT total_spent FROM user_balance WHERE user_id = ?', (user_id,))
+            r = cursor.fetchone()
+            return r[0] if r else 0
+
+    def get_top_balance_users(self, limit: int = 10) -> list:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT user_id, balance, total_earned FROM user_balance ORDER BY balance DESC LIMIT ?', (limit,))
+            return cursor.fetchall()
+
+    def get_recent_economy_transactions(self, limit: int = 20) -> list:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT user_id, amount, reason, action, timestamp FROM economy_transactions ORDER BY timestamp DESC LIMIT ?', (limit,))
+            return [{'user_id': r[0], 'amount': r[1], 'reason': r[2], 'action': r[3], 'timestamp': r[4]} for r in cursor.fetchall()]
+
+    def get_last_daily_claim(self, user_id: str) -> str:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT last_daily FROM user_balance WHERE user_id = ?', (user_id,))
+            r = cursor.fetchone()
+            return r[0] if r else None
+
+    def get_daily_streak(self, user_id: str) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT daily_streak FROM user_balance WHERE user_id = ?', (user_id,))
+            r = cursor.fetchone()
+            return r[0] if r else 0
+
+    def update_daily_claim(self, user_id: str, streak: int):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE user_balance SET last_daily = CURRENT_TIMESTAMP, daily_streak = ? WHERE user_id = ?', (streak, user_id))
+            conn.commit()
+
+    def get_daily_voice_earned(self, user_id: str) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COALESCE(SUM(amount), 0) FROM economy_transactions WHERE user_id = ? AND action="earn" AND reason LIKE "%голосовом%" AND date(timestamp) = date("now")', (user_id,))
+            return cursor.fetchone()[0]
+
+    # ===== МАГАЗИН =====
+
+    def add_shop_item(self, name: str, desc: str, price: int, emoji: str, limit: int, created_by: str = None) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('INSERT INTO shop_items (name, description, price, emoji, limited_quantity, created_by) VALUES (?, ?, ?, ?, ?, ?)',
+                        (name, desc, price, emoji, limit, created_by))
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_shop_items(self, active_only: bool = True) -> list:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if active_only:
+                cursor.execute('SELECT id, name, description, price, emoji, limited_quantity, sold_count FROM shop_items WHERE is_active=1 ORDER BY price')
+            else:
+                cursor.execute('SELECT id, name, description, price, emoji, limited_quantity, sold_count FROM shop_items ORDER BY price')
+            return [{'id': r[0], 'name': r[1], 'description': r[2], 'price': r[3], 'emoji': r[4], 'limited_quantity': r[5], 'sold_count': r[6]} for r in cursor.fetchall()]
+
+    def get_shop_item(self, item_id: int) -> dict:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT id, name, description, price, emoji, limited_quantity, sold_count, is_active FROM shop_items WHERE id = ?', (item_id,))
+            r = cursor.fetchone()
+            if r:
+                return {'id': r[0], 'name': r[1], 'description': r[2], 'price': r[3], 'emoji': r[4], 'limited_quantity': r[5], 'sold_count': r[6], 'is_active': r[7]}
+            return None
+
+    def remove_shop_item(self, item_id: int) -> bool:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE shop_items SET is_active = 0 WHERE id = ?', (item_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def purchase_item(self, user_id: str, item_id: int, price: int) -> bool:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE shop_items SET sold_count = sold_count + 1 WHERE id = ?', (item_id,))
+            cursor.execute('INSERT INTO user_purchases (user_id, item_id, price) VALUES (?, ?, ?)', (user_id, item_id, price))
+            conn.commit()
+            return True
+
+    def get_user_purchases(self, user_id: str, limit: int = 10) -> list:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT up.id, up.item_id, up.price, up.purchased_at, si.name, si.emoji
+                FROM user_purchases up JOIN shop_items si ON up.item_id = si.id
+                WHERE up.user_id = ? ORDER BY up.purchased_at DESC LIMIT ?
+            ''', (user_id, limit))
+            return [{'id': r[0], 'item_id': r[1], 'price': r[2], 'purchased_at': r[3], 'item_name': r[4], 'item_emoji': r[5]} for r in cursor.fetchall()]
 
 db = Database()
