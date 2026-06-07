@@ -47,16 +47,16 @@ class EconomySettingsView(AdminOnlyView):
         app_btn.callback = self.set_application
         self.add_item(app_btn)
         
-        tier_btn = discord.ui.Button(label="🌟 Повышение Tier", style=discord.ButtonStyle.secondary, row=4)
+        tier_btn = discord.ui.Button(label="🌟 Повышение Tier", style=discord.ButtonStyle.secondary, row=3)
         tier_btn.callback = self.set_tier
         self.add_item(tier_btn)
         
-        daily_btn = discord.ui.Button(label="📅 Ежедневный бонус", style=discord.ButtonStyle.secondary, row=4)
+        daily_btn = discord.ui.Button(label="📅 Ежедневный бонус", style=discord.ButtonStyle.secondary, row=3)
         daily_btn.callback = self.set_daily
         self.add_item(daily_btn)
     
     def _add_back_button(self):
-        back_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary, row=5)
+        back_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary, row=4)
         
         async def back_callback(interaction: discord.Interaction):
             from core.settings_panel import GlobalSettingsPanel
@@ -109,7 +109,6 @@ class EconomySettingsView(AdminOnlyView):
                                                             economy_manager.settings['daily_bonus_limit']))
 
 
-# ===== НОВОЕ VIEW ДЛЯ НАСТРОЙКИ КАНАЛОВ =====
 class EconomyChannelsView(AdminOnlyView):
     def __init__(self):
         super().__init__(timeout=60)
