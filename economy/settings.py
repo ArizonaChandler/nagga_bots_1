@@ -17,40 +17,46 @@ class EconomySettingsView(AdminOnlyView):
     def _add_buttons(self):
         self.clear_items()
         
-        voice_btn = discord.ui.Button(label="🎙️ Голосовой канал (балл/мин)", style=discord.ButtonStyle.secondary, row=0)
+        # ===== КНОПКИ НАСТРОЙКИ КАНАЛОВ (НОВЫЕ) =====
+        channel_btn = discord.ui.Button(label="📡 Настройка каналов", style=discord.ButtonStyle.primary, row=0)
+        channel_btn.callback = self.channels_menu
+        self.add_item(channel_btn)
+        
+        # ===== КНОПКИ НАСТРОЙКИ НАЧИСЛЕНИЙ =====
+        voice_btn = discord.ui.Button(label="🎙️ Голосовой канал (балл/мин)", style=discord.ButtonStyle.secondary, row=1)
         voice_btn.callback = self.set_voice
         self.add_item(voice_btn)
         
-        voice_max_btn = discord.ui.Button(label="📊 Максимум баллов в день за войс", style=discord.ButtonStyle.secondary, row=0)
+        voice_max_btn = discord.ui.Button(label="📊 Максимум баллов в день за войс", style=discord.ButtonStyle.secondary, row=1)
         voice_max_btn.callback = self.set_voice_max
         self.add_item(voice_max_btn)
         
-        capt_btn = discord.ui.Button(label="🎯 CAPT (основной/резерв)", style=discord.ButtonStyle.secondary, row=1)
+        capt_btn = discord.ui.Button(label="🎯 CAPT (основной/резерв)", style=discord.ButtonStyle.secondary, row=2)
         capt_btn.callback = self.set_capt
         self.add_item(capt_btn)
         
-        mcl_btn = discord.ui.Button(label="🎯 MCL/ВЗМ (основной/резерв)", style=discord.ButtonStyle.secondary, row=1)
+        mcl_btn = discord.ui.Button(label="🎯 MCL/ВЗМ (основной/резерв)", style=discord.ButtonStyle.secondary, row=2)
         mcl_btn.callback = self.set_mcl
         self.add_item(mcl_btn)
         
-        event_btn = discord.ui.Button(label="📅 Взятие МП", style=discord.ButtonStyle.secondary, row=2)
+        event_btn = discord.ui.Button(label="📅 Взятие МП", style=discord.ButtonStyle.secondary, row=3)
         event_btn.callback = self.set_event
         self.add_item(event_btn)
         
-        app_btn = discord.ui.Button(label="📝 Принятие заявки", style=discord.ButtonStyle.secondary, row=2)
+        app_btn = discord.ui.Button(label="📝 Принятие заявки", style=discord.ButtonStyle.secondary, row=3)
         app_btn.callback = self.set_application
         self.add_item(app_btn)
         
-        tier_btn = discord.ui.Button(label="🌟 Повышение Tier", style=discord.ButtonStyle.secondary, row=3)
+        tier_btn = discord.ui.Button(label="🌟 Повышение Tier", style=discord.ButtonStyle.secondary, row=4)
         tier_btn.callback = self.set_tier
         self.add_item(tier_btn)
         
-        daily_btn = discord.ui.Button(label="📅 Ежедневный бонус", style=discord.ButtonStyle.secondary, row=3)
+        daily_btn = discord.ui.Button(label="📅 Ежедневный бонус", style=discord.ButtonStyle.secondary, row=4)
         daily_btn.callback = self.set_daily
         self.add_item(daily_btn)
     
     def _add_back_button(self):
-        back_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary, row=4)
+        back_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary, row=5)
         
         async def back_callback(interaction: discord.Interaction):
             from core.settings_panel import GlobalSettingsPanel
@@ -60,6 +66,19 @@ class EconomySettingsView(AdminOnlyView):
         back_btn.callback = back_callback
         self.add_item(back_btn)
     
+    # ===== МЕНЮ НАСТРОЙКИ КАНАЛОВ (НОВОЕ) =====
+    async def channels_menu(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        
+        embed = discord.Embed(title="📡 НАСТРОЙКА КАНАЛОВ ЭКОНОМИКИ", color=0x7289da)
+        embed.description = "Выберите, какой канал хотите настроить:"
+        
+        view = EconomyChannelsView()
+        await interaction.response.edit_message(embed=embed, view=view)
+    
+    # ===== ОСТАЛЬНЫЕ МЕТОДЫ (без изменений) =====
     async def set_voice(self, interaction: discord.Interaction):
         await interaction.response.send_modal(SetNumberModal("eco_voice_points", "Баллов за минуту", economy_manager.settings['voice_points_per_minute']))
     
@@ -90,6 +109,81 @@ class EconomySettingsView(AdminOnlyView):
                                                             economy_manager.settings['daily_bonus_limit']))
 
 
+# ===== НОВОЕ VIEW ДЛЯ НАСТРОЙКИ КАНАЛОВ =====
+class EconomyChannelsView(AdminOnlyView):
+    def __init__(self):
+        super().__init__(timeout=60)
+    
+    @discord.ui.button(label="🛒 Публичный канал (магазин)", style=discord.ButtonStyle.primary, row=0, custom_id="eco_channel_shop")
+    async def set_shop_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(SetEconomyChannelModal("economy_channel", "публичный канал магазина"))
+    
+    @discord.ui.button(label="⚙️ Админ-канал (управление)", style=discord.ButtonStyle.primary, row=0, custom_id="eco_channel_admin")
+    async def set_admin_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(SetEconomyChannelModal("economy_admin_channel", "админ-канал управления"))
+    
+    @discord.ui.button(label="◀ Назад", style=discord.ButtonStyle.secondary, row=1, custom_id="eco_channels_back")
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(title="⚙️ **НАСТРОЙКИ ЭКОНОМИКИ**", color=0x00ff00)
+        await interaction.response.edit_message(embed=embed, view=EconomySettingsView())
+
+
+# ===== МОДАЛКА ДЛЯ ВВОДА ID КАНАЛА =====
+class SetEconomyChannelModal(discord.ui.Modal, title="📡 НАСТРОЙКА КАНАЛА"):
+    def __init__(self, setting_key: str, description: str):
+        super().__init__()
+        self.setting_key = setting_key
+        self.channel_input = discord.ui.TextInput(
+            label=f"ID {description}",
+            placeholder="123456789012345678",
+            max_length=20,
+            required=True
+        )
+        self.add_item(self.channel_input)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        
+        try:
+            channel_id = int(self.channel_input.value)
+            channel = interaction.guild.get_channel(channel_id)
+            if not channel:
+                await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
+                return
+            
+            # Сохраняем настройку
+            db.set_setting(self.setting_key, str(channel_id), str(interaction.user.id))
+            CONFIG[self.setting_key] = str(channel_id)
+            
+            await interaction.response.send_message(f"✅ Канал настроен: {channel.mention}", ephemeral=True)
+            
+            # Если настраиваем публичный канал — отправляем туда панель магазина
+            if self.setting_key == "economy_channel":
+                from economy.views import EconomyPanelView
+                embed = discord.Embed(
+                    title="💰 МАГАЗИН БАЛЛОВ",
+                    description="Нажми на кнопки ниже для управления",
+                    color=0xffa500
+                )
+                await channel.send(embed=embed, view=EconomyPanelView())
+            
+            # Если настраиваем админ-канал — отправляем туда админ-панель
+            elif self.setting_key == "economy_admin_channel":
+                from economy.views import AdminEconomyView
+                embed = discord.Embed(
+                    title="⚙️ АДМИН-ПАНЕЛЬ ЭКОНОМИКИ",
+                    description="Управление баллами и магазином",
+                    color=0x7289da
+                )
+                await channel.send(embed=embed, view=AdminEconomyView())
+                
+        except ValueError:
+            await interaction.response.send_message("❌ Введите корректный ID канала", ephemeral=True)
+
+
+# ===== ОСТАЛЬНЫЕ КЛАССЫ (SetNumberModal, SetTwoNumbersModal, SetThreeNumbersModal, SetDailyModal) без изменений =====
 class SetNumberModal(discord.ui.Modal, title="📝 НАСТРОЙКА"):
     def __init__(self, key: str, label: str, current: int):
         super().__init__()
