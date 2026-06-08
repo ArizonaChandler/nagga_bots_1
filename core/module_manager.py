@@ -264,12 +264,10 @@ class ModuleManager:
                             if msg.author == self.bot.user:
                                 await msg.delete()
                         
-                        embed = discord.Embed(
-                            title="💰 МАГАЗИН БАЛЛОВ",
-                            description="Нажми на кнопки ниже для управления",
-                            color=0xffa500
-                        )
-                        await channel.send(embed=embed, view=EconomyPanelView())
+                        # 🔥 ИСПРАВЛЕНО: создаём view и отправляем embed с товарами
+                        view = EconomyPanelView()
+                        embed = await view.get_shop_embed()
+                        await channel.send(embed=embed, view=view)
                         print(f"✅ [MODULE] {module['name']} панель магазина отправлена в #{channel.name}")
                 
                 # Отправляем админ-панель

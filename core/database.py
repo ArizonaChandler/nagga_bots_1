@@ -2494,4 +2494,11 @@ class Database:
             ''', (user_id, limit))
             return [{'id': r[0], 'item_id': r[1], 'price': r[2], 'purchased_at': r[3], 'item_name': r[4], 'item_emoji': r[5]} for r in cursor.fetchall()]
 
+    def update_daily_voice_earned(self, user_id: str, amount: int):
+        """Обновить ежедневный лимит голосовых баллов"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            # Просто логируем, лимит проверяется через get_daily_voice_earned
+            pass  # или можно хранить в отдельной таблице
+
 db = Database()

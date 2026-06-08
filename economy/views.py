@@ -9,15 +9,15 @@ from core.utils import is_admin
 
 
 class EconomyPanelView(PermanentView):
-    """Главная панель магазина (в публичном канале) - товары прямо в embed, без кнопки Обновить"""
+    """Главная панель магазина"""
     
-    bot = None  # Будет установлен из module_manager
+    bot = None
     
     def __init__(self):
         super().__init__()
     
     async def get_shop_embed(self) -> discord.Embed:
-        """Создать embed с актуальным списком товаров (только товары, без инструкций)"""
+        """Создать embed с актуальным списком товаров"""
         items = economy_manager.get_shop_items()
         
         embed = discord.Embed(
@@ -26,7 +26,7 @@ class EconomyPanelView(PermanentView):
         )
         
         if not items:
-            embed.description = "*В магазине пока нет товаров*"
+            embed.description = "*В магазине пока нет товаров*\nДобавьте товары через админ-панель."
         else:
             for item in items:
                 stock = f" (осталось: {item['limited_quantity'] - item['sold_count']})" if item['limited_quantity'] > 0 else ""

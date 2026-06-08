@@ -198,5 +198,46 @@ class EconomyManager:
     def get_top_users(self, limit: int = 10):
         return db.get_top_balance_users(limit)
 
+    # ==================== ГОЛОСОВОЙ ОНЛАЙН ====================
+
+    async def process_voice_update(self, member: discord.Member, before, after):
+        """Обработка изменения голосового статуса"""
+        user_id_str = str(member.id)
+        
+        # Пользователь зашёл в голосовой канал
+        if after.channel and (not before.channel or before.channel != after.channel):
+            self._voice_tracker[user_id_str] = {
+                'joined_at': datetime.now(),
+                'channel_id': str(after.channel.id)
+            }
+            print(f"🎙️ [VOICE] {member.name} зашёл в войс, начат отсчёт")
+        
+        # Пользователь вышел из голосового канала
+        elif before.channel and not after.channel:
+            if user_id_str in self._voice_tracker:
+                joined = self._voice_tracker[user_id_str]['joined_at']
+                now = datetime.now()
+                minutes = int((now - joined).total_seconds() / 60)
+                
+                if minutes > 0:
+                    # Проверка лимита за день
+                    today_earned = db.get_daily_voice_earned(user_id_str)
+                    max_per_day = self.settings['voice_max_per_day']
+                    
+                    points_to_add = minutes * self.settings['voice_points_per_minute']
+                    if today_earned + points_to_add > max_per_day:
+                        points_to_add = max(0, max_per_day - today_earned)
+                        print(f"⚠️ [VOICE] {member.name} достиг лимита {max_per_day} баллов в день")
+                    
+                    if points_to_add > 0:
+                        await self.add_points(member.id, points_to_add, f"{minutes} мин в голосовом канале")
+                        db.update_daily_voice_earned(user_id_str, points_to_add)
+                        print(f"💰 [VOICE] {member.name} +{points_to_add} баллов за {minutes} мин")
+                    else:
+                        print(f"⚠️ [VOICE] {member.name} лимит исчерпан, баллы не начислены")
+                
+                del self._voice_tracker[user_id_str]
+                print(f"🎙️ [VOICE] {member.name} вышел из войса, начислено {points_to_add if minutes > 0 else 0} баллов")
+
 
 economy_manager = EconomyManager()
