@@ -28,8 +28,14 @@ class BattleshipGame(BaseGame):
 
         # Хранилище ID сообщений для обновления (чтобы не флудить)
         self.player_messages = {
-            str(player1.id): {"my_board": None, "enemy_board": None},
-            str(player2.id): {"my_board": None, "enemy_board": None}
+            str(player1.id): {"my_board": None, "enemy_board": None, "view_msg": None},
+            str(player2.id): {"my_board": None, "enemy_board": None, "view_msg": None}
+        }
+        
+        # Хранилище последних отправленных файлов (для сравнения)
+        self.last_images = {
+            str(player1.id): {"my": None, "enemy": None},
+            str(player2.id): {"my": None, "enemy": None}
         }
 
     def _place_ships(self):
@@ -79,11 +85,11 @@ class BattleshipGame(BaseGame):
         return placed
 
     async def make_move(self, user: discord.Member, data: dict) -> tuple:
-        """Сделать ход. Возвращает (success, message, update_for_opponent)"""
+        """Сделать ход. Возвращает (success, message, update_for_opponent, hit)"""
         row, col = data['row'], data['col']
 
         if self.game_over:
-            return False, "Игра уже закончена!", ""
+            return False, "Игра уже закончена!", "", False
 
         if user == self.player1:
             target_board = self.board2
@@ -93,15 +99,17 @@ class BattleshipGame(BaseGame):
             target_ships = self.ships1
 
         if target_board[row][col] in [2, 3]:
-            return False, "Вы уже стреляли в эту клетку!", ""
+            return False, "Вы уже стреляли в эту клетку!", "", False
 
         if target_board[row][col] == 0:
+            # Промах
             target_board[row][col] = 3
             self.passes[str(user.id)] = 0
             self.current_turn = self.get_opponent(user)
-            return True, "❌ Мимо!", f"❌ {user.display_name} промахнулся!"
+            return True, f"❌ Мимо! Клетка {chr(65+row)}{col+1} — промах!", f"❌ {user.display_name} промахнулся по клетке {chr(65+row)}{col+1}!", False
 
         elif target_board[row][col] == 1:
+            # Попадание
             target_board[row][col] = 2
 
             ship_killed = False
@@ -111,23 +119,25 @@ class BattleshipGame(BaseGame):
                         ship_killed = True
                     break
 
-            all_sunk = True
-            for ship in target_ships:
-                if not all(target_board[cx][cy] == 2 for cx, cy in ship):
-                    all_sunk = False
-                    break
+            all_sunk = False
+            if ship_killed:
+                all_sunk = True
+                for ship in target_ships:
+                    if not all(target_board[cx][cy] == 2 for cx, cy in ship):
+                        all_sunk = False
+                        break
 
             if all_sunk:
                 self.game_over = True
                 self.winner = user
-                return True, "💥 Попадание! Корабль уничтожен!\n🎉 **ПОБЕДА!**", f"💥 {user.display_name} уничтожил последний корабль и победил!"
+                return True, f"💥 Попадание! Корабль уничтожен в {chr(65+row)}{col+1}!\n🎉 **ПОБЕДА!**", f"💥 {user.display_name} уничтожил ваш последний корабль и победил!", True
 
             if ship_killed:
-                return True, "💥 Попадание! Корабль уничтожен! Стреляйте ещё раз!", f"💥 {user.display_name} уничтожил ваш корабль!"
+                return True, f"💥 Попадание! Корабль уничтожен в {chr(65+row)}{col+1}! Стреляйте ещё раз!", f"💥 {user.display_name} уничтожил ваш корабль в {chr(65+row)}{col+1}!", True
             else:
-                return True, "💢 Попадание! Стреляйте ещё раз!", f"💢 {user.display_name} попал в ваш корабль!"
+                return True, f"💢 Попадание в {chr(65+row)}{col+1}! Стреляйте ещё раз!", f"💢 {user.display_name} попал в ваш корабль в {chr(65+row)}{col+1}!", True
 
-        return False, "Ошибка!", ""
+        return False, "Ошибка!", "", False
 
     def get_state(self) -> dict:
         """Получить состояние игры для сохранения"""
@@ -142,7 +152,8 @@ class BattleshipGame(BaseGame):
             'player2_id': str(self.player2.id),
             'game_over': self.game_over,
             'winner_id': str(self.winner.id) if self.winner else None,
-            'player_messages': self.player_messages  # ← сохраняем ID сообщений
+            'player_messages': self.player_messages,
+            'last_images': self.last_images
         }
 
     @classmethod
@@ -165,9 +176,10 @@ class BattleshipGame(BaseGame):
         game.passes = data['passes']
         game.game_over = data['game_over']
         
-        # Восстанавливаем ID сообщений
         if 'player_messages' in data:
             game.player_messages = data['player_messages']
+        if 'last_images' in data:
+            game.last_images = data['last_images']
 
         for p in [player1, player2]:
             if str(p.id) == data['current_turn_id']:
@@ -192,13 +204,32 @@ class BattleshipGame(BaseGame):
         img_my = generate_board_image(my_board, show_ships=True)
         img_enemy = generate_board_image(enemy_board, show_ships=False)
 
+        # Определяем статус хода
+        is_my_turn = self.current_turn.id == player.id
+        passes = self.passes.get(str(player.id), 0)
+        
+        if self.game_over:
+            if self.winner == player:
+                status = "🏆 **ВЫ ПОБЕДИЛИ!** 🏆"
+                color = 0xffd700
+            else:
+                status = "💔 **ВЫ ПРОИГРАЛИ** 💔"
+                color = 0xff0000
+        else:
+            if is_my_turn:
+                status = "🎯 **ВАШ ХОД!**"
+                color = 0x00ff00
+            else:
+                status = "⏳ **ХОД ПРОТИВНИКА...**"
+                color = 0xffaa00
+
         embed = discord.Embed(
             title="🎮 **МОРСКОЙ БОЙ**",
-            description=f"**Ваш ход:** {'✅ ДА' if self.current_turn.id == player.id else '❌ НЕТ'}",
-            color=0x00ff00 if self.current_turn.id == player.id else 0xff0000
+            description=f"{status}\nПропусков: {passes}/3",
+            color=color
         )
-
-        embed.add_field(name="📊 Пропусков", value=f"{self.passes.get(str(player.id), 0)}/3", inline=True)
+        
+        embed.add_field(name="📌 Управление", value="Используйте кнопки ниже для выбора клетки", inline=False)
 
         return embed, [discord.File(img_my, "my_board.png"), discord.File(img_enemy, "enemy_board.png")]
 

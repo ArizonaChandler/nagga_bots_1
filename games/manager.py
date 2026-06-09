@@ -52,7 +52,6 @@ class GameManager:
                 logger.error(f"❌ Ошибка восстановления: {e}")
                 db.delete_active_game(game_data['game_id'])
 
-        # Обновляем топ
         await self.update_lobby()
 
         logger.info(f"✅ Восстановлено игр: {restored_count}")
@@ -61,16 +60,14 @@ class GameManager:
     async def create_game(self, game_type: str, player1: discord.Member, player2: discord.Member) -> bool:
         """Создать новую игру"""
         logger.info(f"🎮 Создание игры между {player1.display_name} и {player2.display_name}")
-        print(f"🎮 [Games] create_game вызван: {player1.name} vs {player2.name}")
 
         if str(player1.id) in self.player_games or str(player2.id) in self.player_games:
-            logger.warning(f"Один из игроков уже в игре: {player1.name} или {player2.name}")
+            logger.warning(f"Один из игроков уже в игре")
             return False
 
         guild = player1.guild
         category_id = db.get_setting('games_category_id')
         category = guild.get_channel(int(category_id)) if category_id else None
-        logger.debug(f"Категория: {category.name if category else 'None'}")
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
@@ -109,19 +106,18 @@ class GameManager:
             game_data=json.dumps(game.get_state()),
             current_turn=str(game.current_turn.id)
         )
-        logger.info(f"💾 Игра сохранена в БД: {game_id}")
 
         embed = discord.Embed(
             title=f"🎮 МОРСКОЙ БОЙ",
             description=f"Игра между {player1.mention} и {player2.mention}\n\n"
-                    f"**Управление через личные сообщения с ботом**\n"
-                    f"Канал будет удалён через 1 минуту после завершения игры.",
+                        f"**Управление через личные сообщения с ботом**\n"
+                        f"Канал будет удалён через 1 минуту после завершения игры.",
             color=0x00ff00
         )
         await channel.send(embed=embed)
 
         for player in [player1, player2]:
-            await self.send_game_interface(player, game)
+            await self.send_game_interface(player, game, is_update=False)
 
         await self.log(f"🎮 Новая игра между {player1.display_name} и {player2.display_name}")
         return True
@@ -132,35 +128,65 @@ class GameManager:
         
         player_id = str(player.id)
         messages = game.player_messages.get(player_id, {})
+        last_images = game.last_images.get(player_id, {})
+        
+        # Получаем содержимое файлов для сравнения
+        my_content = files[0].getvalue() if files else None
+        enemy_content = files[1].getvalue() if len(files) > 1 else None
+        
+        my_changed = last_images.get("my") != my_content
+        enemy_changed = last_images.get("enemy") != enemy_content
         
         try:
-            if is_update and messages.get("my_board") and messages.get("enemy_board"):
-                # Обновляем существующие сообщения
+            # Обновляем или отправляем моё поле
+            if is_update and messages.get("my_board") and not my_changed:
+                pass
+            elif is_update and messages.get("my_board") and my_changed:
                 try:
                     my_msg = await player.fetch_message(messages["my_board"])
-                    await my_msg.edit(attachments=[files[0]] if files else [])
+                    await my_msg.edit(attachments=[files[0]])
+                    last_images["my"] = my_content
                 except:
-                    pass
-                
+                    new_msg = await player.send(file=files[0])
+                    messages["my_board"] = new_msg.id
+                    last_images["my"] = my_content
+            else:
+                new_msg = await player.send(file=files[0])
+                messages["my_board"] = new_msg.id
+                last_images["my"] = my_content
+            
+            # Обновляем или отправляем поле противника
+            if is_update and messages.get("enemy_board") and not enemy_changed:
+                pass
+            elif is_update and messages.get("enemy_board") and enemy_changed:
                 try:
                     enemy_msg = await player.fetch_message(messages["enemy_board"])
-                    await enemy_msg.edit(attachments=[files[1]] if len(files) > 1 else [])
+                    await enemy_msg.edit(attachments=[files[1]])
+                    last_images["enemy"] = enemy_content
                 except:
-                    pass
-                
-                # Обновляем embed с кнопками
-                await player.send(embed=embed, view=game.get_view(player))
+                    new_msg = await player.send(file=files[1])
+                    messages["enemy_board"] = new_msg.id
+                    last_images["enemy"] = enemy_content
             else:
-                # Отправляем новые сообщения
-                if files:
-                    my_msg = await player.send(file=files[0])
-                    enemy_msg = await player.send(file=files[1])
-                    
-                    game.player_messages[player_id]["my_board"] = my_msg.id
-                    game.player_messages[player_id]["enemy_board"] = enemy_msg.id
-                
-                await player.send(embed=embed, view=game.get_view(player))
-                
+                new_msg = await player.send(file=files[1])
+                messages["enemy_board"] = new_msg.id
+                last_images["enemy"] = enemy_content
+            
+            # Обновляем View (кнопки)
+            if is_update and messages.get("view_msg"):
+                try:
+                    view_msg = await player.fetch_message(messages["view_msg"])
+                    await view_msg.edit(embed=embed, view=game.get_view(player))
+                except:
+                    view_msg = await player.send(embed=embed, view=game.get_view(player))
+                    messages["view_msg"] = view_msg.id
+            else:
+                view_msg = await player.send(embed=embed, view=game.get_view(player))
+                messages["view_msg"] = view_msg.id
+            
+            game.player_messages[player_id] = messages
+            game.last_images[player_id] = last_images
+            
         except discord.Forbidden:
             await self.log(f"❌ Не могу отправить ЛС {player.display_name}")
             await self.end_game(game.game_id, None, None, force_end=True)
@@ -178,9 +204,10 @@ class GameManager:
             await user.send("❌ Сейчас не ваш ход!")
             return
 
-        success, message, update_for_opponent = await game.make_move(user, move_data)
+        success, message, update_for_opponent, hit = await game.make_move(user, move_data)
 
         if success:
+            # Сохраняем состояние
             db.save_active_game(
                 game_id=game.game_id,
                 game_type="battleship",
@@ -191,19 +218,23 @@ class GameManager:
                 current_turn=str(game.current_turn.id)
             )
 
-            # Обновление текущему игроку
-            embed, files = await game.get_display(user)
-            for file in files:
-                await user.send(file=file)
-            await user.send(content=message, embed=embed, view=game.get_view(user))
-
-            # Обновление противнику
+            # Обновляем интерфейс текущему игроку
+            await self.send_game_interface(user, game, is_update=True)
+            
+            # Если был хит (попадание) и игра не окончена, ход не переходит
+            if hit and not game.game_over:
+                await user.send(message)
+                return
+            
+            # Обновляем интерфейс противнику
             opponent = game.get_opponent(user)
-            embed_opp, files_opp = await game.get_display(opponent)
-            for file in files_opp:
-                await opponent.send(file=file)
-            await opponent.send(content=update_for_opponent, embed=embed_opp, view=game.get_view(opponent))
-
+            await self.send_game_interface(opponent, game, is_update=True)
+            
+            # Отправляем сообщения о результате
+            await user.send(message)
+            if update_for_opponent:
+                await opponent.send(update_for_opponent)
+            
             await game.channel.send(f"🎯 {user.display_name} сделал ход. {message}")
 
             if game.game_over and game.winner:
