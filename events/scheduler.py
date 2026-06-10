@@ -9,10 +9,8 @@ from core.database import db
 from core.config import CONFIG
 from events.views import EventReminderView
 
-# Существующий логгер для консоли
 logger = logging.getLogger(__name__)
 
-# НОВЫЙ файловый логгер
 file_logger = logging.getLogger('events_scheduler')
 file_logger.setLevel(logging.DEBUG)
 fh = logging.FileHandler('event_scheduler.log')
@@ -21,37 +19,67 @@ formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
 file_logger.addHandler(fh)
 
-# Московское время
 MSK_TZ = pytz.timezone('Europe/Moscow')
+
+# Глобальный экземпляр для предотвращения дублирования
+_scheduler_instance = None
+
 
 class EventScheduler:
     def __init__(self, bot):
+        global _scheduler_instance
+        
+        # Если уже есть запущенный экземпляр — останавливаем его
+        if _scheduler_instance and _scheduler_instance.running:
+            file_logger.warning("⚠️ Обнаружен запущенный планировщик, останавливаю...")
+            asyncio.create_task(_scheduler_instance.stop())
+        
         self.bot = bot
-        self.running = True
+        self.running = False
         self.check_interval = 60
         self.task = None
         self.reminder_sent_time = {}
+        
+        # Сохраняем как глобальный экземпляр
+        _scheduler_instance = self
+        
         file_logger.debug("EventScheduler инициализирован")
     
     async def start(self):
+        """Запуск планировщика (только если не запущен)"""
+        if self.running:
+            file_logger.warning("⚠️ Планировщик уже запущен, пропускаю")
+            return
+        
+        self.running = True
         file_logger.info("🕐 Event Scheduler запущен")
         logger.info("🕐 Event Scheduler запущен")
+        
         await self.initialize_settings_channel(self.bot)
+        
         self.task = asyncio.create_task(self._run())
     
     async def stop(self):
+        """Остановка планировщика"""
+        if not self.running:
+            return
+        
         self.running = False
-        if self.task:
+        if self.task and not self.task.done():
             self.task.cancel()
-            file_logger.info("🕐 Event Scheduler остановлен")
-            logger.info("🕐 Event Scheduler остановлен")
+            try:
+                await self.task
+            except asyncio.CancelledError:
+                pass
+        
+        file_logger.info("🕐 Event Scheduler остановлен")
+        logger.info("🕐 Event Scheduler остановлен")
     
     async def _run(self):
         file_logger.debug("Запуск основного цикла")
         while self.running:
             try:
                 now = datetime.now(MSK_TZ)
-                file_logger.debug(f"Проверка событий в {now}")
                 
                 await self.check_events()
                 await self.check_timeouts()
@@ -61,10 +89,13 @@ class EventScheduler:
                     db.generate_schedule(days_ahead=14)
                     self.cleanup_old_reminders()
                     
+            except asyncio.CancelledError:
+                break
             except Exception as e:
                 file_logger.error(f"Ошибка в планировщике: {e}")
                 file_logger.error(traceback.format_exc())
                 logger.error(f"Ошибка в планировщике: {e}")
+            
             await asyncio.sleep(self.check_interval)
     
     async def check_events(self):
@@ -87,12 +118,7 @@ class EventScheduler:
             for event in today_events:
                 try:
                     file_logger.debug(f"--- Обработка события ID: {event['id']} ---")
-                    file_logger.debug(f"Название: {event['name']}")
-                    file_logger.debug(f"Время: {event['event_time']}")
-                    file_logger.debug(f"reminder_sent: {event['reminder_sent']}")
-                    file_logger.debug(f"taken_by: {event['taken_by']}")
                     
-                    # Если уже взяли - пропускаем
                     if event['taken_by']:
                         file_logger.debug("Мероприятие уже взято, пропускаем")
                         continue
@@ -109,13 +135,23 @@ class EventScheduler:
                         reminder_hour = 23
                     
                     reminder_time = f"{reminder_hour:02d}:{reminder_min:02d}"
+                    
+                    # Ключ для проверки отправки
+                    reminder_key = f"{event['id']}_{current_date}"
+                    
                     file_logger.debug(f"Время напоминания: {reminder_time}")
+                    file_logger.debug(f"reminder_sent: {event['reminder_sent']}")
                     
                     # Проверяем, что текущее время РАВНО времени напоминания
                     # И напоминание ещё не отправлено
-                    file_logger.debug(f"Сравнение: {current_time_str} == {reminder_time}?")
+                    # И мы не отправляли уже в этой сессии
                     if current_time_str == reminder_time and not event['reminder_sent']:
+                        if reminder_key in self.reminder_sent_time:
+                            file_logger.debug(f"Уже отправлено в этой сессии, пропускаю")
+                            continue
+                        
                         file_logger.info(f"✅ ПОРА отправлять напоминание для {event['name']} в {event_time}")
+                        self.reminder_sent_time[reminder_key] = datetime.now()
                         await self.send_reminder(event, now)
                     else:
                         file_logger.debug("Условия не выполнены")
@@ -137,12 +173,26 @@ class EventScheduler:
         try:
             now = datetime.now(MSK_TZ)
             current_time_str = now.strftime("%H:%M")
+            current_date = now.date()
+            
             file_logger.debug(f"Текущее время для таймаутов: {current_time_str}")
             file_logger.debug(f"Отслеживается напоминаний: {len(self.reminder_sent_time)}")
             
             for key, sent_time in list(self.reminder_sent_time.items()):
                 try:
-                    event_id, event_date = key
+                    # Ключ имеет формат "eventId_YYYY-MM-DD"
+                    parts = key.split('_')
+                    if len(parts) != 2:
+                        continue
+                    
+                    event_id = int(parts[0])
+                    event_date = parts[1]
+                    
+                    # Проверяем, не устарела ли запись
+                    if event_date != str(current_date):
+                        del self.reminder_sent_time[key]
+                        continue
+                    
                     file_logger.debug(f"Проверка таймаута для event_id={event_id}, date={event_date}")
                     
                     with db.get_connection() as conn:
@@ -161,11 +211,10 @@ class EventScheduler:
                             continue
                         
                         event_time_str, taken_by = result
-                        file_logger.debug(f"Время мероприятия: {event_time_str}, taken_by: {taken_by}")
                         
                         # Если уже взяли - удаляем из отслеживания
                         if taken_by:
-                            file_logger.debug(f"Мероприятие уже взято пользователем {taken_by}, удаляем из отслеживания")
+                            file_logger.debug(f"Мероприятие уже взято, удаляем из отслеживания")
                             del self.reminder_sent_time[key]
                             continue
                         
@@ -185,7 +234,6 @@ class EventScheduler:
                         file_logger.debug(f"Время таймаута: {timeout_time}")
                         
                         # Если наступило время таймаута
-                        file_logger.debug(f"Сравнение: {current_time_str} >= {timeout_time}?")
                         if current_time_str >= timeout_time:
                             file_logger.info(f"⏰ ТАЙМАУТ для мероприятия {event_id} в {event_time_str}")
                             await self.send_timeout_message(event_id, event_date, event_time_str)
@@ -205,6 +253,16 @@ class EventScheduler:
         """Отправка напоминания во все настроенные каналы"""
         file_logger.debug("="*50)
         file_logger.debug("send_reminder START")
+        
+        today = now.date().isoformat()
+        reminder_key = f"{event['id']}_{today}"
+        
+        # Дополнительная проверка — чтобы точно не отправить дважды
+        if reminder_key in self.reminder_sent_time:
+            file_logger.warning(f"Повторная попытка отправки {reminder_key}, игнорирую")
+            return
+        
+        self.reminder_sent_time[reminder_key] = datetime.now()
         
         try:
             channel_ids = CONFIG.get('alarm_channels', [])
@@ -280,14 +338,11 @@ class EventScheduler:
             # Отправляем во все каналы
             from events.views import EventReminderView
             sent_count = 0
-            first_message = None
-            first_channel_id = None
             
             for channel_id in channel_ids:
                 try:
                     channel = self.bot.get_channel(int(channel_id))
                     if not channel:
-                        # Пробуем через guild
                         if guild:
                             channel = guild.get_channel(int(channel_id))
                     
@@ -309,10 +364,6 @@ class EventScheduler:
                     message = await channel.send(content=content, embed=embed, view=view)
                     view.add_message(message, channel_id)
                     
-                    if sent_count == 0:
-                        first_message = message
-                        first_channel_id = channel_id
-                    
                     sent_count += 1
                     file_logger.debug(f"Отправлено в канал {channel.name} (ID: {channel_id})")
                     
@@ -320,18 +371,8 @@ class EventScheduler:
                     file_logger.error(f"Ошибка отправки в канал {channel_id}: {e}")
             
             if sent_count > 0:
-                today = now.date().isoformat()
                 db.mark_reminder_sent(event['id'], today)
                 db.log_event_action(event['id'], "reminder_sent")
-                
-                # Сохраняем первое сообщение для отслеживания таймаута
-                if first_message and first_channel_id in channel_ids:
-                    # Находим view первого сообщения и сохраняем его
-                    for view in self.bot.persistent_views:
-                        if hasattr(view, 'event_id') and view.event_id == event['id']:
-                            view.message = first_message
-                            break
-                
                 file_logger.info(f"✅ Напоминание отправлено в {sent_count} каналов: {event['name']} в {event_time}")
                 logger.info(f"✅ Напоминание отправлено: {event['name']} в {event_time}")
             
@@ -396,7 +437,13 @@ class EventScheduler:
             
             for key in list(self.reminder_sent_time.keys()):
                 try:
-                    event_id, event_date = key
+                    # Ключ имеет формат "eventId_YYYY-MM-DD"
+                    parts = key.split('_')
+                    if len(parts) != 2:
+                        del self.reminder_sent_time[key]
+                        continue
+                    
+                    event_date = parts[1]
                     date_obj = datetime.strptime(event_date, "%Y-%m-%d").date()
                     days_diff = (now.date() - date_obj).days
                     file_logger.debug(f"Ключ {key}: дней разницы {days_diff}")
@@ -428,7 +475,6 @@ class EventScheduler:
             return False
         
         try:
-            # Получаем канал
             channel = bot.get_channel(int(settings_channel_id))
             if not channel:
                 logger.error(f"❌ Канал настроек мероприятий {settings_channel_id} не найден")
@@ -436,7 +482,6 @@ class EventScheduler:
             
             logger.info(f"✅ Канал найден: #{channel.name} (ID: {channel.id})")
             
-            # Импортируем view
             try:
                 from events.settings_view import EventsSettingsView
                 logger.info("✅ EventsSettingsView успешно импортирован")
@@ -444,14 +489,12 @@ class EventScheduler:
                 logger.error(f"❌ Ошибка импорта EventsSettingsView: {e}")
                 return False
             
-            # Ищем существующее сообщение мероприятий
             events_message_exists = False
             message_count = 0
             
             async for msg in channel.history(limit=50):
                 message_count += 1
                 if msg.author == bot.user and msg.embeds:
-                    # Если это наше сообщение - обновляем
                     if msg.embeds and "ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ" in msg.embeds[0].title:
                         await msg.edit(view=EventsSettingsView())
                         events_message_exists = True
@@ -481,33 +524,27 @@ class EventScheduler:
             logger.error(f"❌ Критическая ошибка инициализации канала настроек: {e}", exc_info=True)
             return False
 
-    async def stop(self):
-        """Остановить систему мероприятий"""
-        print("🔔 [EVENTS] Остановка системы мероприятий...")
-        
-        self.running = False
-        if self.task:
-            self.task.cancel()
-        
-        # Очищаем каналы напоминаний
-        for channel_id in CONFIG.get('alarm_channels', []):
-            channel = self.bot.get_channel(int(channel_id))
-            if channel:
-                async for msg in channel.history(limit=50):
-                    if msg.author == self.bot.user and msg.embeds:
-                        await msg.edit(
-                            embed=discord.Embed(
-                                title="🔔 **МЕРОПРИЯТИЯ**",
-                                description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
-                                color=0x808080
-                            ),
-                            view=None
-                        )
-                        break
 
+# Глобальный экземпляр для внешнего доступа
 scheduler = None
 
+
 async def setup(bot):
-    global scheduler
+    global scheduler, _scheduler_instance
+    
+    # Если уже есть запущенный планировщик, останавливаем
+    if scheduler and scheduler.running:
+        await scheduler.stop()
+    
     scheduler = EventScheduler(bot)
     await scheduler.start()
+    return scheduler
+
+
+async def stop_scheduler():
+    """Функция для остановки планировщика извне"""
+    global scheduler, _scheduler_instance
+    if scheduler:
+        await scheduler.stop()
+        scheduler = None
+    _scheduler_instance = None

@@ -201,7 +201,7 @@ class ModuleManager:
             
             # Мероприятия
             elif module_key == 'events':
-                from events.scheduler import setup as setup_events
+                from events.scheduler import setup as setup_events, stop_scheduler
                 await setup_events(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
@@ -351,9 +351,8 @@ class ModuleManager:
             
             # Мероприятия
             elif module_key == 'events':
-                from events.scheduler import scheduler
-                if scheduler and hasattr(scheduler, 'stop'):
-                    await scheduler.stop()
+                from events.scheduler import stop_scheduler
+                await stop_scheduler()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
             # AFK система
