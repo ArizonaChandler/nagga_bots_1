@@ -95,21 +95,24 @@ class GameLobbyView(discord.ui.View):
         
         logger.info(f"🔘 Нажата кнопка очереди от {interaction.user.name}")
         
+        # ✅ СНАЧАЛА ОТВЕЧАЕМ НА INTERACTION (чтобы он не истёк)
+        await interaction.response.defer(ephemeral=True)
+        
         try:
             if not db.get_game_enabled("battleship"):
-                await interaction.response.send_message("❌ Игра временно отключена администратором!", ephemeral=True)
+                await interaction.followup.send("❌ Игра временно отключена администратором!", ephemeral=True)
                 return
             
             # Проверка, не в игре ли уже
             if game_manager.get_player_game(str(interaction.user.id)):
-                await interaction.response.send_message("❌ Вы уже участвуете в игре!", ephemeral=True)
+                await interaction.followup.send("❌ Вы уже участвуете в игре!", ephemeral=True)
                 return
             
-            # Проверка ЛС
+            # Проверка ЛС (после ответа на interaction)
             try:
                 await interaction.user.send("✅ Бот может отправлять вам сообщения")
             except:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     "❌ Бот не может отправить вам личное сообщение.\nПожалуйста, откройте ЛС с ботом.",
                     ephemeral=True
                 )
@@ -119,12 +122,12 @@ class GameLobbyView(discord.ui.View):
             
             if interaction.user in waiting:
                 waiting.remove(interaction.user)
-                await interaction.response.send_message("✅ Вы вышли из очереди!", ephemeral=True)
+                await interaction.followup.send("✅ Вы вышли из очереди!", ephemeral=True)
                 await game_manager.log(f"🚪 {interaction.user.display_name} вышел из очереди")
                 logger.info(f"Игрок {interaction.user.name} вышел из очереди")
             else:
                 waiting.append(interaction.user)
-                await interaction.response.send_message("✅ Вы добавлены в очередь!", ephemeral=True)
+                await interaction.followup.send("✅ Вы добавлены в очередь!", ephemeral=True)
                 await game_manager.log(f"👤 {interaction.user.display_name} вошёл в очередь")
                 logger.info(f"Игрок {interaction.user.name} вошёл в очередь")
             
@@ -157,7 +160,7 @@ class GameLobbyView(discord.ui.View):
             
         except Exception as e:
             logger.error(f"ОШИБКА в toggle_queue: {e}", exc_info=True)
-            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+            await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
 
     async def show_top(self, interaction: discord.Interaction):
         """Показать топ игроков"""
