@@ -270,9 +270,12 @@ class GameManager:
         if not channel:
             return
 
+        from games.battleship.views import GameLobbyView
+
         async for msg in channel.history(limit=50):
             if msg.author == self.bot.user and msg.components:
-                await msg.edit(embed=get_top_embed(), view=GameLobbyView())
+                view = GameLobbyView(self.bot, self.lobby_channel_id)
+                await msg.edit(embed=get_top_embed(), view=view)
                 return
 
     async def log(self, message: str):

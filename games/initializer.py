@@ -69,12 +69,10 @@ class GamesInitializer:
         logger.info(f"✅ Создан embed правил в #{channel.name}")
 
     async def _init_lobby_channel(self):
-        """Канал лобби (очередь + топ игроков)"""
         lobby_channel_id = db.get_setting('games_lobby_channel')
         
         if not lobby_channel_id:
             logger.warning("⚠️ Канал лобби игр не настроен")
-            print("⚠️ [Games] Канал лобби игр не настроен")
             return
 
         channel = self.bot.get_channel(int(lobby_channel_id))
@@ -82,19 +80,17 @@ class GamesInitializer:
             logger.error(f"❌ Канал лобби игр {lobby_channel_id} не найден")
             return
 
+        from games.battleship.views import GameLobbyView
+        
+        # Удаляем старые сообщения
         async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user and msg.components:
-                await msg.edit(
-                    embed=get_top_embed(),
-                    view=GameLobbyView()
-                )
-                logger.info(f"✅ Обновлена панель лобби в #{channel.name}")
-                return
-
-        await channel.send(
-            embed=get_top_embed(),
-            view=GameLobbyView()
-        )
+            if msg.author == self.bot.user:
+                await msg.delete()
+        
+        # Создаём новое сообщение с view
+        view = GameLobbyView(self.bot, lobby_channel_id)
+        embed = get_lobby_embed([], [])  # или view.update_embed() создаст embed
+        await channel.send(embed=embed, view=view)
         logger.info(f"✅ Создана панель лобби в #{channel.name}")
 
     async def _init_log_channel(self):
