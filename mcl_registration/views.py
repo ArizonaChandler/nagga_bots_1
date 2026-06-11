@@ -96,7 +96,7 @@ class ModerationView(PermanentView):
     def update_buttons(self, active: bool):
         for child in self.children:
             if child.custom_id == "mcl_start":
-                child.disabled = active
+                child.disabled = active  # ← АКТИВНА ТОЛЬКО КОГДА НЕТ РЕГИСТРАЦИИ!
             else:
                 child.disabled = not active
     
