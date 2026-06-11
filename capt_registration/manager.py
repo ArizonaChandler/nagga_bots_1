@@ -203,21 +203,18 @@ class CaptRegistrationManager:
 
     async def end_registration(self, user_id: str):
         if self.active_session:
-            # ========== НАЧИСЛЕНИЕ БАЛЛОВ УЧАСТНИКАМ (только если модуль включён) ==========
+            # ========== НАЧИСЛЕНИЕ БАЛЛОВ УЧАСТНИКАМ ==========
             from core.module_manager import MODULES
             
-            # Проверяем, включён ли модуль экономики
             if MODULES.get("economy", {}).get("enabled", False):
                 from economy.manager import economy_manager
                 
                 main_list, reserve_list = self.get_lists()
                 
-                # Начисляем баллы участникам основного списка
                 for reg in main_list:
                     _, uid, _ = reg
                     await economy_manager.award_capt(int(uid), is_main=True)
                 
-                # Начисляем баллы участникам резервного списка
                 for reg in reserve_list:
                     _, uid, _ = reg
                     await economy_manager.award_capt(int(uid), is_main=False)
@@ -244,7 +241,7 @@ class CaptRegistrationManager:
                         except:
                             pass
         
-        await self._update_views(active=False)
+        await self._update_views(session_active=False)
         db.log_action(user_id, "CAPT_REG_END")
         return True
 
@@ -389,7 +386,7 @@ class CaptRegistrationManager:
     async def stop(self):
         """Остановить систему CAPT"""
         print("🎯 [CAPT] Остановка системы CAPT...")
-        await self._update_views(active=False)
+        await self._update_views(session_active=False)
 
 
 capt_reg_manager = CaptRegistrationManager()
