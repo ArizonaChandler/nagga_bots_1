@@ -80,36 +80,85 @@ class MCLRegistrationManager:
             print(f"❌ [MCL] Каналы не найдены: main={main_channel}, reserve={reserve_channel}")
             return False
         
-        # Удаляем ВСЕ сообщения бота в каналах
-        async for msg in main_channel.history(limit=50):
-            if msg.author == bot.user:
-                await msg.delete()
+        # 🔥 ПРОВЕРЯЕМ АКТИВНУЮ СЕССИЮ ДО УДАЛЕНИЯ
+        session = db.mcl_get_active_session()
+        active = session is not None
         
-        async for msg in reserve_channel.history(limit=50):
-            if msg.author == bot.user:
-                await msg.delete()
-        
-        self._load_message_ids()
+        if session:
+            self.active_session = session['id']
+            self.session_info = {
+                'event_name': session.get('event_name'),
+                'event_time': session.get('event_time'),
+                'additional_info': session.get('additional_info'),
+                'started_by_name': f"<@{session['started_by']}>"
+            }
+            self.main_message_id = session.get('main_message_id')
+            self.reserve_message_id = session.get('reserve_message_id')
+            print(f"🎯 [MCL] Восстановлена активная сессия #{session['id']}, active={active}")
+        else:
+            self.active_session = None
+            self.session_info = None
+            self.main_message_id = None
+            self.reserve_message_id = None
+            print(f"🎯 [MCL] Активных сессий нет, active={active}")
         
         from mcl_registration.embeds import create_registration_embed
         from mcl_registration.views import ModerationView, PublicView
         
         main_list = db.mcl_get_registrations('main')
         reserve_list = db.mcl_get_registrations('reserve')
-        embed = create_registration_embed(main_list, reserve_list, None)
         
-        # Создаём view с НЕАКТИВНЫМИ кнопками (ждём старта)
+        if active and self.session_info:
+            embed = create_registration_embed(main_list, reserve_list, self.session_info)
+        else:
+            embed = create_registration_embed(main_list, reserve_list, None)
+        
+        # 🔥 СОЗДАЁМ VIEW С ПРАВИЛЬНЫМ СОСТОЯНИЕМ КНОПОК
         mod_view = ModerationView()
-        mod_view.update_buttons(False)
+        mod_view.update_buttons(active)  # если active=True, кнопки управления будут АКТИВНЫ
         
         pub_view = PublicView()
-        pub_view.set_registration_active(False)
+        pub_view.set_registration_active(active)  # если active=True, кнопки присоединения будут АКТИВНЫ
         
-        main_msg = await main_channel.send(embed=embed, view=mod_view)
-        reserve_msg = await reserve_channel.send(embed=embed, view=pub_view)
+        # 🔥 ИЩЕМ СУЩЕСТВУЮЩИЕ СООБЩЕНИЯ (НЕ УДАЛЯЕМ!)
+        main_msg = None
+        reserve_msg = None
         
-        self.main_message_id = str(main_msg.id)
-        self.reserve_message_id = str(reserve_msg.id)
+        async for msg in main_channel.history(limit=50):
+            if msg.author == bot.user and msg.embeds:
+                main_msg = msg
+                break
+        
+        async for msg in reserve_channel.history(limit=50):
+            if msg.author == bot.user and msg.embeds:
+                reserve_msg = msg
+                break
+        
+        if main_msg and reserve_msg:
+            # ✅ ОБНОВЛЯЕМ существующие сообщения
+            await main_msg.edit(embed=embed, view=mod_view)
+            await reserve_msg.edit(embed=embed, view=pub_view)
+            print(f"🎯 [MCL] Обновлены существующие сообщения, active={active}")
+            
+            self.main_message_id = str(main_msg.id)
+            self.reserve_message_id = str(reserve_msg.id)
+        else:
+            # ✅ Удаляем старые сообщения ТОЛЬКО если нет существующих
+            async for msg in main_channel.history(limit=50):
+                if msg.author == bot.user:
+                    await msg.delete()
+            async for msg in reserve_channel.history(limit=50):
+                if msg.author == bot.user:
+                    await msg.delete()
+            
+            main_msg = await main_channel.send(embed=embed, view=mod_view)
+            reserve_msg = await reserve_channel.send(embed=embed, view=pub_view)
+            self.main_message_id = str(main_msg.id)
+            self.reserve_message_id = str(reserve_msg.id)
+            print(f"🎯 [MCL] Созданы новые сообщения, active={active}")
+        
+        if session:
+            db.mcl_update_session_messages(session['id'], self.main_message_id, self.reserve_message_id)
         
         print(f"✅ [MCL] Инициализирован: main={main_channel.name}, reserve={reserve_channel.name}")
         return True
