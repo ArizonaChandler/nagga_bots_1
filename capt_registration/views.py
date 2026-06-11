@@ -456,19 +456,19 @@ class PublicView(PermanentView):
             
             if success:
                 db.log_action(str(interaction.user.id), "CAPT_JOIN", "Присоединился к регистрации")
-                # ✅ Уведомление в канал модерации о новом участнике
-                mod_channel_id = CONFIG.get('capt_reg_main_channel')
-                if mod_channel_id:
-                    mod_channel = interaction.client.get_channel(int(mod_channel_id))
-                    if mod_channel:
-                        await mod_channel.send(
-                            content=interaction.user.mention,
-                            embed=discord.Embed(
-                                title="👤 НОВЫЙ УЧАСТНИК",
-                                description=f"{interaction.user.display_name} присоединился к регистрации",
-                                color=0x00ff00
-                            )
+                
+                # ✅ Только в канал логов
+                log_channel_id = CONFIG.get('capt_log_channel')
+                if log_channel_id:
+                    log_channel = interaction.client.get_channel(int(log_channel_id))
+                    if log_channel:
+                        embed = discord.Embed(
+                            title="👤 НОВЫЙ УЧАСТНИК",
+                            description=f"{interaction.user.display_name} присоединился к регистрации",
+                            color=0x00ff00,
+                            timestamp=datetime.now()
                         )
+                        await log_channel.send(content=interaction.user.mention, embed=embed)
             
             await interaction.followup.send(msg, ephemeral=True)
         except Exception as e:
@@ -486,19 +486,19 @@ class PublicView(PermanentView):
             
             if success:
                 db.log_action(str(interaction.user.id), "CAPT_LEAVE", "Отсоединился от регистрации")
-                # ✅ Уведомление в канал модерации
-                mod_channel_id = CONFIG.get('capt_reg_main_channel')
-                if mod_channel_id:
-                    mod_channel = interaction.client.get_channel(int(mod_channel_id))
-                    if mod_channel:
-                        await mod_channel.send(
-                            content=interaction.user.mention,
-                            embed=discord.Embed(
-                                title="👤 УЧАСТНИК ВЫШЕЛ",
-                                description=f"{interaction.user.display_name} покинул регистрацию",
-                                color=0xff0000
-                            )
+                
+                # ✅ Только в канал логов
+                log_channel_id = CONFIG.get('capt_log_channel')
+                if log_channel_id:
+                    log_channel = interaction.client.get_channel(int(log_channel_id))
+                    if log_channel:
+                        embed = discord.Embed(
+                            title="👤 УЧАСТНИК ВЫШЕЛ",
+                            description=f"{interaction.user.display_name} покинул регистрацию",
+                            color=0xff0000,
+                            timestamp=datetime.now()
                         )
+                        await log_channel.send(content=interaction.user.mention, embed=embed)
             
             await interaction.followup.send(msg, ephemeral=True)
         except Exception as e:

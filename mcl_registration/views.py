@@ -164,7 +164,6 @@ class PublicView(PermanentView):
         self.set_registration_active(False)
     
     def set_registration_active(self, active: bool):
-        """Активировать/деактивировать кнопки"""
         for child in self.children:
             if child.custom_id in ["mcl_join", "mcl_leave"]:
                 child.disabled = not active
@@ -178,19 +177,18 @@ class PublicView(PermanentView):
         success, msg = await mcl_manager.add_participant(str(interaction.user.id), interaction.user.display_name)
         
         if success:
-            # ✅ Уведомление в канал модерации
-            mod_channel_id = CONFIG.get('mcl_reg_main_channel')
-            if mod_channel_id:
-                mod_channel = interaction.client.get_channel(int(mod_channel_id))
-                if mod_channel:
-                    await mod_channel.send(
-                        content=interaction.user.mention,
-                        embed=discord.Embed(
-                            title="👤 НОВЫЙ УЧАСТНИК",
-                            description=f"{interaction.user.display_name} присоединился к регистрации",
-                            color=0x00ff00
-                        )
+            # ✅ Только в канал логов
+            log_channel_id = CONFIG.get('mcl_log_channel')
+            if log_channel_id:
+                log_channel = interaction.client.get_channel(int(log_channel_id))
+                if log_channel:
+                    embed = discord.Embed(
+                        title="👤 НОВЫЙ УЧАСТНИК",
+                        description=f"{interaction.user.display_name} присоединился к регистрации",
+                        color=0x00ff00,
+                        timestamp=datetime.now()
                     )
+                    await log_channel.send(content=interaction.user.mention, embed=embed)
         
         await interaction.response.send_message(msg, ephemeral=True)
     
@@ -199,19 +197,18 @@ class PublicView(PermanentView):
         success, msg = await mcl_manager.remove_participant(str(interaction.user.id))
         
         if success:
-            # ✅ Уведомление в канал модерации
-            mod_channel_id = CONFIG.get('mcl_reg_main_channel')
-            if mod_channel_id:
-                mod_channel = interaction.client.get_channel(int(mod_channel_id))
-                if mod_channel:
-                    await mod_channel.send(
-                        content=interaction.user.mention,
-                        embed=discord.Embed(
-                            title="👤 УЧАСТНИК ВЫШЕЛ",
-                            description=f"{interaction.user.display_name} покинул регистрацию",
-                            color=0xff0000
-                        )
+            # ✅ Только в канал логов
+            log_channel_id = CONFIG.get('mcl_log_channel')
+            if log_channel_id:
+                log_channel = interaction.client.get_channel(int(log_channel_id))
+                if log_channel:
+                    embed = discord.Embed(
+                        title="👤 УЧАСТНИК ВЫШЕЛ",
+                        description=f"{interaction.user.display_name} покинул регистрацию",
+                        color=0xff0000,
+                        timestamp=datetime.now()
                     )
+                    await log_channel.send(content=interaction.user.mention, embed=embed)
         
         await interaction.response.send_message(msg, ephemeral=True)
 
