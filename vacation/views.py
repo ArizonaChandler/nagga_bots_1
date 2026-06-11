@@ -227,9 +227,9 @@ class VacationModerationView(discord.ui.View):
                     color=0x00ff00,
                     timestamp=datetime.now()
                 )
-                embed.add_field(name="👤 Модератор", value=interaction.user.mention)
                 embed.add_field(name="📝 Причина", value=app['reason'])
-                await log_channel.send(embed=embed)
+                # ✅ Упоминание модератора в content
+                await log_channel.send(content=interaction.user.mention, embed=embed)
         
         # Обновляем embed в публичном канале
         settings = vacation_manager.get_settings()
@@ -307,9 +307,9 @@ class VacationRejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТ
                         color=0xff0000,
                         timestamp=datetime.now()
                     )
-                    embed.add_field(name="👤 Модератор", value=interaction.user.mention)
                     embed.add_field(name="📝 Причина", value=self.reason.value)
-                    await log_channel.send(embed=embed)
+                    # ✅ Упоминание модератора в content
+                    await log_channel.send(content=interaction.user.mention, embed=embed)
         
         # Обновляем сообщение с заявкой (делаем неактивным)
         message = interaction.message

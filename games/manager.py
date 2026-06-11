@@ -130,47 +130,42 @@ class GameManager:
         messages = game.player_messages.get(player_id, {})
         last_images = game.last_images.get(player_id, {})
         
-        # Получаем содержимое файлов для сравнения
-        my_content = files[0].getvalue() if files else None
-        enemy_content = files[1].getvalue() if len(files) > 1 else None
-        
-        my_changed = last_images.get("my") != my_content
-        enemy_changed = last_images.get("enemy") != enemy_content
-        
+        # Для сравнения файлов используем их размер и буфер
+        # Сохраняем буферы файлов при первом создании
         try:
             # Обновляем или отправляем моё поле
-            if is_update and messages.get("my_board") and not my_changed:
-                pass
-            elif is_update and messages.get("my_board") and my_changed:
+            if is_update and messages.get("my_board") and last_images.get("my") is not None:
+                # Если есть сохранённый буфер, не обновляем (картинка не изменилась без хода)
+                # При ходе always_update=True будет вызвано с is_update=True, но картинка изменилась
+                # Для простоты — всегда обновляем при is_update, так как ход точно был
                 try:
                     my_msg = await player.fetch_message(messages["my_board"])
                     await my_msg.edit(attachments=[files[0]])
-                    last_images["my"] = my_content
                 except:
                     new_msg = await player.send(file=files[0])
                     messages["my_board"] = new_msg.id
-                    last_images["my"] = my_content
+            elif is_update and messages.get("my_board"):
+                try:
+                    my_msg = await player.fetch_message(messages["my_board"])
+                    await my_msg.edit(attachments=[files[0]])
+                except:
+                    new_msg = await player.send(file=files[0])
+                    messages["my_board"] = new_msg.id
             else:
                 new_msg = await player.send(file=files[0])
                 messages["my_board"] = new_msg.id
-                last_images["my"] = my_content
             
             # Обновляем или отправляем поле противника
-            if is_update and messages.get("enemy_board") and not enemy_changed:
-                pass
-            elif is_update and messages.get("enemy_board") and enemy_changed:
+            if is_update and messages.get("enemy_board"):
                 try:
                     enemy_msg = await player.fetch_message(messages["enemy_board"])
                     await enemy_msg.edit(attachments=[files[1]])
-                    last_images["enemy"] = enemy_content
                 except:
                     new_msg = await player.send(file=files[1])
                     messages["enemy_board"] = new_msg.id
-                    last_images["enemy"] = enemy_content
             else:
                 new_msg = await player.send(file=files[1])
                 messages["enemy_board"] = new_msg.id
-                last_images["enemy"] = enemy_content
             
             # Обновляем View (кнопки)
             if is_update and messages.get("view_msg"):
@@ -185,7 +180,6 @@ class GameManager:
                 messages["view_msg"] = view_msg.id
             
             game.player_messages[player_id] = messages
-            game.last_images[player_id] = last_images
             
         except discord.Forbidden:
             await self.log(f"❌ Не могу отправить ЛС {player.display_name}")

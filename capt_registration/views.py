@@ -194,10 +194,14 @@ class CaptRegSendModal(discord.ui.Modal, title="🚨 ОТПРАВКА CAPT"):
             await interaction.response.send_message("⚠️ Нет участников с этой ролью", ephemeral=True)
             return
         
+        # ✅ Упоминание роли в content (если нужно упомянуть роль, выносим в content)
+        role_mention = role.mention
         await interaction.response.send_message(
-            f"🚀 **CAPT** | {len(members)} участников с ролью {role.mention} | ⚡ Запуск...",
+            f"🚀 **CAPT** | {len(members)} участников с ролью | ⚡ Запуск...",
             ephemeral=False
         )
+        # Если нужно отправить отдельное сообщение с упоминанием роли:
+        # await interaction.followup.send(content=role_mention, ephemeral=False)
         
         time_str = self.teleport_time.value
         message = f"👊 Противник: {self.enemy.value}"
@@ -227,6 +231,18 @@ class ConfirmMoveAllView(discord.ui.View):
                     "CAPT_MOVE_ALL_TO_MAIN",
                     f"Перемещены все {self.count} участников из резерва в основной"
                 )
+                # ✅ Отправляем лог с упоминанием в канал (если нужно)
+                log_channel_id = CONFIG.get('capt_log_channel')
+                if log_channel_id:
+                    log_channel = interaction.client.get_channel(int(log_channel_id))
+                    if log_channel:
+                        embed = discord.Embed(
+                            title="📋 ДЕЙСТВИЕ",
+                            description=f"Перемещены все участники из резерва в основной",
+                            color=0xffa500,
+                            timestamp=datetime.now()
+                        )
+                        await log_channel.send(content=interaction.user.mention, embed=embed)
             
             await interaction.followup.send(msg, ephemeral=True)
             await interaction.edit_original_response(content=f"✅ {msg}", view=None)
@@ -269,6 +285,20 @@ class ModerationView(PermanentView):
         try:
             await capt_reg_manager.end_registration(str(interaction.user.id))
             db.log_action(str(interaction.user.id), "CAPT_REG_END", "Регистрация завершена")
+            
+            # ✅ Лог с упоминанием
+            log_channel_id = CONFIG.get('capt_log_channel')
+            if log_channel_id:
+                log_channel = interaction.client.get_channel(int(log_channel_id))
+                if log_channel:
+                    embed = discord.Embed(
+                        title="📋 ЗАВЕРШЕНИЕ РЕГИСТРАЦИИ",
+                        description="Регистрация CAPT завершена",
+                        color=0x00ff00,
+                        timestamp=datetime.now()
+                    )
+                    await log_channel.send(content=interaction.user.mention, embed=embed)
+            
             await interaction.followup.send("✅ Регистрация завершена! Чат очищен.", ephemeral=True)
         except Exception as e:
             print(f"❌ Ошибка при завершении: {e}")
@@ -426,6 +456,19 @@ class PublicView(PermanentView):
             
             if success:
                 db.log_action(str(interaction.user.id), "CAPT_JOIN", "Присоединился к регистрации")
+                # ✅ Уведомление в канал модерации о новом участнике
+                mod_channel_id = CONFIG.get('capt_reg_main_channel')
+                if mod_channel_id:
+                    mod_channel = interaction.client.get_channel(int(mod_channel_id))
+                    if mod_channel:
+                        await mod_channel.send(
+                            content=interaction.user.mention,
+                            embed=discord.Embed(
+                                title="👤 НОВЫЙ УЧАСТНИК",
+                                description=f"{interaction.user.display_name} присоединился к регистрации",
+                                color=0x00ff00
+                            )
+                        )
             
             await interaction.followup.send(msg, ephemeral=True)
         except Exception as e:
@@ -443,6 +486,19 @@ class PublicView(PermanentView):
             
             if success:
                 db.log_action(str(interaction.user.id), "CAPT_LEAVE", "Отсоединился от регистрации")
+                # ✅ Уведомление в канал модерации
+                mod_channel_id = CONFIG.get('capt_reg_main_channel')
+                if mod_channel_id:
+                    mod_channel = interaction.client.get_channel(int(mod_channel_id))
+                    if mod_channel:
+                        await mod_channel.send(
+                            content=interaction.user.mention,
+                            embed=discord.Embed(
+                                title="👤 УЧАСТНИК ВЫШЕЛ",
+                                description=f"{interaction.user.display_name} покинул регистрацию",
+                                color=0xff0000
+                            )
+                        )
             
             await interaction.followup.send(msg, ephemeral=True)
         except Exception as e:

@@ -199,14 +199,12 @@ class EventReminderView(discord.ui.View):
     
     async def update_taken_status(self, user_id: str, user_name: str, group_code: str, meeting_place: str):
         """Обновить статус после взятия МП во всех каналах"""
-        # Просто вызываем update_all_instances
         await self.update_all_instances(user_id, user_name, group_code, meeting_place)
     
     async def on_timeout(self):
         """Когда время вышло (за 10 минут до начала)"""
         self.timeout_occurred = True
         if not self.taken and self.messages:
-            # Отключаем все кнопки
             for child in self.children:
                 child.disabled = True
             
@@ -230,7 +228,6 @@ class EventReminderView(discord.ui.View):
             
             embed.set_footer(text=f"{CONFIG.get('family_name', 'Семья')} Management System")
             
-            # Обновляем все сообщения
             for channel_id, message in self.messages.items():
                 try:
                     await message.edit(embed=embed, view=self)
@@ -260,7 +257,6 @@ class EventInfoView(BaseMenuView):
             weekday = today.weekday()
             current_time_str = now.strftime("%H:%M")
             
-            # Получаем все мероприятия на сегодня
             events = db.get_events(enabled_only=True, weekday=weekday)
             
             if not events:
@@ -271,19 +267,16 @@ class EventInfoView(BaseMenuView):
                 )
                 return
             
-            # Фильтруем мероприятия
             visible_events = []
             for event in events:
                 event_time = event['event_time']
                 event_hour, event_min = map(int, event_time.split(':'))
                 
-                # Создаем datetime для времени мероприятия
                 event_datetime = MSK_TZ.localize(datetime(
                     today.year, today.month, today.day,
                     event_hour, event_min
                 ))
                 
-                # Проверяем, взято ли мероприятие
                 with db.get_connection() as conn:
                     cursor = conn.cursor()
                     cursor.execute('''
@@ -293,14 +286,9 @@ class EventInfoView(BaseMenuView):
                     result = cursor.fetchone()
                     taken_by = result[0] if result else None
                 
-                # Показываем если:
-                # 1. Мероприятие ещё не началось ИЛИ
-                # 2. Мероприятие идёт И ЕГО ВЗЯЛИ (до +1 часа после начала)
                 if now < event_datetime:
-                    # Будущее мероприятие
                     visible_events.append(event)
                 elif taken_by and now <= event_datetime + timedelta(hours=1):
-                    # Идущее мероприятие (только если взято)
                     visible_events.append(event)
             
             if not visible_events:
@@ -311,7 +299,6 @@ class EventInfoView(BaseMenuView):
                 )
                 return
             
-            # Сортируем по времени
             visible_events.sort(key=lambda x: x['event_time'])
             
             embed = discord.Embed(
@@ -328,7 +315,6 @@ class EventInfoView(BaseMenuView):
                     event_hour, event_min
                 ))
                 
-                # Вычисляем время напоминания (за 1 час)
                 reminder_datetime = event_datetime - timedelta(hours=1)
                 reminder_time = reminder_datetime.strftime("%H:%M")
                 
@@ -341,21 +327,15 @@ class EventInfoView(BaseMenuView):
                     ''', (event['id'], today.isoformat()))
                     result = cursor.fetchone()
                 
-                # Определяем статус
-                if result and result[0]:  # Взято
+                if result and result[0]:
                     if now > event_datetime:
-                        # Идёт сейчас
                         status = f"🔴 **Проводит:** <@{result[0]}>\n📍 {result[2]}\n🔢 {result[1]}"
                     else:
-                        # Будет
                         status = f"✅ **Проводит:** <@{result[0]}>\n📍 {result[2]}\n🔢 {result[1]}"
                 else:
-                    # Не взято
                     if now >= reminder_datetime:
-                        # Напоминание уже пришло
                         status = "⏳ **Ожидаем информацию от HIGH состава**"
                     else:
-                        # Напоминание ещё не пришло
                         minutes_to = int((event_datetime - now).total_seconds() / 60)
                         status = f"🕒 **Начнётся через {minutes_to} мин**"
                 

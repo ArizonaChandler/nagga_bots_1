@@ -208,7 +208,7 @@ class TierModerationView(discord.ui.View):
         except:
             pass
 
-        # Логируем
+        # Логируем — упоминание модератора в content
         log_channel_id = CONFIG.get('tier_log_channel')
         if log_channel_id:
             log_channel = interaction.client.get_channel(int(log_channel_id))
@@ -219,13 +219,13 @@ class TierModerationView(discord.ui.View):
                     color=0x00ff00,
                     timestamp=datetime.now()
                 )
-                embed.add_field(name="👤 Модератор", value=interaction.user.mention)
-                await log_channel.send(embed=embed)
+                # ✅ Упоминание модератора в content
+                await log_channel.send(content=interaction.user.mention, embed=embed)
 
         # Обновляем сообщение
         embed = interaction.message.embeds[0]
         embed.color = 0x00ff00
-        embed.add_field(name="✅ Статус", value=f"Одобрена модератором {interaction.user.mention} на {tier_info['name']}", inline=False)
+        embed.add_field(name="✅ Статус", value=f"Одобрена модератором {interaction.user.mention}", inline=False)
         await interaction.message.edit(embed=embed, view=self)
 
         tier_manager.delete_application_message(self.application_id)
@@ -287,9 +287,9 @@ class TierRejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКА
                     color=0xff0000,
                     timestamp=datetime.now()
                 )
-                embed.add_field(name="👤 Модератор", value=interaction.user.mention)
                 embed.add_field(name="📝 Причина", value=self.reason.value)
-                await log_channel.send(embed=embed)
+                # ✅ Упоминание модератора в content
+                await log_channel.send(content=interaction.user.mention, embed=embed)
         
         # Обновляем сообщение
         message = interaction.message

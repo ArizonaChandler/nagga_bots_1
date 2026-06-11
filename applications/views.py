@@ -298,6 +298,7 @@ class ApplicationModerationView(discord.ui.View):
         embed.add_field(name="🎮 Ник", value=answers_dict.get('nickname', 'Не указан'), inline=True)
         embed.add_field(name="🎯 Статик", value=answers_dict.get('static', 'Не указан'), inline=True)
         
+        # ✅ Упоминания в content
         await interview_channel.send(content=f"{member.mention} {interaction.user.mention}", embed=embed)
 
         # Обновляем embed с информацией об обзвоне
@@ -362,13 +363,13 @@ class ApplicationModerationView(discord.ui.View):
             timestamp=datetime.now()
         )
         embed.add_field(name="👤 Пользователь", value=f"<@{app['user_id']}>")
-        embed.add_field(name="👤 Модератор", value=interaction.user.mention)
         embed.add_field(name="🎮 Ник", value=nickname)
 
         if details:
             embed.add_field(name="📝 Детали", value=details, inline=False)
 
-        await log_channel.send(embed=embed)
+        # ✅ Упоминание модератора в content
+        await log_channel.send(content=interaction.user.mention, embed=embed)
 
     async def cleanup_message_record(self):
         """Удалить запись о сообщении после обработки заявки"""
@@ -432,9 +433,9 @@ class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА
                                 color=0x808080,
                                 timestamp=datetime.now()
                             )
-                            embed.add_field(name="👤 Модератор", value=interaction.user.mention)
                             embed.add_field(name="📝 Причина", value=self.reason.value)
-                            await log_channel.send(embed=embed)
+                            # ✅ Упоминание модератора в content
+                            await log_channel.send(content=interaction.user.mention, embed=embed)
                 except Exception as e:
                     print(f"❌ Ошибка при удалении канала: {e}")
 
@@ -461,9 +462,9 @@ class RejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА
                         color=0xff0000,
                         timestamp=datetime.now()
                     )
-                    embed.add_field(name="👤 Модератор", value=interaction.user.mention)
                     embed.add_field(name="📝 Причина", value=self.reason.value)
-                    await log_channel.send(embed=embed)
+                    # ✅ Упоминание модератора в content
+                    await log_channel.send(content=interaction.user.mention, embed=embed)
 
         embed = message.embeds[0]
         embed.color = 0xff0000

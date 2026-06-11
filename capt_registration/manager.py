@@ -83,35 +83,86 @@ class CaptRegistrationManager:
             print(f"❌ [CAPT] Каналы не найдены: main={main_channel}, reserve={reserve_channel}")
             return False
         
-        # Удаляем ВСЕ сообщения бота в каналах
-        async for msg in main_channel.history(limit=50):
-            if msg.author == bot.user:
-                await msg.delete()
+        # 🔥 ПРОВЕРЯЕМ, ЕСТЬ ЛИ АКТИВНАЯ СЕССИЯ
+        session = db.capt_get_active_session()
         
-        async for msg in reserve_channel.history(limit=50):
-            if msg.author == bot.user:
-                await msg.delete()
-        
-        self._load_message_ids()
+        active = False
+        if session:
+            active = True
+            self.active_session = session['id']
+            self.session_info = {
+                'enemy': session.get('event_name'),
+                'event_time': session.get('event_time'),
+                'additional_info': session.get('additional_info'),
+                'started_by_name': f"<@{session['started_by']}>"
+            }
+            self.main_message_id = session.get('main_message_id')
+            self.reserve_message_id = session.get('reserve_message_id')
+            print(f"🎯 [CAPT] Восстановлена активная сессия #{session['id']}")
+        else:
+            self.active_session = None
+            self.session_info = None
+            self.main_message_id = None
+            self.reserve_message_id = None
         
         from capt_registration.embeds import create_registration_embed
         from capt_registration.views import ModerationView, PublicView
         
         main_list = db.capt_get_registrations('main')
         reserve_list = db.capt_get_registrations('reserve')
-        embed = create_registration_embed(main_list, reserve_list, None)
         
+        # ✅ Создаём embed с правильными списками
+        if active and self.session_info:
+            embed = create_registration_embed(main_list, reserve_list, self.session_info)
+        else:
+            embed = create_registration_embed(main_list, reserve_list, None)
+        
+        # ✅ Восстанавливаем view с правильным состоянием кнопок
         mod_view = ModerationView()
-        mod_view.update_buttons(False)
+        mod_view.update_buttons(active)
         
         pub_view = PublicView()
-        pub_view.set_registration_active(False)
+        pub_view.set_registration_active(active)
         
-        main_msg = await main_channel.send(embed=embed, view=mod_view)
-        reserve_msg = await reserve_channel.send(embed=embed, view=pub_view)
+        # Ищем существующие сообщения
+        main_msg = None
+        reserve_msg = None
         
-        self.main_message_id = str(main_msg.id)
-        self.reserve_message_id = str(reserve_msg.id)
+        async for msg in main_channel.history(limit=50):
+            if msg.author == bot.user and msg.embeds:
+                main_msg = msg
+                break
+        
+        async for msg in reserve_channel.history(limit=50):
+            if msg.author == bot.user and msg.embeds:
+                reserve_msg = msg
+                break
+        
+        if main_msg and reserve_msg:
+            await main_msg.edit(embed=embed, view=mod_view)
+            await reserve_msg.edit(embed=embed, view=pub_view)
+            print(f"🎯 [CAPT] Восстановлены сообщения с активными кнопками (active={active})")
+            
+            self.main_message_id = str(main_msg.id)
+            self.reserve_message_id = str(reserve_msg.id)
+        else:
+            # Удаляем старые сообщения (на всякий случай)
+            async for msg in main_channel.history(limit=50):
+                if msg.author == bot.user:
+                    await msg.delete()
+            
+            async for msg in reserve_channel.history(limit=50):
+                if msg.author == bot.user:
+                    await msg.delete()
+            
+            main_msg = await main_channel.send(embed=embed, view=mod_view)
+            reserve_msg = await reserve_channel.send(embed=embed, view=pub_view)
+            self.main_message_id = str(main_msg.id)
+            self.reserve_message_id = str(reserve_msg.id)
+            print(f"🎯 [CAPT] Созданы новые сообщения, active={active}")
+        
+        if session:
+            db.capt_update_session_messages(session['id'], self.main_message_id, self.reserve_message_id)
         
         print(f"✅ [CAPT] Инициализирован: main={main_channel.name}, reserve={reserve_channel.name}")
         return True
@@ -144,7 +195,7 @@ class CaptRegistrationManager:
         
         db.capt_clear_all()
         
-        await self._update_views(active=True)
+        await self._update_views(session_active=True)
         await self._send_announcement(enemy, event_time, additional_info)
         
         db.log_action(user_id, "CAPT_REG_START", f"Session {session_id}")
@@ -212,7 +263,7 @@ class CaptRegistrationManager:
                 return False, "❌ Вы уже в резерве"
         
         if db.capt_add_registration(user_id, user_name, 'reserve'):
-            await self._update_views(active=True)
+            await self._update_views(session_active=True)
             return True, "✅ Вы добавлены в резерв"
         
         return False, "❌ Ошибка при регистрации"
@@ -235,27 +286,27 @@ class CaptRegistrationManager:
             return False, "❌ Вы не были зарегистрированы"
         
         if db.capt_remove_registration(user_id):
-            await self._update_views(active=True)
+            await self._update_views(session_active=True)
             return True, "✅ Вы удалены из регистрации"
         
         return False, "❌ Ошибка при удалении"
 
     async def move_to_main(self, reg_id: int):
         if db.capt_move_to_main(reg_id):
-            await self._update_views(active=True)
+            await self._update_views(session_active=True)
             return True, "✅ Участник перемещён в основной список"
         return False, "❌ Не найден или уже в основном"
 
     async def move_to_reserve(self, reg_id: int):
         if db.capt_move_to_reserve(reg_id):
-            await self._update_views(active=True)
+            await self._update_views(session_active=True)
             return True, "✅ Участник переведён в резерв"
         return False, "❌ Не найден или уже в резерве"
 
     async def move_all_to_main(self):
         moved = db.capt_move_all_to_main()
         if moved > 0:
-            await self._update_views(active=True)
+            await self._update_views(session_active=True)
             return True, f"✅ {moved} участников перемещено в основной список"
         return False, "❌ В резерве нет участников"
 
@@ -290,7 +341,7 @@ class CaptRegistrationManager:
         await channel.send(content="@everyone", embed=embed)
         print(f"✅ [CAPT] Отправлен @everyone в канал #{channel.name}")
 
-    async def _update_views(self, active: bool):
+    async def _update_views(self, session_active: bool = False):
         from capt_registration.embeds import create_registration_embed
         from capt_registration.views import ModerationView, PublicView
         
@@ -304,16 +355,16 @@ class CaptRegistrationManager:
                 channel = self.bot.get_channel(int(self.main_channel_id))
                 if channel:
                     msg = await channel.fetch_message(int(self.main_message_id))
-                    if active:
+                    
+                    if session_active and self.session_info:
                         embed = create_registration_embed(main_list, reserve_list, self.session_info)
-                        view = ModerationView()
-                        view.update_buttons(True)
-                        await msg.edit(embed=embed, view=view)
                     else:
                         embed = create_registration_embed(main_list, reserve_list, None)
-                        view = ModerationView()
-                        view.update_buttons(False)
-                        await msg.edit(embed=embed, view=view)
+                    
+                    view = ModerationView()
+                    view.update_buttons(session_active)  # ← ключевой момент!
+                    await msg.edit(embed=embed, view=view)
+                    
             except Exception as e:
                 print(f"❌ [CAPT] Ошибка обновления main канала: {e}")
         
@@ -322,16 +373,16 @@ class CaptRegistrationManager:
                 channel = self.bot.get_channel(int(self.reserve_channel_id))
                 if channel:
                     msg = await channel.fetch_message(int(self.reserve_message_id))
-                    if active:
+                    
+                    if session_active and self.session_info:
                         embed = create_registration_embed(main_list, reserve_list, self.session_info)
-                        view = PublicView()
-                        view.set_registration_active(True)
-                        await msg.edit(embed=embed, view=view)
                     else:
                         embed = create_registration_embed(main_list, reserve_list, None)
-                        view = PublicView()
-                        view.set_registration_active(False)
-                        await msg.edit(embed=embed, view=view)
+                    
+                    view = PublicView()
+                    view.set_registration_active(session_active)  # ← ключевой момент!
+                    await msg.edit(embed=embed, view=view)
+                    
             except Exception as e:
                 print(f"❌ [CAPT] Ошибка обновления reserve канала: {e}")
 

@@ -164,13 +164,12 @@ class AFKPublicView(PermanentView):
             color=0x00ff00 if action == "ВОЗВРАТ ИЗ AFK" else 0xffa500,
             timestamp=datetime.now()
         )
-        embed.add_field(name="👤 Пользователь", value=interaction.user.mention)
         embed.add_field(name="🆔 ID", value=interaction.user.id)
         
         if details:
             embed.add_field(name="📝 Детали", value=details, inline=False)
-        
-        await log_channel.send(embed=embed)
+
+        await log_channel.send(content=interaction.user.mention, embed=embed)
     
     @discord.ui.button(
         label="🛌 УЙТИ В AFK", 
