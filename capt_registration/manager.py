@@ -83,9 +83,8 @@ class CaptRegistrationManager:
             print(f"❌ [CAPT] Каналы не найдены: main={main_channel}, reserve={reserve_channel}")
             return False
         
-        # 🔥 ПРОВЕРЯЕМ, ЕСТЬ ЛИ АКТИВНАЯ СЕССИЯ
+        # 🔥 ПРОВЕРЯЕМ, ЕСТЬ ЛИ АКТИВНАЯ СЕССИЯ (ДО УДАЛЕНИЯ СООБЩЕНИЙ!)
         session = db.capt_get_active_session()
-        
         active = False
         if session:
             active = True
@@ -119,12 +118,12 @@ class CaptRegistrationManager:
         
         # ✅ Восстанавливаем view с правильным состоянием кнопок
         mod_view = ModerationView()
-        mod_view.update_buttons(active)
+        mod_view.update_buttons(active)  # если active=True, кнопка "Начать" будет НЕАКТИВНА
         
         pub_view = PublicView()
         pub_view.set_registration_active(active)
         
-        # Ищем существующие сообщения
+        # 🔥 ИЩЕМ СУЩЕСТВУЮЩИЕ СООБЩЕНИЯ (НЕ УДАЛЯЕМ!)
         main_msg = None
         reserve_msg = None
         
@@ -139,22 +138,15 @@ class CaptRegistrationManager:
                 break
         
         if main_msg and reserve_msg:
+            # ✅ ОБНОВЛЯЕМ существующие сообщения
             await main_msg.edit(embed=embed, view=mod_view)
             await reserve_msg.edit(embed=embed, view=pub_view)
-            print(f"🎯 [CAPT] Восстановлены сообщения с активными кнопками (active={active})")
+            print(f"🎯 [CAPT] Обновлены существующие сообщения, active={active}")
             
             self.main_message_id = str(main_msg.id)
             self.reserve_message_id = str(reserve_msg.id)
         else:
-            # Удаляем старые сообщения (на всякий случай)
-            async for msg in main_channel.history(limit=50):
-                if msg.author == bot.user:
-                    await msg.delete()
-            
-            async for msg in reserve_channel.history(limit=50):
-                if msg.author == bot.user:
-                    await msg.delete()
-            
+            # ✅ СОЗДАЁМ НОВЫЕ сообщения (только если старых нет)
             main_msg = await main_channel.send(embed=embed, view=mod_view)
             reserve_msg = await reserve_channel.send(embed=embed, view=pub_view)
             self.main_message_id = str(main_msg.id)
