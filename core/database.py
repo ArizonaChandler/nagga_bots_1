@@ -2639,4 +2639,82 @@ class Database:
                 return {'backup_data': row[0], 'backup_date': row[1]}
             return None
 
+    # ===== МЕТОДЫ ДЛЯ ВРЕМЕННЫХ КОМНАТ =====
+
+    def get_temp_voice_room_by_user(self, user_id: str) -> dict:
+        """Получить комнату пользователя"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT channel_id, creator_id, creator_name, slots, created_at FROM temp_voice_rooms WHERE creator_id = ?',
+                (user_id,)
+            )
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'channel_id': row[0],
+                    'creator_id': int(row[1]),
+                    'creator_name': row[2],
+                    'slots': row[3],
+                    'created_at': row[4]
+                }
+            return None
+
+    def get_temp_voice_room_by_channel(self, channel_id: str) -> dict:
+        """Получить комнату по ID канала"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT channel_id, creator_id, creator_name, slots, created_at FROM temp_voice_rooms WHERE channel_id = ?',
+                (channel_id,)
+            )
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'channel_id': row[0],
+                    'creator_id': int(row[1]),
+                    'creator_name': row[2],
+                    'slots': row[3],
+                    'created_at': row[4]
+                }
+            return None
+
+    def get_all_temp_voice_rooms(self) -> list:
+        """Получить все комнаты"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT channel_id, creator_id, creator_name, slots, created_at FROM temp_voice_rooms')
+            rows = cursor.fetchall()
+            return [{
+                'channel_id': row[0],
+                'creator_id': int(row[1]),
+                'creator_name': row[2],
+                'slots': row[3],
+                'created_at': row[4]
+            } for row in rows]
+
+    def save_temp_voice_room(self, channel_id: str, creator_id: str, creator_name: str, slots: int):
+        """Сохранить комнату в БД"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO temp_voice_rooms (channel_id, creator_id, creator_name, slots, created_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (channel_id, creator_id, creator_name, slots))
+            conn.commit()
+
+    def delete_temp_voice_room(self, channel_id: str):
+        """Удалить комнату из БД"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM temp_voice_rooms WHERE channel_id = ?', (channel_id,))
+            conn.commit()
+
+    def update_temp_voice_room_slots(self, channel_id: str, slots: int):
+        """Обновить количество слотов в комнате"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE temp_voice_rooms SET slots = ? WHERE channel_id = ?', (slots, channel_id))
+            conn.commit()
+
 db = Database()

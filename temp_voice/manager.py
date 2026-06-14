@@ -3,7 +3,7 @@ import asyncio
 import discord
 from datetime import datetime
 from core.database import db
-from core.config import CONFIG, save_config
+from core.config import CONFIG
 
 
 class TempVoiceManager:
@@ -24,7 +24,6 @@ class TempVoiceManager:
             'temp_voice_category': CONFIG.get('temp_voice_category'),
             'temp_voice_public_channel': CONFIG.get('temp_voice_public_channel'),
             'temp_voice_log_channel': CONFIG.get('temp_voice_log_channel'),
-            'temp_voice_settings_channel': CONFIG.get('temp_voice_settings_channel'),
             'temp_voice_default_slots': int(CONFIG.get('temp_voice_default_slots', 2)),
             'temp_voice_max_slots': int(CONFIG.get('temp_voice_max_slots', 10)),
             'temp_voice_delete_delay': int(CONFIG.get('temp_voice_delete_delay', 60)),
@@ -35,69 +34,22 @@ class TempVoiceManager:
         CONFIG[key] = value
     
     def get_user_room(self, user_id: int) -> dict:
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                'SELECT channel_id, creator_id, creator_name, slots, created_at FROM temp_voice_rooms WHERE creator_id = ?',
-                (str(user_id),)
-            )
-            row = cursor.fetchone()
-            if row:
-                return {
-                    'channel_id': row[0],
-                    'creator_id': int(row[1]),
-                    'creator_name': row[2],
-                    'slots': row[3],
-                    'created_at': row[4]
-                }
-            return None
+        return db.get_temp_voice_room_by_user(str(user_id))
     
     def get_room_by_channel(self, channel_id: int) -> dict:
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                'SELECT channel_id, creator_id, creator_name, slots, created_at FROM temp_voice_rooms WHERE channel_id = ?',
-                (str(channel_id),)
-            )
-            row = cursor.fetchone()
-            if row:
-                return {
-                    'channel_id': row[0],
-                    'creator_id': int(row[1]),
-                    'creator_name': row[2],
-                    'slots': row[3],
-                    'created_at': row[4]
-                }
-            return None
+        return db.get_temp_voice_room_by_channel(str(channel_id))
     
     def get_all_rooms(self) -> list:
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT channel_id, creator_id, creator_name, slots, created_at FROM temp_voice_rooms')
-            rows = cursor.fetchall()
-            return [{
-                'channel_id': row[0],
-                'creator_id': int(row[1]),
-                'creator_name': row[2],
-                'slots': row[3],
-                'created_at': row[4]
-            } for row in rows]
+        return db.get_all_temp_voice_rooms()
     
     def save_room(self, channel_id: int, creator_id: int, creator_name: str, slots: int):
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                INSERT OR REPLACE INTO temp_voice_rooms (channel_id, creator_id, creator_name, slots, created_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ''', (str(channel_id), str(creator_id), creator_name, slots))
-            conn.commit()
+        db.save_temp_voice_room(str(channel_id), str(creator_id), creator_name, slots)
     
     def delete_room_from_db(self, channel_id: int):
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM temp_voice_rooms WHERE channel_id = ?', (str(channel_id),))
-            conn.commit()
-            print(f"🎤 [TEMP_VOICE] Комната {channel_id} удалена из БД")
+        db.delete_temp_voice_room(str(channel_id))
+    
+    def update_room_slots(self, channel_id: int, slots: int):
+        db.update_temp_voice_room_slots(str(channel_id), slots)
     
     async def create_room(self, interaction: discord.Interaction, room_name: str) -> tuple:
         settings = self.get_settings()
@@ -238,11 +190,7 @@ class TempVoiceManager:
         
         new_slots = min(current_slots + 2, max_slots)
         
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('UPDATE temp_voice_rooms SET slots = ? WHERE channel_id = ?', (new_slots, str(channel.id)))
-            conn.commit()
-        
+        self.update_room_slots(channel.id, new_slots)
         await channel.edit(user_limit=new_slots)
         
         if channel.id in self.active_rooms:
@@ -271,6 +219,7 @@ class TempVoiceManager:
         await self.log_action(interaction.guild, f"🔒 {interaction.user.mention} закрыл комнату {channel.name}")
     
     async def check_creator_presence(self, guild: discord.Guild):
+        """Проверить всех создателей комнат — в войсе ли они"""
         rooms = self.get_all_rooms()
         
         for room in rooms:
