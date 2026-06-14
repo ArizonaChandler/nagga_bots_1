@@ -11,6 +11,7 @@ class EmbedBuilderManager:
     
     def set_bot(self, bot):
         self.bot = bot
+        print("📦 [EMBED_BUILDER] Бот установлен в менеджер")
     
     def get_settings(self):
         return {
@@ -28,9 +29,16 @@ class EmbedBuilderManager:
                          author_icon: str = None, fields: list = None):
         """Отправить embed в канал"""
         try:
+            print(f"📦 [EMBED_BUILDER] send_embed вызван: channel_id={channel_id}, bot={self.bot is not None}")
+            
+            if not self.bot:
+                return False, "❌ Бот не инициализирован"
+            
             channel = self.bot.get_channel(channel_id)
             if not channel:
-                return False, "❌ Канал не найден"
+                return False, f"❌ Канал с ID {channel_id} не найден"
+            
+            print(f"📦 [EMBED_BUILDER] Канал найден: #{channel.name}")
             
             embed = discord.Embed(
                 title=title[:256] if title else None,
@@ -59,9 +67,12 @@ class EmbedBuilderManager:
                     )
             
             await channel.send(embed=embed)
+            print(f"📦 [EMBED_BUILDER] Embed отправлен в #{channel.name}")
             return True, "✅ Embed отправлен!"
         except Exception as e:
-            print(f"❌ Ошибка отправки embed: {e}")
+            print(f"❌ [EMBED_BUILDER] Ошибка отправки embed: {e}")
+            import traceback
+            traceback.print_exc()
             return False, f"❌ Ошибка: {e}"
     
     async def send_simple_embed(self, interaction: discord.Interaction, title: str, 
@@ -78,7 +89,7 @@ class EmbedBuilderManager:
             
             await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
-            print(f"❌ Ошибка: {e}")
+            print(f"❌ [EMBED_BUILDER] Ошибка: {e}")
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
 

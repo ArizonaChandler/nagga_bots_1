@@ -2,6 +2,7 @@
 import discord
 from embed_builder.base import PermanentView
 from embed_builder.modals import CreateEmbedModal, AdvancedEmbedModal, AddFieldModal
+from embed_builder.manager import embed_builder_manager
 
 
 class EmbedBuilderPanelView(PermanentView):
@@ -10,60 +11,90 @@ class EmbedBuilderPanelView(PermanentView):
     def __init__(self, channel_id: int):
         super().__init__()
         self.channel_id = channel_id
+        self._add_buttons()
     
-    @discord.ui.button(
-        label="📝 ПРОСТОЙ EMBED",
-        style=discord.ButtonStyle.primary,
-        emoji="📝",
-        row=0,
-        custom_id="embed_simple"
-    )
+    def _add_buttons(self):
+        self.clear_items()
+        
+        simple_btn = discord.ui.Button(
+            label="📝 ПРОСТОЙ EMBED",
+            style=discord.ButtonStyle.primary,
+            emoji="📝",
+            row=0,
+            custom_id="embed_simple"
+        )
+        simple_btn.callback = self.simple_embed
+        self.add_item(simple_btn)
+        
+        advanced_btn = discord.ui.Button(
+            label="🎨 РАСШИРЕННЫЙ EMBED",
+            style=discord.ButtonStyle.success,
+            emoji="🎨",
+            row=0,
+            custom_id="embed_advanced"
+        )
+        advanced_btn.callback = self.advanced_embed
+        self.add_item(advanced_btn)
+        
+        fields_btn = discord.ui.Button(
+            label="➕ EMBED С ПОЛЯМИ",
+            style=discord.ButtonStyle.secondary,
+            emoji="➕",
+            row=1,
+            custom_id="embed_fields"
+        )
+        fields_btn.callback = self.embed_with_fields
+        self.add_item(fields_btn)
+        
+        # 🔥 КНОПКА "НАЗАД"
+        back_btn = discord.ui.Button(
+            label="◀ Назад в настройки",
+            style=discord.ButtonStyle.secondary,
+            emoji="◀",
+            row=2,
+            custom_id="embed_back"
+        )
+        back_btn.callback = self.go_back
+        self.add_item(back_btn)
+    
     async def simple_embed(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Создать простой embed"""
         await interaction.response.send_modal(CreateEmbedModal(self.channel_id))
     
-    @discord.ui.button(
-        label="🎨 РАСШИРЕННЫЙ EMBED",
-        style=discord.ButtonStyle.success,
-        emoji="🎨",
-        row=0,
-        custom_id="embed_advanced"
-    )
     async def advanced_embed(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Создать расширенный embed"""
         await interaction.response.send_modal(AdvancedEmbedModal(self.channel_id))
     
-    @discord.ui.button(
-        label="➕ EMBED С ПОЛЯМИ",
-        style=discord.ButtonStyle.secondary,
-        emoji="➕",
-        row=1,
-        custom_id="embed_fields"
-    )
     async def embed_with_fields(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Создать embed с полями"""
         fields = []
         
-        async def add_field_callback(interaction: discord.Interaction):
-            await interaction.response.send_modal(AddFieldModal(self.channel_id, fields))
-        
-        async def send_callback(interaction: discord.Interaction):
-            await interaction.response.send_modal(SendFieldsEmbedModal(self.channel_id, fields))
-        
-        view = FieldsBuilderView(fields, self.channel_id)
+        view = FieldsBuilderView(fields, self.channel_id, self)
         embed = discord.Embed(
             title="📋 СОЗДАНИЕ EMBED С ПОЛЯМИ",
             description="Нажмите «➕ Добавить поле» чтобы добавить поля.\nКогда закончите — нажмите «📨 Отправить»",
             color=0x7289da
         )
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+    
+    async def go_back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Вернуться в панель настроек"""
+        from embed_builder.settings_view import EmbedBuilderSettingsView
+        
+        embed = discord.Embed(
+            title="📦 **СОЗДАНИЕ EMBED**",
+            description="Настройка системы создания embed сообщений",
+            color=0x00ff00
+        )
+        await interaction.response.edit_message(embed=embed, view=EmbedBuilderSettingsView())
 
 
 class FieldsBuilderView(discord.ui.View):
-    def __init__(self, fields: list, channel_id: int):
+    def __init__(self, fields: list, channel_id: int, parent_view: EmbedBuilderPanelView):
         super().__init__(timeout=120)
         self.fields = fields
         self.channel_id = channel_id
+        self.parent_view = parent_view
     
     @discord.ui.button(label="➕ ДОБАВИТЬ ПОЛЕ", style=discord.ButtonStyle.success, emoji="➕", row=0)
     async def add_field(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -73,7 +104,17 @@ class FieldsBuilderView(discord.ui.View):
     async def send_embed(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(SendFieldsEmbedModal(self.channel_id, self.fields))
     
-    @discord.ui.button(label="❌ ОТМЕНА", style=discord.ButtonStyle.danger, emoji="❌", row=1)
+    @discord.ui.button(label="◀ НАЗАД", style=discord.ButtonStyle.secondary, emoji="◀", row=1)
+    async def go_back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Вернуться к выбору типа embed"""
+        embed = discord.Embed(
+            title="📝 **СОЗДАНИЕ EMBED**",
+            description="Выберите тип embed для создания",
+            color=0x00ff00
+        )
+        await interaction.response.edit_message(embed=embed, view=self.parent_view)
+    
+    @discord.ui.button(label="❌ ОТМЕНА", style=discord.ButtonStyle.danger, emoji="❌", row=2)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(content="❌ Создание отменено", embed=None, view=None)
 
@@ -125,6 +166,9 @@ class SendFieldsEmbedModal(discord.ui.Modal, title="📨 ОТПРАВКА EMBED"
     async def on_submit(self, interaction: discord.Interaction):
         try:
             color_val = self.color.value
+            if not color_val:
+                color_val = "#00ff00"
+            
             if color_val.startswith('#'):
                 color_val = int(color_val[1:], 16)
             elif color_val.startswith('0x'):

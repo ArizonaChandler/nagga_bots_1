@@ -1,6 +1,6 @@
 """Модальные окна для создания embed"""
 import discord
-from embed_builder.manager import embed_builder_manager  # ← ДОБАВИТЬ
+from embed_builder.manager import embed_builder_manager
 
 
 class CreateEmbedModal(discord.ui.Modal, title="📝 СОЗДАНИЕ EMBED"):
@@ -45,8 +45,11 @@ class CreateEmbedModal(discord.ui.Modal, title="📝 СОЗДАНИЕ EMBED"):
     def __init__(self, channel_id: int):
         super().__init__()
         self.channel_id = channel_id
+        print(f"📦 [EMBED_BUILDER] CreateEmbedModal создан, channel_id={channel_id}")
     
     async def on_submit(self, interaction: discord.Interaction):
+        print(f"📦 [EMBED_BUILDER] CreateEmbedModal.on_submit вызван")
+        
         try:
             # Преобразуем цвет
             color_val = self.color.value
@@ -59,8 +62,11 @@ class CreateEmbedModal(discord.ui.Modal, title="📝 СОЗДАНИЕ EMBED"):
                 color_val = int(color_val, 16)
             else:
                 color_val = int(color_val, 16) if color_val else 0x00ff00
-        except:
+        except Exception as e:
+            print(f"❌ Ошибка преобразования цвета: {e}")
             color_val = 0x00ff00
+        
+        print(f"📦 [EMBED_BUILDER] Отправка embed в канал {self.channel_id}")
         
         success, msg = await embed_builder_manager.send_embed(
             channel_id=self.channel_id,
@@ -130,8 +136,11 @@ class AdvancedEmbedModal(discord.ui.Modal, title="🎨 РАСШИРЕННОЕ С
     def __init__(self, channel_id: int):
         super().__init__()
         self.channel_id = channel_id
+        print(f"📦 [EMBED_BUILDER] AdvancedEmbedModal создан, channel_id={channel_id}")
     
     async def on_submit(self, interaction: discord.Interaction):
+        print(f"📦 [EMBED_BUILDER] AdvancedEmbedModal.on_submit вызван")
+        
         try:
             color_val = self.color.value
             if not color_val:
@@ -143,8 +152,11 @@ class AdvancedEmbedModal(discord.ui.Modal, title="🎨 РАСШИРЕННОЕ С
                 color_val = int(color_val, 16)
             else:
                 color_val = int(color_val, 16) if color_val else 0x00ff00
-        except:
+        except Exception as e:
+            print(f"❌ Ошибка преобразования цвета: {e}")
             color_val = 0x00ff00
+        
+        print(f"📦 [EMBED_BUILDER] Отправка расширенного embed в канал {self.channel_id}")
         
         success, msg = await embed_builder_manager.send_embed(
             channel_id=self.channel_id,
@@ -245,8 +257,11 @@ class SendFieldsEmbedModal(discord.ui.Modal, title="📨 ОТПРАВКА EMBED"
         super().__init__()
         self.channel_id = channel_id
         self.fields = fields
+        print(f"📦 [EMBED_BUILDER] SendFieldsEmbedModal создан, channel_id={channel_id}, полей={len(fields)}")
     
     async def on_submit(self, interaction: discord.Interaction):
+        print(f"📦 [EMBED_BUILDER] SendFieldsEmbedModal.on_submit вызван")
+        
         try:
             color_val = self.color.value
             if not color_val:
@@ -258,8 +273,11 @@ class SendFieldsEmbedModal(discord.ui.Modal, title="📨 ОТПРАВКА EMBED"
                 color_val = int(color_val, 16)
             else:
                 color_val = int(color_val, 16) if color_val else 0x00ff00
-        except:
+        except Exception as e:
+            print(f"❌ Ошибка преобразования цвета: {e}")
             color_val = 0x00ff00
+        
+        print(f"📦 [EMBED_BUILDER] Отправка embed с полями в канал {self.channel_id}")
         
         success, msg = await embed_builder_manager.send_embed(
             channel_id=self.channel_id,
