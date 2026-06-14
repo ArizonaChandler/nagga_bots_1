@@ -90,16 +90,20 @@ class TempVoiceManager:
             'channel': channel
         }
         
-        # Таймер на случай, если создатель не зайдёт в комнату (используем настройку)
-        async def check_creator_join():
-            await asyncio.sleep(delete_delay)
+        # Периодическая проверка, зашёл ли создатель
+        async def check_creator_join_periodic():
+            for i in range(delete_delay // 5):
+                await asyncio.sleep(5)
+                member = interaction.guild.get_member(interaction.user.id)
+                if member and member.voice and member.voice.channel == channel:
+                    print(f"🎤 [TEMP_VOICE] Создатель зашёл в комнату, отменяем удаление")
+                    return
+            # Если за всё время не зашёл
             room = self.get_room_by_channel(channel.id)
             if room:
-                member = interaction.guild.get_member(interaction.user.id)
-                if not member or not member.voice or member.voice.channel != channel:
-                    await self.delete_room(channel, f"Создатель не зашёл в комнату в течение {delete_delay} секунд")
+                await self.delete_room(channel, f"Создатель не зашёл в комнату в течение {delete_delay} секунд")
         
-        asyncio.create_task(check_creator_join())
+        asyncio.create_task(check_creator_join_periodic())
         
         await self.log_action(interaction.guild, f"✅ Создана временная комната: {channel.name} (создатель: {interaction.user.mention})")
         

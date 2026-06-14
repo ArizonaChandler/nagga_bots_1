@@ -42,10 +42,11 @@ if not BOT_TOKEN:
     print("❌ DISCORD_BOT_TOKEN не найден в .env")
     exit(1)
 
+# ========== ИНТЕНТЫ ==========
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
-intents.voice_states = True
+intents.voice_states = True  # ← КЛЮЧЕВОЙ ИНТЕНТ ДЛЯ ВОЙСА
 
 bot = commands.Bot(
     command_prefix='!',
@@ -63,12 +64,15 @@ setup_log(bot)
 @bot.event
 async def on_ready():
     print("\n" + "=" * 60)
-    print("✅ **by Nagga**")
+    print("✅ **MAJESTIC BOT by Nagga**")
     print("=" * 60)
     print(f"🤖 Бот: {bot.user.name}")
     print(f"🆔 ID: {bot.user.id}")
     print(f"🌐 Серверов: {len(bot.guilds)}")
     print(f"📁 Файловое хранилище: {file_manager.storage_path}")
+
+    # Проверка интентов
+    print(f"🎤 [DEBUG] voice_states intent: {bot.intents.voice_states}")
 
     # Регистрация persistent view для временных комнат
     try:
@@ -218,12 +222,10 @@ async def on_member_remove(member):
 
 @bot.event
 async def on_voice_state_update(member: discord.Member, before, after):
-    """Отслеживание изменений голосового статуса для временных комнат"""
-    from core.module_manager import MODULES
+    """ТЕСТОВЫЙ ОБРАБОТЧИК — ПРОВЕРЯЕМ, ВЫЗЫВАЕТСЯ ЛИ СОБЫТИЕ"""
+    print(f"🔊🔊🔊 [VOICE_TEST] {member.name} | Before: {before.channel.name if before.channel else 'None'} | After: {after.channel.name if after.channel else 'None'}")
     
-    # ВРЕМЕННАЯ ОТЛАДКА
-    print(f"🎤 [DEBUG] on_voice_state_update ВЫЗВАН для {member.name}")
-    print(f"🎤 [DEBUG] temp_voice enabled: {MODULES.get('temp_voice', {}).get('enabled', False)}")
+    from core.module_manager import MODULES
     
     # Проверяем, включён ли модуль temp_voice
     if not MODULES.get("temp_voice", {}).get("enabled", False):
@@ -231,8 +233,6 @@ async def on_voice_state_update(member: discord.Member, before, after):
         return
     
     from temp_voice.manager import temp_voice_manager
-    
-    print(f"🎤 [DEBUG] Voice state: {member.name} | Before: {before.channel.name if before.channel else None} | After: {after.channel.name if after.channel else None}")
     
     # Проверяем, есть ли у пользователя комната
     room = temp_voice_manager.get_user_room(member.id)
@@ -249,13 +249,14 @@ async def on_voice_state_update(member: discord.Member, before, after):
     
     # Создатель вышел из комнаты
     if before.channel == channel and after.channel != channel:
-        print(f"🎤 [DEBUG] Создатель {member.name} вышел из комнаты, запускаем таймер")
+        print(f"🎤 [DEBUG] Создатель {member.name} ВЫШЕЛ из комнаты, запускаем таймер")
         await temp_voice_manager.schedule_deletion(channel, member.id)
     
     # Создатель вернулся в комнату
     elif after.channel == channel and before.channel != channel:
-        print(f"🎤 [DEBUG] Создатель {member.name} вернулся в комнату, отменяем таймер")
+        print(f"🎤 [DEBUG] Создатель {member.name} ВЕРНУЛСЯ в комнату, отменяем таймер")
         await temp_voice_manager.cancel_deletion(channel)
+
 
 # ========== ЗАПУСК ==========
 async def main():
