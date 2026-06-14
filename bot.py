@@ -62,12 +62,20 @@ setup_log(bot)
 @bot.event
 async def on_ready():
     print("\n" + "=" * 60)
-    print("✅ **MAJESTIC BOT by Nagga**")
+    print("✅ **by Nagga**")
     print("=" * 60)
     print(f"🤖 Бот: {bot.user.name}")
     print(f"🆔 ID: {bot.user.id}")
     print(f"🌐 Серверов: {len(bot.guilds)}")
     print(f"📁 Файловое хранилище: {file_manager.storage_path}")
+
+    # Регистрация persistent view для временных комнат
+    try:
+        from temp_voice.views import TempVoicePublicView
+        bot.add_view(TempVoicePublicView())
+        print("✅ Зарегистрирован persistent view для временных комнат")
+    except Exception as e:
+        print(f"❌ Ошибка регистрации view: {e}")
 
     # Инициализация системы модулей
     try:
