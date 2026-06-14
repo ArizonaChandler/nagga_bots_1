@@ -29,7 +29,7 @@ class TempVoicePublicView(PermanentView):
             return
         await interaction.response.send_modal(CreateRoomModal())
     
-    @discord.ui.Button(
+    @discord.ui.button(  # ← маленькая буква "b"
         label="🔧 УПРАВЛЯТЬ",
         style=discord.ButtonStyle.primary,
         emoji="🔧",
@@ -48,7 +48,6 @@ class TempVoicePublicView(PermanentView):
             await interaction.response.send_message("❌ Комната не найдена", ephemeral=True)
             return
         
-        # Создаём embed
         embed = discord.Embed(
             title="🎤 УПРАВЛЕНИЕ КОМНАТОЙ",
             description=f"**Комната:** {channel.mention}\n"
@@ -58,49 +57,46 @@ class TempVoicePublicView(PermanentView):
             color=0x00bfff
         )
         
-        # Создаём view и отправляем
-        view = TempVoiceManageView(interaction.user.id, channel.id, interaction.message.channel)
-        await interaction.response.send_message(embed=embed, view=view)
+        view = TempVoiceManageView(interaction.user.id, channel.id)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
 
 
 class TempVoiceManageView(discord.ui.View):
-    """Панель управления комнатой"""
+    """Панель управления комнатой (только для создателя)"""
     
-    def __init__(self, creator_id: int, channel_id: int, target_channel):
-        super().__init__(timeout=120)  # 2 минуты на управление
+    def __init__(self, creator_id: int, channel_id: int):
+        super().__init__(timeout=120)
         self.creator_id = creator_id
         self.channel_id = channel_id
-        self.target_channel = target_channel
-        self.message = None
         self._add_buttons()
     
     def _add_buttons(self):
-        # Расширить слоты
         expand_btn = discord.ui.Button(
             label="➕ РАСШИРИТЬ (+2 СЛОТА)",
             style=discord.ButtonStyle.success,
             emoji="➕",
-            row=0
+            row=0,
+            custom_id=f"temp_voice_expand_{self.channel_id}"
         )
         expand_btn.callback = self.expand_slots
         self.add_item(expand_btn)
         
-        # Кикнуть пользователя
         kick_btn = discord.ui.Button(
             label="👢 КИКНУТЬ ПОЛЬЗОВАТЕЛЯ",
             style=discord.ButtonStyle.danger,
             emoji="👢",
-            row=1
+            row=1,
+            custom_id=f"temp_voice_kick_{self.channel_id}"
         )
         kick_btn.callback = self.kick_user
         self.add_item(kick_btn)
         
-        # Закрыть комнату
         close_btn = discord.ui.Button(
             label="🔒 ЗАКРЫТЬ КОМНАТУ",
             style=discord.ButtonStyle.danger,
             emoji="🔒",
-            row=2
+            row=2,
+            custom_id=f"temp_voice_close_{self.channel_id}"
         )
         close_btn.callback = self.close_room
         self.add_item(close_btn)
@@ -132,7 +128,6 @@ class TempVoiceManageView(discord.ui.View):
         await interaction.response.send_message(msg, ephemeral=True)
         
         if success:
-            # Обновляем embed в сообщении
             room = temp_voice_manager.get_room_by_channel(channel.id)
             if room:
                 embed = discord.Embed(
@@ -155,7 +150,6 @@ class TempVoiceManageView(discord.ui.View):
             await interaction.response.send_message("❌ В комнате никого нет", ephemeral=True)
             return
         
-        # Отправляем модалку
         modal = KickUserModal(self.channel_id)
         await interaction.response.send_modal(modal)
     
@@ -169,22 +163,8 @@ class TempVoiceManageView(discord.ui.View):
         await interaction.response.send_message("🔒 Закрываю комнату...", ephemeral=True)
         await temp_voice_manager.close_room(interaction, channel)
         
-        # Удаляем сообщение с кнопками
-        await interaction.message.delete()
+        try:
+            await interaction.message.delete()
+        except:
+            pass
         self.stop()
-
-
-class TempVoiceTestView(discord.ui.View):
-    """Тестовый view для проверки работы кнопок"""
-    
-    def __init__(self):
-        super().__init__(timeout=None)
-    
-    @discord.ui.button(
-        label="✅ ТЕСТ",
-        style=discord.ButtonStyle.success,
-        row=0
-    )
-    async def test_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        print("🎤 [TEST] ТЕСТОВАЯ КНОПКА СРАБОТАЛА!")
-        await interaction.response.send_message("✅ Кнопка работает!", ephemeral=True)
