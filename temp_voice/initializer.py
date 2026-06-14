@@ -3,7 +3,6 @@ import discord
 import logging
 from core.database import db
 from temp_voice.views import TempVoicePublicView
-from temp_voice.settings_view import TempVoiceSettingsView
 from temp_voice.manager import temp_voice_manager
 
 logger = logging.getLogger(__name__)
@@ -22,10 +21,8 @@ class TempVoiceInitializer:
         temp_voice_manager.set_bot(self.bot)
         
         self.public_channel_id = db.get_setting('temp_voice_public_channel')
-        self.settings_channel_id = db.get_setting('temp_voice_settings_channel')
         
         await self._init_public_channel()
-        await self._init_settings_channel()
         await self._restore_rooms()
         
         logger.info("✅ Инициализация системы временных комнат завершена")
@@ -57,51 +54,21 @@ class TempVoiceInitializer:
                             "└ Нажмите кнопку «СОЗДАТЬ КОМНАТУ» и введите название\n"
                             "└ Комната появится в голосовом канале\n"
                             "└ Приглашайте друзей — они смогут зайти\n"
-                            "└ Управляйте комнатой через кнопку «УПРАВЛЯТЬ»\n\n"
+                            "└ Управляйте комнатой кнопками ниже\n\n"
                             "**Возможности управления:**\n"
-                            "└ Расширить комнату (+2 слота)\n"
+                            "└ Расширить комнату (выберите количество слотов)\n"
                             "└ Кикнуть нежелательного пользователя\n"
                             "└ Закрыть комнату\n\n"
-                            "**Важно:** Комната будет автоматически удалена через 60 секунд после того, как создатель покинет её.",
+                            "**Важно:** Комната будет автоматически удалена через N секунд после того, как создатель покинет её.",
                 color=0x00bfff
             )
             await channel.send(embed=embed, view=TempVoicePublicView())
             print(f"🎤 [TEMP_VOICE] Создана панель в #{channel.name}")
     
-    async def _init_settings_channel(self):
-        if not self.settings_channel_id:
-            logger.warning("⚠️ Канал настроек временных комнат не настроен")
-            return
-        
-        channel = self.bot.get_channel(int(self.settings_channel_id))
-        if not channel:
-            logger.error(f"❌ Канал настроек {self.settings_channel_id} не найден")
-            return
-        
-        found = False
-        async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user and msg.embeds:
-                if msg.embeds and "ВРЕМЕННЫХ КОМНАТ" in msg.embeds[0].title:
-                    await msg.edit(view=TempVoiceSettingsView())
-                    found = True
-                    print(f"🎤 [TEMP_VOICE] Обновлена панель настроек в #{channel.name}")
-                    break
-        
-        if not found:
-            embed = discord.Embed(
-                title="⚙️ **УПРАВЛЕНИЕ СИСТЕМОЙ ВРЕМЕННЫХ КОМНАТ**",
-                description="Настройка системы временных голосовых комнат",
-                color=0x00ff00
-            )
-            await channel.send(embed=embed, view=TempVoiceSettingsView())
-            print(f"🎤 [TEMP_VOICE] Создана панель настроек в #{channel.name}")
-    
     async def _restore_rooms(self):
         print("🎤 [TEMP_VOICE] Проверка комнат после перезапуска...")
-        
         for guild in self.bot.guilds:
             await temp_voice_manager.check_creator_presence(guild)
-        
         print("🎤 [TEMP_VOICE] Проверка комнат завершена")
     
     async def stop(self):

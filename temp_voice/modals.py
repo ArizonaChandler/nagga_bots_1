@@ -16,6 +16,45 @@ class CreateRoomModal(discord.ui.Modal, title="🎤 СОЗДАНИЕ КОМНА�
         await interaction.response.send_message(msg, ephemeral=True)
 
 
+class ExpandSlotsModal(discord.ui.Modal, title="➕ РАСШИРИТЬ КОМНАТУ"):
+    slots = discord.ui.TextInput(
+        label="Количество добавляемых слотов",
+        placeholder="Введите число от 1 до 8",
+        max_length=2,
+        required=True
+    )
+    
+    def __init__(self, channel_id: int, current_slots: int, max_slots: int):
+        super().__init__()
+        self.channel_id = channel_id
+        self.current_slots = current_slots
+        self.max_slots = max_slots
+        self.slots.placeholder = f"Максимум {max_slots - current_slots} слотов"
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            add_slots = int(self.slots.value)
+            if add_slots < 1:
+                await interaction.response.send_message("❌ Минимум 1 слот", ephemeral=True)
+                return
+            
+            new_slots = self.current_slots + add_slots
+            if new_slots > self.max_slots:
+                await interaction.response.send_message(f"❌ Нельзя превысить максимум {self.max_slots} слотов", ephemeral=True)
+                return
+            
+            channel = interaction.guild.get_channel(self.channel_id)
+            if not channel:
+                await interaction.response.send_message("❌ Комната не найдена", ephemeral=True)
+                return
+            
+            success, msg = await temp_voice_manager.expand_slots_to(interaction, channel, new_slots)
+            await interaction.response.send_message(msg, ephemeral=True)
+            
+        except ValueError:
+            await interaction.response.send_message("❌ Введите число", ephemeral=True)
+
+
 class KickUserModal(discord.ui.Modal, title="👢 КИКНУТЬ ПОЛЬЗОВАТЕЛЯ"):
     user_mention = discord.ui.TextInput(
         label="Упоминание пользователя",
@@ -29,7 +68,6 @@ class KickUserModal(discord.ui.Modal, title="👢 КИКНУТЬ ПОЛЬЗОВ�
         self.channel_id = channel_id
     
     async def on_submit(self, interaction: discord.Interaction):
-        # Извлекаем ID пользователя из упоминания
         user_id = None
         for word in self.user_mention.value.split():
             if word.startswith('<@') and word.endswith('>'):

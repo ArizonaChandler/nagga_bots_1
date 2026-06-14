@@ -17,10 +17,9 @@ class TempVoiceManager:
     
     def set_bot(self, bot):
         self.bot = bot
-        print("🎤 [DEBUG] set_bot вызван")
     
     def get_settings(self):
-        settings = {
+        return {
             'temp_voice_category': CONFIG.get('temp_voice_category'),
             'temp_voice_public_channel': CONFIG.get('temp_voice_public_channel'),
             'temp_voice_log_channel': CONFIG.get('temp_voice_log_channel'),
@@ -28,7 +27,6 @@ class TempVoiceManager:
             'temp_voice_max_slots': int(CONFIG.get('temp_voice_max_slots', 10)),
             'temp_voice_delete_delay': int(CONFIG.get('temp_voice_delete_delay', 60)),
         }
-        return settings
     
     def save_setting(self, key: str, value: str, updated_by: str = None):
         db.set_setting(key, value, updated_by)
@@ -104,7 +102,7 @@ class TempVoiceManager:
                     return
             room = self.get_room_by_channel(channel.id)
             if room:
-                await self.delete_room(channel, f"Создатель не зашёл в комнату в течение {delete_delay} секунд")
+                await self._delete_room_channel(channel, f"Создатель не зашёл в комнату в течение {delete_delay} секунд")
         
         asyncio.create_task(check_creator_join_periodic())
         
@@ -112,26 +110,17 @@ class TempVoiceManager:
         
         return True, f"✅ Комната создана: {channel.mention}\n🔊 Войдите в неё, чтобы начать общение!"
     
-    async def delete_room(self, channel: discord.VoiceChannel, reason: str = None):
-        print(f"🎤 [TEMP_VOICE] delete_room ВЫЗВАН для канала {channel.name}")
-        
+    async def _delete_room_channel(self, channel: discord.VoiceChannel, reason: str = None):
+        """Внутренний метод удаления канала"""
         channel_id = channel.id
         
-        if channel_id in self.delete_tasks:
-            self.delete_tasks[channel_id].cancel()
-            del self.delete_tasks[channel_id]
+        print(f"🎤 [TEMP_VOICE] _delete_room_channel: удаляем канал {channel.name}")
         
-        if channel_id in self.pending_deletions:
-            del self.pending_deletions[channel_id]
-        
-        print(f"🎤 [DEBUG] delete_room: вызываем delete_room_from_db для {channel_id}")
         self.delete_room_from_db(channel_id)
-        print(f"🎤 [DEBUG] delete_room: delete_room_from_db выполнен")
         
         if channel_id in self.active_rooms:
             del self.active_rooms[channel_id]
         
-        print(f"🎤 [DEBUG] delete_room: пытаемся удалить канал {channel.name}")
         try:
             await channel.delete()
             print(f"🎤 [TEMP_VOICE] ✅ КАНАЛ {channel.name} УСПЕШНО УДАЛЁН")
@@ -141,6 +130,25 @@ class TempVoiceManager:
             print(f"⚠️ [TEMP_VOICE] Канал {channel.name} уже удалён")
         except Exception as e:
             print(f"❌ [TEMP_VOICE] Ошибка удаления: {type(e).__name__}: {e}")
+        
+        if self.bot:
+            await self.log_action(channel.guild, f"🗑️ Удалена временная комната: {channel.name}")
+        
+        if channel_id in self.delete_tasks:
+            del self.delete_tasks[channel_id]
+    
+    async def delete_room(self, channel: discord.VoiceChannel, reason: str = None):
+        """Публичный метод удаления (для кнопки закрыть)"""
+        channel_id = channel.id
+        
+        if channel_id in self.delete_tasks:
+            self.delete_tasks[channel_id].cancel()
+            del self.delete_tasks[channel_id]
+        
+        if channel_id in self.pending_deletions:
+            del self.pending_deletions[channel_id]
+        
+        await self._delete_room_channel(channel, reason)
     
     async def schedule_deletion(self, channel: discord.VoiceChannel, creator_id: int):
         settings = self.get_settings()
@@ -166,7 +174,7 @@ class TempVoiceManager:
                     await self.log_action(guild, f"🔄 Отмена удаления комнаты {channel.name} — создатель вернулся")
                     return
                 
-                await self.delete_room(channel, "Создатель покинул комнату")
+                await self._delete_room_channel(channel, "Создатель покинул комнату")
                 
             except asyncio.CancelledError:
                 print(f"🎤 [DEBUG] delete_task: отменена")
@@ -186,21 +194,12 @@ class TempVoiceManager:
             del self.delete_tasks[channel_id]
             print(f"🎤 [DEBUG] cancel_deletion: отменено для {channel.name}")
     
-    async def expand_slots(self, interaction: discord.Interaction, channel: discord.VoiceChannel) -> tuple:
-        print(f"🎤 [DEBUG] expand_slots НАЧАЛО, пользователь={interaction.user.name}")
-        
-        settings = self.get_settings()
-        max_slots = settings.get('temp_voice_max_slots', 10)
+    async def expand_slots_to(self, interaction: discord.Interaction, channel: discord.VoiceChannel, new_slots: int) -> tuple:
+        print(f"🎤 [DEBUG] expand_slots_to: канал={channel.name}, новые слоты={new_slots}")
         
         room = self.get_room_by_channel(channel.id)
         if not room:
             return False, "❌ Комната не найдена"
-        
-        current_slots = room['slots']
-        if current_slots >= max_slots:
-            return False, f"❌ Достигнут максимум слотов: {max_slots}"
-        
-        new_slots = min(current_slots + 2, max_slots)
         
         self.update_room_slots(channel.id, new_slots)
         await channel.edit(user_limit=new_slots)
@@ -244,7 +243,7 @@ class TempVoiceManager:
             creator = guild.get_member(room['creator_id'])
             
             if not creator or not creator.voice or creator.voice.channel != channel:
-                await self.delete_room(channel, "Создатель не в комнате после перезапуска")
+                await self._delete_room_channel(channel, "Создатель не в комнате после перезапуска")
             else:
                 self.active_rooms[channel.id] = {
                     'creator_id': room['creator_id'],
