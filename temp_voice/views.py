@@ -1,6 +1,6 @@
 """Кнопки для системы временных комнат"""
 import discord
-from temp_voice.base import PermanentView, CreatorOnlyView
+from temp_voice.base import PermanentView
 from temp_voice.manager import temp_voice_manager
 from temp_voice.modals import CreateRoomModal, KickUserModal
 
@@ -58,11 +58,12 @@ class TempVoicePublicView(PermanentView):
         )
         
         view = TempVoiceManageView(interaction.user.id, channel.id)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        # 🔥 ОТПРАВЛЯЕМ НЕ EPHEMERAL, А ВИДИМОЕ СООБЩЕНИЕ
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
 
 
 class TempVoiceManageView(discord.ui.View):
-    """Панель управления комнатой (только для создателя) - без CreatorOnlyView для теста"""
+    """Панель управления комнатой (только для создателя)"""
     
     def __init__(self, creator_id: int, channel_id: int):
         super().__init__(timeout=None)
@@ -71,7 +72,6 @@ class TempVoiceManageView(discord.ui.View):
         self._add_buttons()
     
     def _add_buttons(self):
-        # Расширить слоты
         expand_btn = discord.ui.Button(
             label="➕ РАСШИРИТЬ (+2 СЛОТА)",
             style=discord.ButtonStyle.success,
@@ -82,7 +82,6 @@ class TempVoiceManageView(discord.ui.View):
         expand_btn.callback = self.expand_slots
         self.add_item(expand_btn)
         
-        # Кикнуть пользователя
         kick_btn = discord.ui.Button(
             label="👢 КИКНУТЬ ПОЛЬЗОВАТЕЛЯ",
             style=discord.ButtonStyle.danger,
@@ -93,7 +92,6 @@ class TempVoiceManageView(discord.ui.View):
         kick_btn.callback = self.kick_user
         self.add_item(kick_btn)
         
-        # Закрыть комнату
         close_btn = discord.ui.Button(
             label="🔒 ЗАКРЫТЬ КОМНАТУ",
             style=discord.ButtonStyle.danger,
@@ -141,7 +139,7 @@ class TempVoiceManageView(discord.ui.View):
                                 f"**Участников:** {len(channel.members)}/{room['slots']}",
                     color=0x00bfff
                 )
-                await interaction.edit_original_response(embed=embed)
+                await interaction.message.edit(embed=embed)
     
     async def kick_user(self, interaction: discord.Interaction, button: discord.ui.Button):
         print(f"🎤 [DEBUG] kick_user вызван")
@@ -155,9 +153,7 @@ class TempVoiceManageView(discord.ui.View):
             await interaction.followup.send("❌ В комнате никого нет", ephemeral=True)
             return
         
-        # Закрываем текущее сообщение и открываем модалку
-        await interaction.edit_original_response(view=None)
-        
+        # Отправляем модалку
         modal = KickUserModal(self.channel_id)
         await interaction.followup.send_modal(modal)
     
@@ -171,4 +167,7 @@ class TempVoiceManageView(discord.ui.View):
         
         await temp_voice_manager.close_room(interaction, channel)
         await interaction.followup.send("✅ Комната закрыта", ephemeral=True)
+        
+        # Удаляем сообщение с кнопками
+        await interaction.message.delete()
         self.stop()
