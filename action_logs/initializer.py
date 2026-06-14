@@ -1,5 +1,6 @@
 """Инициализация системы логов"""
 import logging
+import discord
 from core.database import db
 from action_logs.views import ActionLogsPanelView
 from action_logs.settings_view import ActionLogsSettingsView
@@ -22,7 +23,6 @@ class ActionLogsInitializer:
         self.public_channel_id = db.get_setting('action_logs_channel')
         self.settings_channel_id = db.get_setting('action_logs_settings_channel')
         
-        # Принудительно выводим в консоль, чтобы увидеть что настроено
         print(f"📋 [ACTION_LOGS] public_channel_id = {self.public_channel_id}")
         print(f"📋 [ACTION_LOGS] settings_channel_id = {self.settings_channel_id}")
         
@@ -73,7 +73,6 @@ class ActionLogsInitializer:
             logger.error(f"❌ Канал настроек {self.settings_channel_id} не найден")
             return
         
-        # Очищаем старые сообщения
         async for msg in channel.history(limit=50):
             if msg.author == self.bot.user:
                 await msg.delete()

@@ -55,6 +55,8 @@ class ActionLogsManager:
         settings = self.get_settings()
         channel_id = settings.get('action_logs_channel')
         
+        print(f"📋 [ACTION_LOGS] _send_to_channel: channel_id={channel_id}")
+        
         if not channel_id or not self.bot:
             print(f"📋 [ACTION_LOGS] Канал логов не настроен: channel_id={channel_id}, bot={self.bot is not None}")
             return
@@ -68,6 +70,8 @@ class ActionLogsManager:
         if not channel:
             print(f"📋 [ACTION_LOGS] Канал {channel_id} не найден в гильдии {guild.name}")
             return
+        
+        print(f"📋 [ACTION_LOGS] Канал найден: #{channel.name}, отправляем лог...")
         
         # Цвета для событий
         colors = {
@@ -129,7 +133,7 @@ class ActionLogsManager:
         embed.set_footer(text=f"ID: {user_id}")
         
         await channel.send(embed=embed)
-        print(f"📋 [ACTION_LOGS] Лог отправлен в канал #{channel.name}")
+        print(f"📋 [ACTION_LOGS] ✅ Лог отправлен в канал #{channel.name}")
     
     def get_logs(self, guild_id: str, limit: int = 100, offset: int = 0,
                  user_id: str = None, event_type: str = None, days: int = None) -> list:

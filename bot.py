@@ -108,6 +108,8 @@ async def on_ready():
         name=f"{CONFIG.get('family_name', 'Семья')} | !info"
     ))
 
+    from core.config import CONFIG
+    print(f"📋 [DEBUG] action_logs_channel = {CONFIG.get('action_logs_channel')}")
     print("=" * 60 + "\n")
 
 
