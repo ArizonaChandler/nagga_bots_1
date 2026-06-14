@@ -27,6 +27,7 @@ class TempVoicePublicView(PermanentView):
                 ephemeral=True
             )
             return
+        
         await interaction.response.send_modal(CreateRoomModal())
     
     @discord.ui.button(
@@ -114,6 +115,8 @@ class TempVoiceManageView(CreatorOnlyView):
         return channel
     
     async def expand_slots(self, interaction: discord.Interaction, button: discord.ui.Button):
+        print(f"🎤 [DEBUG] expand_slots вызвана пользователем {interaction.user.id}")
+        
         channel = await self.get_channel(interaction)
         if not channel:
             return
@@ -134,6 +137,8 @@ class TempVoiceManageView(CreatorOnlyView):
                 await interaction.edit_original_response(embed=embed)
     
     async def kick_user(self, interaction: discord.Interaction, button: discord.ui.Button):
+        print(f"🎤 [DEBUG] kick_user вызвана пользователем {interaction.user.id}")
+        
         channel = await self.get_channel(interaction)
         if not channel:
             return
@@ -145,6 +150,8 @@ class TempVoiceManageView(CreatorOnlyView):
         await interaction.response.send_modal(KickUserModal(channel.id))
     
     async def close_room(self, interaction: discord.Interaction, button: discord.ui.Button):
+        print(f"🎤 [DEBUG] close_room вызвана пользователем {interaction.user.id}")
+        
         channel = await self.get_channel(interaction)
         if not channel:
             return

@@ -21,6 +21,9 @@ class CreatorOnlyView(discord.ui.View):
         self.creator_id = creator_id
     
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        # Приводим оба ID к int для корректного сравнения
+        print(f"🎤 [DEBUG] CreatorOnlyView: проверка {interaction.user.id} == {self.creator_id}")
+        
         if interaction.user.id != self.creator_id:
             await interaction.response.send_message(
                 "❌ Только создатель комнаты может управлять ею!",
