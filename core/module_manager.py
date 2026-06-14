@@ -114,7 +114,6 @@ MODULES = {
         "initializer": None,
         "toggleable": False
     },
-    # ========== НОВЫЙ МОДУЛЬ ЭКОНОМИКИ ==========
     "economy": {
         "name": "💰 Экономика и магазин",
         "description": "Балловая система, начисления за активности, магазин товаров",
@@ -123,6 +122,16 @@ MODULES = {
         "settings_channels": ["economy_settings_channel"],
         "initializer": "economy.manager",
         "initialize_method": "initialize_buttons",
+        "toggleable": True
+    },
+    "stats": {
+        "name": "📊 Расширенная статистика",
+        "description": "Сбор статистики и бекап сервера",
+        "enabled": False,
+        "channels": ["stats_channel"],
+        "settings_channels": ["stats_settings_channel"],
+        "initializer": "stats.manager",
+        "initialize_method": "initialize",
         "toggleable": True
     },
 }
@@ -264,7 +273,7 @@ class ModuleManager:
                             if msg.author == self.bot.user:
                                 await msg.delete()
                         
-                        # 🔥 ИСПРАВЛЕНО: создаём view и отправляем embed с товарами
+                        # Создаём view и отправляем embed с товарами
                         view = EconomyPanelView()
                         embed = await view.get_shop_embed()
                         await channel.send(embed=embed, view=view)

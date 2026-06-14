@@ -282,6 +282,8 @@ class Database:
                         ('applications_settings_channel', 'null'))
             cursor.execute('INSERT OR IGNORE INTO application_settings (key, value) VALUES (?, ?)', 
                         ('submit_channel', 'null'))
+            cursor.execute('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', 
+                        ('applications_create_profiles', 'true'))
 
             # ===== ТАБЛИЦА ДЛЯ ХРАНЕНИЯ СООБЩЕНИЙ С ЗАЯВКАМИ =====
             cursor.execute('''
@@ -418,6 +420,10 @@ class Database:
                         ('tier2', '1. Выполнение требований Tier 3\n2. Регулярные отчёты\n3. Помощь новичкам'))
             cursor.execute('INSERT OR IGNORE INTO tier_requirements (tier, requirements) VALUES (?, ?)', 
                         ('tier1', '1. Выполнение требований Tier 2\n2. Лидерские качества\n3. Вклад в развитие семьи'))
+            cursor.execute('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', 
+                        ('tier_delete_profile', 'false'))
+            cursor.execute('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', 
+                        ('tier_create_profile', 'false'))
 
             # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ СТАТИСТИКИ =====
             cursor.execute('''
@@ -446,6 +452,41 @@ class Database:
                         ('stats_backup_enabled', 'true'))
             cursor.execute('INSERT OR IGNORE INTO stats_settings (key, value) VALUES (?, ?)', 
                         ('stats_channel', 'null'))
+
+            # ===== Почасовая статистика =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS hourly_stats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date TEXT NOT NULL,
+                    hour INTEGER NOT NULL,
+                    messages INTEGER DEFAULT 0,
+                    voice_users INTEGER DEFAULT 0,
+                    UNIQUE(date, hour)
+                );
+            ''')
+
+            # ===== Статистика пользователей =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_activity (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    messages INTEGER DEFAULT 0,
+                    voice_minutes INTEGER DEFAULT 0,
+                    UNIQUE(user_id, date)
+                );
+            ''')
+
+            # ===== Бекапы сервера =====
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS server_backups (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    backup_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    backup_data TEXT NOT NULL,
+                    backup_size INTEGER DEFAULT 0,
+                    created_by TEXT
+                );
+            ''')
 
             # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ ОТПУСКОВ =====
 
@@ -1615,100 +1656,29 @@ class Database:
             conn.commit()
             return len(stuck_apps)
 
-    # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ СТАТИСТИКИ =====
-
-    def load_stats_settings(self):
-        from core.config import CONFIG
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT key, value FROM stats_settings')
-            settings = dict(cursor.fetchall())
-        for key, value in settings.items():
-            if value and value.lower() != 'null':
-                CONFIG[key] = value
+    # ===== МЕТОДЫ ДЛЯ TIER (для bot.py) =====
     
-    def get_stats_setting(self, key: str) -> str:
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT value FROM stats_settings WHERE key = ?', (key,))
-            result = cursor.fetchone()
-            return result[0] if result else None
-    
-    def set_stats_setting(self, key: str, value: str, updated_by: str = None):
+    def get_pending_tier_applications_raw(self):
+        """Получить все ожидающие заявки TIER (без обёрток)"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT OR REPLACE INTO stats_settings (key, value)
-                VALUES (?, ?)
-            ''', (key, value))
-            conn.commit()
-            if updated_by:
-                self.log_action(updated_by, f"SET_STATS_SETTING", f"{key}={value}")
+                SELECT id, user_id, user_name, nickname, arena_link, screenshots, additional 
+                FROM tier_applications WHERE status = 'pending'
+            ''')
+            return cursor.fetchall()
     
-    def save_daily_stats(self, stats_data: dict):
+    def save_tier_application_message_raw(self, application_id: int, channel_id: str, message_id: str, user_id: str):
+        """Сохранить сообщение заявки TIER"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT OR REPLACE INTO daily_stats 
-                (date, new_members, left_members, new_applications, accepted_applications, max_voice_online, capt_registrations)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (stats_data['date'], stats_data.get('new_members', 0), stats_data.get('left_members', 0),
-                stats_data.get('new_applications', 0), stats_data.get('accepted_applications', 0),
-                stats_data.get('max_voice_online', 0), stats_data.get('capt_registrations', 0)))
+                INSERT OR REPLACE INTO tier_application_messages (application_id, channel_id, message_id, user_id)
+                VALUES (?, ?, ?, ?)
+            ''', (application_id, channel_id, message_id, user_id))
             conn.commit()
-    
-    def get_stats_for_date(self, date_str: str):
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT * FROM daily_stats WHERE date = ?', (date_str,))
-            row = cursor.fetchone()
-            if row:
-                columns = [description[0] for description in cursor.description]
-                return dict(zip(columns, row))
-            return None
-    
-    def get_today_stats(self):
-        from datetime import datetime
-        import pytz
-        msk_tz = pytz.timezone('Europe/Moscow')
-        today = datetime.now(msk_tz).date().isoformat()
-        return self.get_stats_for_date(today)
 
-    def get_total_mp_takes(self) -> int:
-        """Получить общее количество взятых МП за всё время"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT COUNT(*) FROM event_takes WHERE is_cancelled = 0')
-            return cursor.fetchone()[0]
-
-    def get_today_mp_takes(self) -> int:
-        """Получить количество взятых МП сегодня"""
-        from datetime import datetime
-        import pytz
-        msk_tz = pytz.timezone('Europe/Moscow')
-        today = datetime.now(msk_tz).date().isoformat()
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT COUNT(*) FROM event_takes WHERE event_date = ? AND is_cancelled = 0', (today,))
-            return cursor.fetchone()[0]
-
-    def get_total_mcl_registrations(self) -> int:
-        """Получить общее количество регистраций на MCL/ВЗМ"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT COUNT(*) FROM mcl_registrations')
-            return cursor.fetchone()[0]
-
-    def get_today_mcl_registrations(self) -> int:
-        """Получить количество регистраций на MCL/ВЗМ сегодня"""
-        from datetime import datetime
-        import pytz
-        msk_tz = pytz.timezone('Europe/Moscow')
-        today = datetime.now(msk_tz).date().isoformat()
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT COUNT(*) FROM mcl_registrations WHERE date(registered_at) = ?', (today,))
-            return cursor.fetchone()[0]
+    # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ CAPT =====
 
     def capt_get_active_session(self):
         """Получить активную сессию CAPT"""
@@ -1730,8 +1700,6 @@ class Database:
                 WHERE id = ?
             ''', (main_message_id, reserve_message_id, session_id))
             conn.commit()
-
-    # ===== МЕТОДЫ ДЛЯ СИСТЕМЫ CAPT =====
 
     def capt_get_registrations(self, list_type: str = None):
         with self.get_connection() as conn:
@@ -2500,5 +2468,131 @@ class Database:
             cursor = conn.cursor()
             # Просто логируем, лимит проверяется через get_daily_voice_earned
             pass  # или можно хранить в отдельной таблице
+
+    # ===== РАСШИРЕННАЯ СТАТИСТИКА =====
+
+    def get_daily_new_members(self, date: str) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM audit_log WHERE action="MEMBER_JOIN" AND date(timestamp) = ?', (date,))
+            return cursor.fetchone()[0]
+
+    def get_daily_left_members(self, date: str) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM audit_log WHERE action="MEMBER_LEAVE" AND date(timestamp) = ?', (date,))
+            return cursor.fetchone()[0]
+
+    def get_daily_applications(self, date: str) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM applications WHERE date(created_at) = ?', (date,))
+            return cursor.fetchone()[0]
+
+    def get_daily_accepted_applications(self, date: str) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM applications WHERE status="accepted" AND date(reviewed_at) = ?', (date,))
+            return cursor.fetchone()[0]
+
+    def get_daily_capt_registrations(self, date: str) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM capt_registrations WHERE date(registered_at) = ?', (date,))
+            return cursor.fetchone()[0]
+
+    def get_daily_mcl_registrations(self, date: str) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM mcl_registrations WHERE date(registered_at) = ?', (date,))
+            return cursor.fetchone()[0]
+
+    def get_daily_mp_takes(self, date: str) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM event_takes WHERE date(event_date) = ?', (date,))
+            return cursor.fetchone()[0]
+
+    def get_stats_for_last_days(self, days: int) -> list:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM daily_stats ORDER BY date DESC LIMIT ?', (days,))
+            rows = cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
+            return [dict(zip(columns, row)) for row in rows]
+
+    # ===== ПОЧАСОВАЯ СТАТИСТИКА =====
+
+    def update_hourly_stats(self, date: str, hour: int, messages: int, voice_users: int):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO hourly_stats (date, hour, messages, voice_users)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(date, hour) DO UPDATE SET
+                    messages = excluded.messages,
+                    voice_users = excluded.voice_users
+            ''', (date, hour, messages, voice_users))
+            conn.commit()
+
+    def get_hourly_stats(self, date: str) -> list:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT hour, messages, voice_users FROM hourly_stats WHERE date = ? ORDER BY hour', (date,))
+            return cursor.fetchall()
+
+    # ===== СТАТИСТИКА ПОЛЬЗОВАТЕЛЕЙ =====
+
+    def update_user_activity(self, user_id: str, date: str, field: str, delta: int):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f'''
+                INSERT INTO user_activity (user_id, date, {field}) VALUES (?, ?, ?)
+                ON CONFLICT(user_id, date) DO UPDATE SET
+                    {field} = {field} + ?
+            ''', (user_id, date, delta, delta))
+            conn.commit()
+
+    def get_user_activity(self, user_id: str, days: int) -> dict:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT SUM(messages) as messages, SUM(voice_minutes) as voice_minutes
+                FROM user_activity
+                WHERE user_id = ? AND date >= date("now", ?)
+            ''', (user_id, f'-{days} days'))
+            row = cursor.fetchone()
+            return {'messages': row[0] or 0, 'voice_minutes': row[1] or 0}
+
+    # ===== БЕКАПЫ =====
+
+    def save_server_backup(self, backup_data: str, created_by: str = None) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO server_backups (backup_data, created_by, backup_size)
+                VALUES (?, ?, ?)
+            ''', (backup_data, created_by, len(backup_data)))
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_server_backups(self, limit: int = 10) -> list:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, backup_date, backup_size, created_by
+                FROM server_backups ORDER BY backup_date DESC LIMIT ?
+            ''', (limit,))
+            rows = cursor.fetchall()
+            return [{'id': r[0], 'backup_date': r[1], 'backup_size': r[2], 'created_by': r[3]} for r in rows]
+
+    def get_server_backup(self, backup_id: int) -> dict:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT backup_data, backup_date FROM server_backups WHERE id = ?', (backup_id,))
+            row = cursor.fetchone()
+            if row:
+                return {'backup_data': row[0], 'backup_date': row[1]}
+            return None
 
 db = Database()

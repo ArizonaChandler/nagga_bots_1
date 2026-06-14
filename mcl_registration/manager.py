@@ -3,7 +3,6 @@ import discord
 from datetime import datetime
 from core.database import db
 from core.config import CONFIG, save_config
-from server_stats.global_collector import get_collector
 
 
 class MCLRegistrationManager:
@@ -193,11 +192,6 @@ class MCLRegistrationManager:
         
         await self._update_views(session_active=True)
         await self._send_announcement(event_name, event_time, additional_info)
-        
-        from server_stats.global_collector import get_collector
-        collector = get_collector()
-        if collector:
-            collector.increment_mcl_registration()
         
         db.log_action(user_id, "MCL_REG_START", f"Session {session_id}")
         return True

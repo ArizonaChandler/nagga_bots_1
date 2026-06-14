@@ -20,8 +20,7 @@ def setup(bot):
             timestamp=datetime.now()
         )
         
-        embed.add_field(name="🎨 DUAL MCL", value=mcl_text, inline=True)
-        
+        # Статистика CAPT
         capt_text = f"✅ Отправлено: `{capt_core.stats['total_sent']}`\n"
         capt_text += f"❌ Ошибок: `{capt_core.stats['total_failed']}`\n"
         if capt_core.stats['total_time'] > 0:
@@ -32,6 +31,7 @@ def setup(bot):
         
         embed.add_field(name="🚨 CAPT", value=capt_text, inline=True)
         
+        # Пользователи и администраторы
         users = db.get_users()
         admins = [uid for uid in users if db.is_admin(uid)]
         embed.add_field(
@@ -40,6 +40,7 @@ def setup(bot):
             inline=True
         )
         
+        # Мероприятия
         events_today = len(db.get_today_events())
         events_total = len(db.get_events(enabled_only=False))
         takes_30d = len(db.get_event_takes(days=30))

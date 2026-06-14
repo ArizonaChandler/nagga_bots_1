@@ -28,6 +28,7 @@ CONFIG = {
     'events_settings_channel': None,
     'applications_settings_channel': None,
     'application_custom_fields': [],
+    'applications_create_profiles': 'true',  # true/false - создавать профили при принятии заявки
     'submit_text': "Нажмите кнопку ниже, чтобы подать заявку",
     'submit_image': None,
     'welcome_message': None,
@@ -47,9 +48,9 @@ CONFIG = {
     'tier1_role': None,
     'tier2_role': None,
     'tier3_role': None,
-    'stats_channel': None,
-    'stats_backup_enabled': True,
-    'stats_settings_channel': None,
+    'tier_delete_profile': 'false',  # true/false - удалять профиль при выдаче Tier
+    'tier_create_profile': 'false',      # true/false - создавать профиль при выдаче Tier
+    'tier_profiles_category': None,      # ID категории для профилей Tier
     'vacation_public_channel': None,
     'vacation_applications_channel': None,
     'vacation_log_channel': None,
@@ -98,6 +99,12 @@ CONFIG = {
     'eco_daily_bonus': '25',           # Базовая награда
     'eco_daily_increment': '5',        # Прирост за 2 дня серии
     'eco_daily_limit': '30',           # Лимит серии (дней)
+
+    # ===== РАСШИРЕННАЯ СТАТИСТИКА (stats) =====
+    'stats_channel': None,           # Канал для панели статистики
+    'stats_settings_channel': None,  # Канал настроек статистики
+    'stats_backup_enabled': 'true',  # Включить авто-бекап
+    'stats_backup_time': '00:00',    # Время ежедневного бекапа
 }
 
 def load_config():
@@ -131,7 +138,6 @@ def load_config():
     
     db.load_application_settings()
     db.load_tier_settings()
-    db.load_stats_settings()
     db.load_vacation_settings()
 
 def save_config(updated_by: str = None):

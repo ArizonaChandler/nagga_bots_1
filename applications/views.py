@@ -157,7 +157,7 @@ class ApplicationModerationView(discord.ui.View):
                     else:
                         print(f"❌ Роль с ID {role_id} не найдена")
 
-        # Создание личного профиля (если есть nickname и static в answers)
+        # Получаем данные из answers
         answers = app.get('answers')
         import json
         try:
@@ -168,24 +168,33 @@ class ApplicationModerationView(discord.ui.View):
         nickname = answers_dict.get('nickname', 'Участник')
         static = answers_dict.get('static', '')
 
+        # 🔥 ПРОВЕРКА: создавать профиль или нет
+        create_profiles = CONFIG.get('applications_create_profiles', 'true') == 'true'
+
         channel = None
         error = None
-        try:
-            channel, error = await app_manager.create_member_profile(
-                guild,
-                app['user_id'],
-                nickname,
-                static
-            )
+        
+        if create_profiles:
+            try:
+                channel, error = await app_manager.create_member_profile(
+                    guild,
+                    app['user_id'],
+                    nickname,
+                    static
+                )
 
-            if error:
-                print(f"❌ Ошибка создания профиля: {error}")
-                await interaction.followup.send(f"✅ Заявка принята, но не удалось создать профиль: {error}", ephemeral=True)
-            else:
-                print(f"✅ Создан личный профиль: {channel.name}")
-        except Exception as e:
-            print(f"❌ Ошибка при создании профиля: {e}")
-            await interaction.followup.send(f"✅ Заявка принята, но произошла ошибка при создании профиля: {e}", ephemeral=True)
+                if error:
+                    print(f"❌ Ошибка создания профиля: {error}")
+                    await interaction.followup.send(f"✅ Заявка принята, но не удалось создать профиль: {error}", ephemeral=True)
+                else:
+                    print(f"✅ Создан личный профиль: {channel.name}")
+                    await interaction.followup.send(f"✅ Заявка принята, личный профиль создан: {channel.mention}", ephemeral=True)
+            except Exception as e:
+                print(f"❌ Ошибка при создании профиля: {e}")
+                await interaction.followup.send(f"✅ Заявка принята, но произошла ошибка при создании профиля: {e}", ephemeral=True)
+        else:
+            print(f"✅ Заявка принята (создание профилей отключено в настройках)")
+            await interaction.followup.send("✅ Заявка принята! (создание профилей отключено в настройках)", ephemeral=True)
 
         # Отправляем ЛС пользователю
         try:
@@ -193,8 +202,8 @@ class ApplicationModerationView(discord.ui.View):
             if user:
                 embed = discord.Embed(
                     title="✅ ЗАЯВКА ПРИНЯТА",
-                    description=f"Поздравляем! Ваша заявка в семью принята.\n"
-                                f"Ваш личный профиль создан: {channel.mention if channel else 'в категории PROFILES'}",
+                    description=f"Поздравляем! Ваша заявка в семью принята.\n" +
+                                (f"Ваш личный профиль создан: {channel.mention}" if channel and create_profiles else ""),
                     color=0x00ff00
                 )
                 await user.send(embed=embed)
@@ -217,7 +226,8 @@ class ApplicationModerationView(discord.ui.View):
         if collector:
             collector.increment_accepted_applications()
 
-        await interaction.followup.send("✅ Заявка принята, личный профиль создан", ephemeral=True)
+        if not create_profiles:
+            await interaction.followup.send("✅ Заявка принята", ephemeral=True)
         print(f"✅ Заявка {self.application_id} принята")
 
     async def process_interview(self, interaction: discord.Interaction):

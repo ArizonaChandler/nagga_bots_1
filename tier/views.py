@@ -1,5 +1,6 @@
 """Кнопки для системы TIER"""
 import discord
+import re
 from datetime import datetime
 from tier.base import PermanentView
 from tier.modals import TierApplicationModal
@@ -89,10 +90,9 @@ class TierModerationView(discord.ui.View):
         super().__init__(timeout=None)
         self.application_id = application_id
 
-        # 🔥 ПРОВЕРКА: существует ли заявка в БД?
+        # Проверка: существует ли заявка в БД?
         app = tier_manager.get_application(application_id)
         if not app:
-            # Если заявки нет в БД, отключаем все кнопки
             for child in self.children:
                 child.disabled = True
 
@@ -171,6 +171,7 @@ class TierModerationView(discord.ui.View):
 
         guild = interaction.guild
         member = guild.get_member(int(app['user_id']))
+        nickname = app.get('nickname', member.display_name if member else 'Пользователь')
 
         new_role = None
         role_mention = tier_info['name']
@@ -195,20 +196,98 @@ class TierModerationView(discord.ui.View):
                     await member.add_roles(new_role)
                     role_mention = new_role.mention
 
-        # Отправляем ЛС
+        # ==================== УДАЛЕНИЕ ПРОФИЛЯ (если включено) ====================
+        delete_profile = CONFIG.get('tier_delete_profile', 'false') == 'true'
+
+        if delete_profile and member:
+            try:
+                profile_channel = None
+                
+                # Ищем канал профиля по всему серверу
+                for channel in guild.text_channels:
+                    # Проверяем topic канала (там хранится ID пользователя)
+                    if channel.topic and f"ID: {app['user_id']}" in channel.topic:
+                        profile_channel = channel
+                        break
+                    
+                    # Альтернативная проверка по названию канала
+                    if nickname and nickname.lower() in channel.name.lower():
+                        profile_channel = channel
+                        break
+                
+                if not profile_channel:
+                    print(f"⚠️ Профиль пользователя {member.display_name} не найден на сервере, пропускаем удаление")
+                else:
+                    await profile_channel.delete()
+                    print(f"🗑️ Удалён профиль пользователя {member.display_name} из канала {profile_channel.name} при выдаче Tier")
+                    
+                    # Логируем
+                    log_channel_id = CONFIG.get('tier_log_channel')
+                    if log_channel_id:
+                        log_channel = interaction.client.get_channel(int(log_channel_id))
+                        if log_channel:
+                            embed = discord.Embed(
+                                title="🗑️ ПРОФИЛЬ УДАЛЁН",
+                                description=f"Профиль пользователя {member.mention} удалён при выдаче {tier_info['name']}\nКанал: {profile_channel.mention}",
+                                color=0xffa500,
+                                timestamp=datetime.now()
+                            )
+                            await log_channel.send(embed=embed)
+                            
+            except Exception as e:
+                print(f"❌ Ошибка при удалении профиля: {e}")
+
+        # ==================== СОЗДАНИЕ ПРОФИЛЯ (если включено) ====================
+        create_profile = CONFIG.get('tier_create_profile', 'false') == 'true'
+        profile_channel = None
+
+        if create_profile and member:
+            try:
+                profile_channel, error = await tier_manager.create_tier_profile(
+                    guild,
+                    member,
+                    target_tier,
+                    nickname
+                )
+                
+                if error:
+                    print(f"❌ Ошибка создания Tier профиля: {error}")
+                    await interaction.followup.send(f"⚠️ Tier выдан, но не удалось создать профиль: {error}", ephemeral=True)
+                else:
+                    print(f"✅ Создан Tier профиль: {profile_channel.name}")
+                    await interaction.followup.send(f"✅ Tier выдан, создан профиль: {profile_channel.mention}", ephemeral=True)
+                    
+                    # Логируем
+                    log_channel_id = CONFIG.get('tier_log_channel')
+                    if log_channel_id:
+                        log_channel = interaction.client.get_channel(int(log_channel_id))
+                        if log_channel:
+                            embed = discord.Embed(
+                                title="📁 TIER ПРОФИЛЬ СОЗДАН",
+                                description=f"Создан профиль для {member.mention}\nКанал: {profile_channel.mention}",
+                                color=0x00ff00,
+                                timestamp=datetime.now()
+                            )
+                            await log_channel.send(embed=embed)
+            except Exception as e:
+                print(f"❌ Ошибка при создании Tier профиля: {e}")
+                await interaction.followup.send(f"⚠️ Tier выдан, но произошла ошибка при создании профиля: {e}", ephemeral=True)
+
+        # ==================== ОТПРАВКА ЛС ====================
         try:
             user = await interaction.client.fetch_user(int(app['user_id']))
             if user:
                 embed = discord.Embed(
                     title=f"{tier_info['emoji']} ПОЗДРАВЛЯЕМ!",
-                    description=f"Ваша заявка на **{tier_info['name']}** одобрена!",
+                    description=f"Ваша заявка на **{tier_info['name']}** одобрена!\n" +
+                               (f"Ваш Tier профиль создан: {profile_channel.mention}" if create_profile and profile_channel else ""),
                     color=0x00ff00
                 )
                 await user.send(embed=embed)
         except:
             pass
 
-        # Логируем — упоминание модератора в content
+        # ==================== ЛОГИРОВАНИЕ ====================
         log_channel_id = CONFIG.get('tier_log_channel')
         if log_channel_id:
             log_channel = interaction.client.get_channel(int(log_channel_id))
@@ -219,17 +298,21 @@ class TierModerationView(discord.ui.View):
                     color=0x00ff00,
                     timestamp=datetime.now()
                 )
-                # ✅ Упоминание модератора в content
-                await log_channel.send(content=interaction.user.mention, embed=embed)
+                embed.add_field(name="👤 Модератор", value=interaction.user.mention)
+                if create_profile and profile_channel:
+                    embed.add_field(name="📁 Профиль", value=profile_channel.mention)
+                await log_channel.send(embed=embed)
 
         # Обновляем сообщение
         embed = interaction.message.embeds[0]
         embed.color = 0x00ff00
-        embed.add_field(name="✅ Статус", value=f"Одобрена модератором {interaction.user.mention}", inline=False)
+        embed.add_field(name="✅ Статус", value=f"Одобрена модератором {interaction.user.mention} на {tier_info['name']}", inline=False)
         await interaction.message.edit(embed=embed, view=self)
 
         tier_manager.delete_application_message(self.application_id)
-        await interaction.followup.send(f"✅ Заявка одобрена, выдана роль {role_mention}", ephemeral=True)
+        
+        if not create_profile or not profile_channel:
+            await interaction.followup.send(f"✅ Заявка одобрена, выдана роль {role_mention}", ephemeral=True)
 
 
 class TierRejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКАЗА"):
@@ -287,9 +370,9 @@ class TierRejectReasonModal(discord.ui.Modal, title="❌ ПРИЧИНА ОТКА
                     color=0xff0000,
                     timestamp=datetime.now()
                 )
+                embed.add_field(name="👤 Модератор", value=interaction.user.mention)
                 embed.add_field(name="📝 Причина", value=self.reason.value)
-                # ✅ Упоминание модератора в content
-                await log_channel.send(content=interaction.user.mention, embed=embed)
+                await log_channel.send(embed=embed)
         
         # Обновляем сообщение
         message = interaction.message

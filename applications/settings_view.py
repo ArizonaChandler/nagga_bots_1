@@ -1,348 +1,64 @@
-"""Панель управления и модерации заявок"""
+"""Панель настроек системы заявок"""
 import discord
-from datetime import datetime
-from core.database import db
-from core.utils import format_mention, is_admin
 from core.admin_views import AdminOnlyView
+from core.database import db
+from core.config import CONFIG, save_config
+from core.utils import is_admin
 from applications.base import PermanentView
 from applications.manager import app_manager
 
 
-class SetSubmitChannelModal(discord.ui.Modal, title="📝 КАНАЛ ПОДАЧИ ЗАЯВОК"):
-    channel_id = discord.ui.TextInput(label="ID канала", placeholder="123456789012345678", max_length=20, required=True)
-    async def on_submit(self, interaction: discord.Interaction):
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
-            return
-        channel = interaction.guild.get_channel(int(self.channel_id.value))
-        if not channel:
-            await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
-            return
-        app_manager.save_setting('submit_channel', self.channel_id.value, str(interaction.user.id))
-        await interaction.response.send_message(f"✅ Канал подачи заявок настроен: {channel.mention}", ephemeral=True)
+class ApplicationsSettingsView(AdminOnlyView):
+    """Панель настроек системы заявок"""
 
-
-class SetApplicationsChannelModal(discord.ui.Modal, title="📋 КАНАЛ АНКЕТ"):
-    channel_id = discord.ui.TextInput(label="ID канала", placeholder="123456789012345678", max_length=20, required=True)
-    async def on_submit(self, interaction: discord.Interaction):
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
-            return
-        channel = interaction.guild.get_channel(int(self.channel_id.value))
-        if not channel:
-            await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
-            return
-        app_manager.save_setting('applications_channel', self.channel_id.value, str(interaction.user.id))
-        await interaction.response.send_message(f"✅ Канал анкет настроен: {channel.mention}", ephemeral=True)
-
-
-class SetLogChannelModal(discord.ui.Modal, title="📜 КАНАЛ ЛОГОВ"):
-    channel_id = discord.ui.TextInput(label="ID канала", placeholder="123456789012345678", max_length=20, required=True)
-    async def on_submit(self, interaction: discord.Interaction):
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
-            return
-        channel = interaction.guild.get_channel(int(self.channel_id.value))
-        if not channel:
-            await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
-            return
-        app_manager.save_setting('applications_log_channel', self.channel_id.value, str(interaction.user.id))
-        await interaction.response.send_message(f"✅ Канал логов настроен: {channel.mention}", ephemeral=True)
-
-
-class SetRecruitRoleModal(discord.ui.Modal, title="👥 РОЛЬ РЕКРУТА"):
-    role_id = discord.ui.TextInput(label="ID роли", placeholder="123456789012345678", max_length=20, required=True)
-    async def on_submit(self, interaction: discord.Interaction):
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
-            return
-        role = interaction.guild.get_role(int(self.role_id.value))
-        if not role:
-            await interaction.response.send_message("❌ Роль не найдена", ephemeral=True)
-            return
-        app_manager.save_setting('applications_recruit_role', self.role_id.value, str(interaction.user.id))
-        await interaction.response.send_message(f"✅ Роль рекрута настроена: {role.mention}", ephemeral=True)
-
-
-class SetSubmitTextModal(discord.ui.Modal, title="📝 ТЕКСТ НАД КНОПКОЙ"):
-    text = discord.ui.TextInput(label="Текст", placeholder="Нажмите кнопку ниже, чтобы подать заявку", style=discord.TextStyle.paragraph, max_length=500, required=True)
-    async def on_submit(self, interaction: discord.Interaction):
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
-            return
-        app_manager.save_setting('submit_text', self.text.value, str(interaction.user.id))
-        from applications.initializer import update_submit_channel
-        await update_submit_channel(interaction.client)
-        await interaction.response.send_message("✅ Текст над кнопкой обновлён!", ephemeral=True)
-
-
-class SetSubmitImageModal(discord.ui.Modal, title="🖼️ КАРТИНКА ДЛЯ ЭМБЕДА"):
-    image_url = discord.ui.TextInput(label="URL картинки", placeholder="https://example.com/image.png", max_length=500, required=False)
-    async def on_submit(self, interaction: discord.Interaction):
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
-            return
-        app_manager.save_setting('submit_image', self.image_url.value or "", str(interaction.user.id))
-        from applications.initializer import update_submit_channel
-        await update_submit_channel(interaction.client)
-        await interaction.response.send_message(f"✅ Картинка {'установлена' if self.image_url.value else 'удалена'}", ephemeral=True)
-
-
-class SetWelcomeMessageModal(discord.ui.Modal, title="👋 ПРИВЕТСТВИЕ НОВЫМ"):
-    message = discord.ui.TextInput(label="Текст", placeholder="Добро пожаловать! Подайте заявку в канале {channel}", style=discord.TextStyle.paragraph, max_length=1000, required=True)
-    image_url = discord.ui.TextInput(label="URL картинки (опционально)", placeholder="https://example.com/image.png", max_length=500, required=False)
-    async def on_submit(self, interaction: discord.Interaction):
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
-            return
-        app_manager.save_setting('welcome_message', self.message.value, str(interaction.user.id))
-        app_manager.save_setting('welcome_image', self.image_url.value or "", str(interaction.user.id))
-        await interaction.response.send_message("✅ Приветствие настроено!", ephemeral=True)
-
-
-class ResetUserModal(discord.ui.Modal, title="🔄 СБРОС ПОЛЬЗОВАТЕЛЯ"):
-    user_id = discord.ui.TextInput(label="ID пользователя", placeholder="123456789012345678", max_length=20, required=True)
-    confirm = discord.ui.TextInput(label="Подтверждение (введите 'СБРОС')", placeholder="СБРОС", max_length=10, required=True)
-    async def on_submit(self, interaction: discord.Interaction):
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
-            return
-        if self.confirm.value != "СБРОС":
-            await interaction.response.send_message("❌ Неверное подтверждение", ephemeral=True)
-            return
-        await interaction.response.defer(ephemeral=True)
-        success, msg = app_manager.reset_user_applications(self.user_id.value, str(interaction.user.id))
-        await interaction.followup.send(msg, ephemeral=True)
-
-
-class AddRewardRoleModal(discord.ui.Modal, title="➕ ДОБАВИТЬ РОЛЬ"):
-    role_id = discord.ui.TextInput(label="ID роли", placeholder="123456789012345678", max_length=20, required=True)
-    async def on_submit(self, interaction: discord.Interaction):
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
-            return
-        role = interaction.guild.get_role(int(self.role_id.value))
-        if not role:
-            await interaction.response.send_message("❌ Роль не найдена", ephemeral=True)
-            return
-        db.add_reward_role(self.role_id.value, str(interaction.user.id))
-        await interaction.response.send_message(f"✅ Роль {role.mention} добавлена в список выдачи", ephemeral=True)
-
-
-class RemoveRewardRoleModal(discord.ui.Modal, title="➖ УДАЛИТЬ РОЛЬ"):
-    role_id = discord.ui.TextInput(label="ID роли", placeholder="123456789012345678", max_length=20, required=True)
-    async def on_submit(self, interaction: discord.Interaction):
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
-            return
-        db.remove_reward_role(self.role_id.value)
-        await interaction.response.send_message(f"✅ Роль ID {self.role_id.value} удалена", ephemeral=True)
-
-
-class AddFieldModal(discord.ui.Modal, title="➕ ДОБАВИТЬ ПОЛЕ"):
-    field_name = discord.ui.TextInput(label="Название поля", placeholder="например: arena_link", max_length=50, required=True)
-    field_description = discord.ui.TextInput(label="Описание (макс. 45 символов)", placeholder="Ссылка на откат с арены", max_length=45, required=True)
-    placeholder = discord.ui.TextInput(label="Placeholder (макс. 100 символов)", placeholder="https://...", max_length=100, required=False)
-    required = discord.ui.TextInput(label="Обязательное (да/нет)", placeholder="да", max_length=3, required=True)
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
-            return
-        
-        req = self.required.value.lower() == 'да'
-        
-        if len(self.field_description.value) > 45:
-            await interaction.response.send_message("❌ Описание не может быть длиннее 45 символов!", ephemeral=True)
-            return
-        
-        if self.placeholder.value and len(self.placeholder.value) > 100:
-            await interaction.response.send_message("❌ Placeholder не может быть длиннее 100 символов!", ephemeral=True)
-            return
-        
-        fields = db.get_application_fields()
-        if len(fields) >= 5:
-            await interaction.response.send_message("❌ Нельзя добавить больше 5 полей! Discord не поддерживает модальные окна с более чем 5 полями.", ephemeral=True)
-            return
-        
-        order = len(fields) + 1
-        db.add_application_field(self.field_name.value, self.field_description.value, self.placeholder.value or "", req, order, str(interaction.user.id))
-        
-        embed = discord.Embed(
-            title="📝 **УПРАВЛЕНИЕ ПОЛЯМИ ЗАЯВКИ**",
-            description="Добавление, удаление и просмотр полей формы подачи заявки",
-            color=0x00ff00
-        )
-        await interaction.response.edit_message(embed=embed, view=ApplicationFieldsView())
-
-
-class RemoveFieldModal(discord.ui.Modal, title="➖ УДАЛИТЬ ПОЛЕ"):
-    field_id = discord.ui.TextInput(label="ID поля", placeholder="1", max_length=5, required=True)
-    async def on_submit(self, interaction: discord.Interaction):
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
-            return
-        db.remove_application_field(int(self.field_id.value), str(interaction.user.id))
-        embed = discord.Embed(
-            title="📝 **УПРАВЛЕНИЕ ПОЛЯМИ ЗАЯВКИ**",
-            description="Добавление, удаление и просмотр полей формы подачи заявки",
-            color=0x00ff00
-        )
-        await interaction.response.edit_message(embed=embed, view=ApplicationFieldsView())
-
-
-class EditFieldModal(discord.ui.Modal, title="✏️ РЕДАКТИРОВАТЬ ПОЛЕ"):
-    def __init__(self, field_id: int, current_name: str, current_description: str, current_placeholder: str, current_required: bool):
-        super().__init__()
-        self.field_id = field_id
-        
-        self.field_name = discord.ui.TextInput(label="Название поля", default=current_name, max_length=50, required=True)
-        self.add_item(self.field_name)
-        
-        self.field_description = discord.ui.TextInput(label="Описание (макс. 45 символов)", default=current_description, max_length=45, required=True)
-        self.add_item(self.field_description)
-        
-        self.placeholder = discord.ui.TextInput(label="Placeholder (макс. 100 символов)", default=current_placeholder, max_length=100, required=False)
-        self.add_item(self.placeholder)
-        
-        self.required = discord.ui.TextInput(label="Обязательное (да/нет)", default="да" if current_required else "нет", max_length=3, required=True)
-        self.add_item(self.required)
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
-            return
-        
-        try:
-            req = self.required.value.lower() == 'да'
-            
-            if len(self.field_description.value) > 45:
-                await interaction.response.send_message("❌ Описание не может быть длиннее 45 символов!", ephemeral=True)
-                return
-            
-            if self.placeholder.value and len(self.placeholder.value) > 100:
-                await interaction.response.send_message("❌ Placeholder не может быть длиннее 100 символов!", ephemeral=True)
-                return
-            
-            db.update_application_field(self.field_id, self.field_name.value, self.field_description.value, self.placeholder.value or "", req)
-            
-            embed = discord.Embed(
-                title="📝 **УПРАВЛЕНИЕ ПОЛЯМИ ЗАЯВКИ**",
-                description="Добавление, удаление и просмотр полей формы подачи заявки",
-                color=0x00ff00
-            )
-            await interaction.response.edit_message(embed=embed, view=ApplicationFieldsView())
-            
-        except Exception as e:
-            print(f"❌ Ошибка редактирования поля: {e}")
-            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
-
-
-class ApplicationFieldsView(AdminOnlyView):
-    def __init__(self):
-        super().__init__()
-        self._add_buttons()
-
-    def _add_buttons(self):
-        self.clear_items()
-        add_btn = discord.ui.Button(label="➕ Добавить поле", style=discord.ButtonStyle.success, row=0, custom_id="add_field")
-        add_btn.callback = self.add_field
-        self.add_item(add_btn)
-        remove_btn = discord.ui.Button(label="➖ Удалить поле", style=discord.ButtonStyle.danger, row=0, custom_id="remove_field")
-        remove_btn.callback = self.remove_field
-        self.add_item(remove_btn)
-        list_btn = discord.ui.Button(label="📋 Список полей", style=discord.ButtonStyle.secondary, row=0, custom_id="list_fields")
-        list_btn.callback = self.list_fields
-        self.add_item(list_btn)
-        edit_btn = discord.ui.Button(label="✏️ Редактировать", style=discord.ButtonStyle.secondary, row=1, custom_id="edit_field")
-        edit_btn.callback = self.edit_field
-        self.add_item(edit_btn)
-        back_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary, row=1, custom_id="back_fields")
-        back_btn.callback = self.back
-        self.add_item(back_btn)
-
-    async def add_field(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(AddFieldModal())
-
-    async def remove_field(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(RemoveFieldModal())
-
-    async def list_fields(self, interaction: discord.Interaction):
-        fields = db.get_application_fields()
-        if not fields:
-            await interaction.response.send_message("📭 Нет дополнительных полей", ephemeral=True)
-            return
-        text = ""
-        for f in fields:
-            req = "✅" if f['required'] else "❌"
-            text += f"`{f['id']}` {req} **{f['name']}** — {f['description']}\n"
-        embed = discord.Embed(title="📋 Поля заявки", description=text, color=0x00ff00)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    async def edit_field(self, interaction: discord.Interaction):
-        fields = db.get_application_fields()
-        if not fields:
-            await interaction.response.send_message("📭 Нет полей для редактирования", ephemeral=True)
-            return
-        
-        options = []
-        for f in fields:
-            options.append(discord.SelectOption(label=f"{f['name']}", description=f"{f['description'][:50]}", value=str(f['id'])))
-        
-        select = discord.ui.Select(placeholder="Выберите поле для редактирования", options=options)
-        
-        async def select_callback(select_interaction: discord.Interaction):
-            field_id = int(select.values[0])
-            field = next((f for f in fields if f['id'] == field_id), None)
-            if field:
-                modal = EditFieldModal(field_id, field['name'], field['description'], field['placeholder'], field['required'])
-                await select_interaction.response.send_modal(modal)
-        
-        select.callback = select_callback
-        
-        view = discord.ui.View()
-        view.add_item(select)
-        await interaction.response.send_message("Выберите поле для редактирования:", view=view, ephemeral=True)
-
-    async def back(self, interaction: discord.Interaction):
-        embed = discord.Embed(
-            title="📋 **УПРАВЛЕНИЕ И МОДЕРАЦИЯ ЗАЯВОК**",
-            description="Настройка системы и управление заявками",
-            color=0x00ff00
-        )
-        await interaction.response.edit_message(embed=embed, view=ApplicationsCombinedPanel())
-
-
-class ApplicationsCombinedPanel(AdminOnlyView):
     def __init__(self):
         super().__init__()
         self._add_buttons()
         self._add_back_button()
 
     def _add_buttons(self):
-        # Ряд 0: каналы (3 кнопки)
-        self.add_item(discord.ui.Button(label="📝 Канал подачи", style=discord.ButtonStyle.primary, row=0, custom_id="submit_channel"))
-        self.add_item(discord.ui.Button(label="📋 Канал анкет", style=discord.ButtonStyle.primary, row=0, custom_id="apps_channel"))
-        self.add_item(discord.ui.Button(label="📜 Канал логов", style=discord.ButtonStyle.primary, row=0, custom_id="log_channel"))
-
-        # Ряд 1: роли (1 кнопка)
-        self.add_item(discord.ui.Button(label="👥 Роль рекрута", style=discord.ButtonStyle.primary, row=1, custom_id="recruit_role"))
-
-        # Ряд 2: внешний вид (3 кнопки)
-        self.add_item(discord.ui.Button(label="📝 Текст над кнопкой", style=discord.ButtonStyle.secondary, row=2, custom_id="submit_text"))
-        self.add_item(discord.ui.Button(label="🖼️ Картинка эмбеда", style=discord.ButtonStyle.secondary, row=2, custom_id="submit_image"))
-        self.add_item(discord.ui.Button(label="👋 Приветствие", style=discord.ButtonStyle.secondary, row=2, custom_id="welcome"))
-
-        # Ряд 3: выдаваемые роли (3 кнопки)
-        self.add_item(discord.ui.Button(label="➕ Добавить роль", style=discord.ButtonStyle.success, row=3, custom_id="add_role"))
-        self.add_item(discord.ui.Button(label="➖ Удалить роль", style=discord.ButtonStyle.danger, row=3, custom_id="remove_role"))
-        self.add_item(discord.ui.Button(label="📋 Список ролей", style=discord.ButtonStyle.secondary, row=3, custom_id="list_roles"))
-
-        # Ряд 4: модерация и поля (4 кнопки)
-        self.add_item(discord.ui.Button(label="📋 Ожидающие заявки", style=discord.ButtonStyle.success, row=4, custom_id="pending"))
-        self.add_item(discord.ui.Button(label="🔄 Сбросить пользователя", style=discord.ButtonStyle.secondary, row=4, custom_id="reset"))
-        self.add_item(discord.ui.Button(label="📝 Управление полями", style=discord.ButtonStyle.secondary, row=4, custom_id="fields"))
-        self.add_item(discord.ui.Button(label="📊 Текущие настройки", style=discord.ButtonStyle.secondary, row=4, custom_id="settings"))
+        self.clear_items()
+        
+        # Каналы
+        channels_btn = discord.ui.Button(label="📡 Настройка каналов", style=discord.ButtonStyle.primary, emoji="📡", row=0, custom_id="apps_channels")
+        channels_btn.callback = self.channels_menu
+        self.add_item(channels_btn)
+        
+        # Роли
+        roles_btn = discord.ui.Button(label="🎭 Настройка ролей", style=discord.ButtonStyle.primary, emoji="🎭", row=0, custom_id="apps_roles")
+        roles_btn.callback = self.roles_menu
+        self.add_item(roles_btn)
+        
+        # Поля заявки
+        fields_btn = discord.ui.Button(label="📝 Настройка полей", style=discord.ButtonStyle.primary, emoji="📝", row=1, custom_id="apps_fields")
+        fields_btn.callback = self.fields_menu
+        self.add_item(fields_btn)
+        
+        # Текст подачи
+        text_btn = discord.ui.Button(label="📢 Текст кнопки подачи", style=discord.ButtonStyle.secondary, emoji="📢", row=1, custom_id="apps_text")
+        text_btn.callback = self.set_submit_text
+        self.add_item(text_btn)
+        
+        # Приветствие
+        welcome_btn = discord.ui.Button(label="👋 Приветственное сообщение", style=discord.ButtonStyle.secondary, emoji="👋", row=2, custom_id="apps_welcome")
+        welcome_btn.callback = self.set_welcome
+        self.add_item(welcome_btn)
+        
+        # 🔥 НОВАЯ КНОПКА — СОЗДАНИЕ ПРОФИЛЕЙ
+        profile_btn = discord.ui.Button(
+            label="📁 Создание профилей",
+            style=discord.ButtonStyle.secondary,
+            emoji="📁",
+            row=2,
+            custom_id="apps_profile_toggle"
+        )
+        profile_btn.callback = self.toggle_profiles
+        self.add_item(profile_btn)
+        
+        # Статистика
+        stats_btn = discord.ui.Button(label="📊 Статистика заявок", style=discord.ButtonStyle.secondary, emoji="📊", row=3, custom_id="apps_stats")
+        stats_btn.callback = self.show_stats
+        self.add_item(stats_btn)
 
     def _add_back_button(self):
         back_btn = discord.ui.Button(
@@ -366,107 +82,357 @@ class ApplicationsCombinedPanel(AdminOnlyView):
         back_btn.callback = back_callback
         self.add_item(back_btn)
 
-    async def interaction_check(self, interaction: discord.Interaction):
-        # Проверка на админа
+    async def channels_menu(self, interaction: discord.Interaction):
         if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message(
-                "❌ **Доступ запрещён**\nТолько администраторы бота могут управлять настройками.",
-                ephemeral=True
-            )
-            return False
-        
-        # Логируем
-        custom_id = interaction.data.get('custom_id', 'unknown')
-        db.log_action(str(interaction.user.id), "ADMIN_PANEL_CLICK", f"Кнопка: {custom_id}")
-        
-        # Обработка
-        if custom_id == "submit_channel":
-            await interaction.response.send_modal(SetSubmitChannelModal())
-        elif custom_id == "apps_channel":
-            await interaction.response.send_modal(SetApplicationsChannelModal())
-        elif custom_id == "log_channel":
-            await interaction.response.send_modal(SetLogChannelModal())
-        elif custom_id == "recruit_role":
-            await interaction.response.send_modal(SetRecruitRoleModal())
-        elif custom_id == "submit_text":
-            await interaction.response.send_modal(SetSubmitTextModal())
-        elif custom_id == "submit_image":
-            await interaction.response.send_modal(SetSubmitImageModal())
-        elif custom_id == "welcome":
-            await interaction.response.send_modal(SetWelcomeMessageModal())
-        elif custom_id == "add_role":
-            await interaction.response.send_modal(AddRewardRoleModal())
-        elif custom_id == "remove_role":
-            await interaction.response.send_modal(RemoveRewardRoleModal())
-        elif custom_id == "list_roles":
-            await self.list_reward_roles(interaction)
-        elif custom_id == "pending":
-            await self.show_pending(interaction)
-        elif custom_id == "reset":
-            await interaction.response.send_modal(ResetUserModal())
-        elif custom_id == "fields":
-            await self.manage_fields(interaction)
-        elif custom_id == "settings":
-            await self.show_settings(interaction)
-        return True
-
-    async def list_reward_roles(self, interaction: discord.Interaction):
-        role_ids = db.get_reward_roles()
-        if not role_ids:
-            await interaction.response.send_message("📭 Нет настроенных ролей", ephemeral=True)
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
             return
-        guild = interaction.guild
-        text = ""
-        for rid in role_ids:
-            role = guild.get_role(int(rid))
-            text += f"• {role.mention if role else f'ID: {rid} (не найдена)'}\n"
-        embed = discord.Embed(title="📋 Роли для выдачи", description=text, color=0x00ff00)
+        embed = discord.Embed(title="📡 **НАСТРОЙКА КАНАЛОВ ЗАЯВОК**", description="Выберите, какой канал хотите настроить:", color=0x7289da)
+        view = ApplicationsChannelsView()
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    async def roles_menu(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        embed = discord.Embed(title="🎭 **НАСТРОЙКА РОЛЕЙ ЗАЯВОК**", description="Выберите, какую роль хотите настроить:", color=0x7289da)
+        view = ApplicationsRolesView()
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    async def fields_menu(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        embed = discord.Embed(title="📝 **НАСТРОЙКА ПОЛЕЙ ЗАЯВКИ**", color=0x7289da)
+        view = ApplicationsFieldsView()
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    async def set_submit_text(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        await interaction.response.send_modal(SetSubmitTextModal())
+
+    async def set_welcome(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        await interaction.response.send_modal(SetWelcomeMessageModal())
+
+    # 🔥 НОВЫЙ МЕТОД
+    async def toggle_profiles(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        
+        current = CONFIG.get('applications_create_profiles', 'true')
+        new_state = not (current == 'true')
+        
+        db.set_setting('applications_create_profiles', str(new_state).lower(), str(interaction.user.id))
+        CONFIG['applications_create_profiles'] = str(new_state).lower()
+        save_config(str(interaction.user.id))
+        
+        status = "включено ✅" if new_state else "выключено ❌"
+        await interaction.response.send_message(f"📁 Создание профилей при принятии заявок: {status}", ephemeral=True)
+        await interaction.message.edit(view=self)
+
+    async def show_stats(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        
+        total = len(db.get_all_applications())
+        pending = len(db.get_pending_applications())
+        accepted = len(db.get_accepted_applications())
+        rejected = len(db.get_rejected_applications())
+        
+        embed = discord.Embed(title="📊 СТАТИСТИКА ЗАЯВОК", color=0x7289da)
+        embed.add_field(name="📝 Всего заявок", value=f"**{total}**", inline=True)
+        embed.add_field(name="⏳ Ожидают", value=f"**{pending}**", inline=True)
+        embed.add_field(name="✅ Принято", value=f"**{accepted}**", inline=True)
+        embed.add_field(name="❌ Отклонено", value=f"**{rejected}**", inline=True)
+        
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    async def show_pending(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        apps = app_manager.get_pending_applications()
-        if not apps:
-            await interaction.followup.send("📭 Нет ожидающих заявок", ephemeral=True)
+
+class ApplicationsChannelsView(AdminOnlyView):
+    def __init__(self):
+        super().__init__(timeout=60)
+        
+        submit_btn = discord.ui.Button(label="📝 Канал подачи заявок", style=discord.ButtonStyle.secondary, row=0, custom_id="apps_submit")
+        submit_btn.callback = self.set_submit_channel
+        self.add_item(submit_btn)
+        
+        mod_btn = discord.ui.Button(label="⚙️ Канал модерации", style=discord.ButtonStyle.secondary, row=0, custom_id="apps_mod")
+        mod_btn.callback = self.set_mod_channel
+        self.add_item(mod_btn)
+        
+        log_btn = discord.ui.Button(label="📜 Канал логов", style=discord.ButtonStyle.secondary, row=1, custom_id="apps_log")
+        log_btn.callback = self.set_log_channel
+        self.add_item(log_btn)
+        
+        settings_btn = discord.ui.Button(label="⚙️ Канал настроек", style=discord.ButtonStyle.secondary, row=1, custom_id="apps_settings")
+        settings_btn.callback = self.set_settings_channel
+        self.add_item(settings_btn)
+        
+        back_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary, row=2, custom_id="apps_back")
+        back_btn.callback = self.back
+        self.add_item(back_btn)
+    
+    async def set_submit_channel(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(SetChannelModal("submit_channel", "канал подачи заявок"))
+    
+    async def set_mod_channel(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(SetChannelModal("applications_channel", "канал модерации заявок"))
+    
+    async def set_log_channel(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(SetChannelModal("applications_log_channel", "канал логов заявок"))
+    
+    async def set_settings_channel(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(SetChannelModal("applications_settings_channel", "канал настроек заявок"))
+    
+    async def back(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="⚙️ **НАСТРОЙКИ ЗАЯВОК**", description="Настройка системы заявок в семью", color=0x00ff00)
+        await interaction.response.edit_message(embed=embed, view=ApplicationsSettingsView())
+
+
+class ApplicationsRolesView(AdminOnlyView):
+    def __init__(self):
+        super().__init__(timeout=60)
+        
+        recruit_btn = discord.ui.Button(label="🎭 Роль рекрута", style=discord.ButtonStyle.secondary, row=0, custom_id="apps_recruit")
+        recruit_btn.callback = self.set_recruit_role
+        self.add_item(recruit_btn)
+        
+        member_btn = discord.ui.Button(label="🎭 Роль участника", style=discord.ButtonStyle.secondary, row=0, custom_id="apps_member")
+        member_btn.callback = self.set_member_role
+        self.add_item(member_btn)
+        
+        back_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary, row=1, custom_id="apps_back")
+        back_btn.callback = self.back
+        self.add_item(back_btn)
+    
+    async def set_recruit_role(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(SetRoleModal("applications_recruit_role", "роль рекрута"))
+    
+    async def set_member_role(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(SetRoleModal("applications_member_role", "роль участника"))
+    
+    async def back(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="⚙️ **НАСТРОЙКИ ЗАЯВОК**", description="Настройка системы заявок в семью", color=0x00ff00)
+        await interaction.response.edit_message(embed=embed, view=ApplicationsSettingsView())
+
+
+class ApplicationsFieldsView(AdminOnlyView):
+    def __init__(self):
+        super().__init__(timeout=60)
+        
+        add_btn = discord.ui.Button(label="➕ Добавить поле", style=discord.ButtonStyle.success, row=0, custom_id="apps_add_field")
+        add_btn.callback = self.add_field
+        self.add_item(add_btn)
+        
+        remove_btn = discord.ui.Button(label="🗑️ Удалить поле", style=discord.ButtonStyle.danger, row=0, custom_id="apps_remove_field")
+        remove_btn.callback = self.remove_field
+        self.add_item(remove_btn)
+        
+        list_btn = discord.ui.Button(label="📋 Список полей", style=discord.ButtonStyle.secondary, row=1, custom_id="apps_list_fields")
+        list_btn.callback = self.list_fields
+        self.add_item(list_btn)
+        
+        back_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary, row=1, custom_id="apps_back")
+        back_btn.callback = self.back
+        self.add_item(back_btn)
+    
+    async def add_field(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(AddFieldModal())
+    
+    async def remove_field(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(RemoveFieldModal())
+    
+    async def list_fields(self, interaction: discord.Interaction):
+        fields = db.get_application_fields()
+        
+        if not fields:
+            await interaction.response.send_message("📋 Список полей пуст", ephemeral=True)
             return
-        embed = discord.Embed(title="📋 ОЖИДАЮЩИЕ ЗАЯВКИ", color=0xffa500, timestamp=datetime.now())
-        for app in apps[:10]:
+        
+        embed = discord.Embed(title="📋 ПОЛЯ ЗАЯВКИ", color=0x7289da)
+        for field in fields:
             embed.add_field(
-                name=f"ID: {app['id']} - {app.get('nickname', 'Неизвестно')}",
-                value=f"👤 <@{app['user_id']}>\n⏰ {app['created_at'][:16]}",
+                name=f"{field['name']}",
+                value=f"Описание: {field['description']}\nОбязательное: {'✅' if field['required'] else '❌'}",
                 inline=False
             )
-        if len(apps) > 10:
-            embed.set_footer(text=f"Показано 10 из {len(apps)} заявок")
-        await interaction.followup.send(embed=embed, ephemeral=True)
-
-    async def manage_fields(self, interaction: discord.Interaction):
-        embed = discord.Embed(
-            title="📝 **УПРАВЛЕНИЕ ПОЛЯМИ ЗАЯВКИ**",
-            description="Добавление, удаление и просмотр полей формы подачи заявки",
-            color=0x00ff00
-        )
-        await interaction.response.edit_message(embed=embed, view=ApplicationFieldsView())
-
-    async def show_settings(self, interaction: discord.Interaction):
-        embed = discord.Embed(title="📊 ТЕКУЩИЕ НАСТРОЙКИ", color=0x00ff00)
-        guild = interaction.guild
-        settings = app_manager.get_settings()
-        submit_channel = format_mention(guild, settings.get('submit_channel'), 'channel') if settings.get('submit_channel') else "`Не настроен`"
-        applications_channel = format_mention(guild, settings.get('applications_channel'), 'channel') if settings.get('applications_channel') else "`Не настроен`"
-        log_channel = format_mention(guild, settings.get('applications_log_channel'), 'channel') if settings.get('applications_log_channel') else "`Не настроен`"
-        recruit_role = format_mention(guild, settings.get('applications_recruit_role'), 'role') if settings.get('applications_recruit_role') else "`Не настроена`"
-        embed.add_field(name="📝 Канал подачи", value=submit_channel, inline=False)
-        embed.add_field(name="📋 Канал анкет", value=applications_channel, inline=False)
-        embed.add_field(name="📜 Канал логов", value=log_channel, inline=False)
-        embed.add_field(name="👥 Роль рекрута", value=recruit_role, inline=False)
-        role_ids = db.get_reward_roles()
-        if role_ids:
-            roles_text = ""
-            for rid in role_ids:
-                role = guild.get_role(int(rid))
-                roles_text += f"• {role.mention if role else f'ID: {rid} (не найдена)'}\n"
-            embed.add_field(name="🎭 Выдаваемые роли", value=roles_text, inline=False)
-        else:
-            embed.add_field(name="🎭 Выдаваемые роли", value="`Не настроены`", inline=False)
+        
         await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    async def back(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="⚙️ **НАСТРОЙКИ ЗАЯВОК**", description="Настройка системы заявок в семью", color=0x00ff00)
+        await interaction.response.edit_message(embed=embed, view=ApplicationsSettingsView())
+
+
+class SetChannelModal(discord.ui.Modal, title="📡 НАСТРОЙКА КАНАЛА"):
+    def __init__(self, setting_key: str, description: str):
+        super().__init__()
+        self.setting_key = setting_key
+        self.channel_id = discord.ui.TextInput(label=f"ID {description}", placeholder="123456789012345678", max_length=20, required=True)
+        self.add_item(self.channel_id)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        try:
+            channel = interaction.guild.get_channel(int(self.channel_id.value))
+            if not channel:
+                await interaction.response.send_message("❌ Канал не найден", ephemeral=True)
+                return
+            db.set_setting(self.setting_key, self.channel_id.value, str(interaction.user.id))
+            CONFIG[self.setting_key] = self.channel_id.value
+            save_config(str(interaction.user.id))
+            
+            # Обновляем панель в канале настроек
+            settings_channel_id = CONFIG.get('applications_settings_channel')
+            if settings_channel_id:
+                settings_channel = interaction.guild.get_channel(int(settings_channel_id))
+                if settings_channel:
+                    async for msg in settings_channel.history(limit=10):
+                        if msg.author == interaction.client.user and msg.embeds:
+                            embed = discord.Embed(
+                                title="⚙️ **НАСТРОЙКИ ЗАЯВОК**",
+                                description="Настройка системы заявок в семью",
+                                color=0x00ff00
+                            )
+                            await msg.edit(embed=embed, view=ApplicationsSettingsView())
+                            break
+            
+            await interaction.response.send_message(f"✅ {self.channel_id.label} настроен: {channel.mention}", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
+
+class SetRoleModal(discord.ui.Modal, title="🎭 НАСТРОЙКА РОЛИ"):
+    def __init__(self, setting_key: str, description: str):
+        super().__init__()
+        self.setting_key = setting_key
+        self.role_id = discord.ui.TextInput(label=f"ID {description}", placeholder="123456789012345678", max_length=20, required=True)
+        self.add_item(self.role_id)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        try:
+            role = interaction.guild.get_role(int(self.role_id.value))
+            if not role:
+                await interaction.response.send_message("❌ Роль не найдена", ephemeral=True)
+                return
+            db.set_setting(self.setting_key, self.role_id.value, str(interaction.user.id))
+            CONFIG[self.setting_key] = self.role_id.value
+            save_config(str(interaction.user.id))
+            await interaction.response.send_message(f"✅ {self.role_id.label} настроена: {role.mention}", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
+
+class AddFieldModal(discord.ui.Modal, title="➕ ДОБАВИТЬ ПОЛЕ"):
+    field_name = discord.ui.TextInput(label="Название поля", placeholder="nickname", max_length=50, required=True)
+    field_description = discord.ui.TextInput(label="Описание", placeholder="Игровой ник", max_length=200, required=True)
+    placeholder = discord.ui.TextInput(label="Placeholder", placeholder="Ваш ник в игре", max_length=100, required=False)
+    required = discord.ui.TextInput(label="Обязательное (да/нет)", placeholder="да", max_length=3, required=False)
+    order = discord.ui.TextInput(label="Порядок", placeholder="1", max_length=3, required=False)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        
+        required_bool = self.required.value.lower() in ['да', 'yes', 'true', '1']
+        order_int = int(self.order.value) if self.order.value else 999
+        
+        db.add_application_field(
+            self.field_name.value,
+            self.field_description.value,
+            self.placeholder.value or "",
+            required_bool,
+            order_int,
+            str(interaction.user.id)
+        )
+        
+        await interaction.response.send_message(f"✅ Поле {self.field_name.value} добавлено!", ephemeral=True)
+
+
+class RemoveFieldModal(discord.ui.Modal, title="🗑️ УДАЛИТЬ ПОЛЕ"):
+    field_id = discord.ui.TextInput(label="ID поля", placeholder="1", max_length=10, required=True)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        
+        field_id = int(self.field_id.value)
+        db.remove_application_field(field_id, str(interaction.user.id))
+        
+        await interaction.response.send_message(f"✅ Поле ID {field_id} удалено!", ephemeral=True)
+
+
+class SetSubmitTextModal(discord.ui.Modal, title="📢 ТЕКСТ КНОПКИ ПОДАЧИ"):
+    text = discord.ui.TextInput(
+        label="Текст",
+        placeholder="Нажмите кнопку ниже, чтобы подать заявку",
+        style=discord.TextStyle.paragraph,
+        max_length=500,
+        required=True
+    )
+    image = discord.ui.TextInput(
+        label="Ссылка на изображение (опционально)",
+        placeholder="https://...",
+        required=False
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        
+        db.set_setting('submit_text', self.text.value, str(interaction.user.id))
+        CONFIG['submit_text'] = self.text.value
+        
+        if self.image.value:
+            db.set_setting('submit_image', self.image.value, str(interaction.user.id))
+            CONFIG['submit_image'] = self.image.value
+        
+        save_config(str(interaction.user.id))
+        
+        await interaction.response.send_message("✅ Текст кнопки подачи обновлён!", ephemeral=True)
+
+
+class SetWelcomeMessageModal(discord.ui.Modal, title="👋 ПРИВЕТСТВЕННОЕ СООБЩЕНИЕ"):
+    message = discord.ui.TextInput(
+        label="Текст приветствия",
+        placeholder="Добро пожаловать в семью!",
+        style=discord.TextStyle.paragraph,
+        max_length=500,
+        required=True
+    )
+    channel = discord.ui.TextInput(label="ID канала для приветствия", placeholder="123456789012345678", required=False)
+    image = discord.ui.TextInput(label="Ссылка на изображение", placeholder="https://...", required=False)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        
+        db.set_setting('welcome_message', self.message.value, str(interaction.user.id))
+        CONFIG['welcome_message'] = self.message.value
+        
+        if self.channel.value:
+            db.set_setting('welcome_channel', self.channel.value, str(interaction.user.id))
+            CONFIG['welcome_channel'] = self.channel.value
+        
+        if self.image.value:
+            db.set_setting('welcome_image', self.image.value, str(interaction.user.id))
+            CONFIG['welcome_image'] = self.image.value
+        
+        save_config(str(interaction.user.id))
+        
+        await interaction.response.send_message("✅ Приветственное сообщение сохранено!", ephemeral=True)

@@ -19,6 +19,8 @@ import os
 from core.database import db
 from core.config import CONFIG, load_config
 from core.utils import format_mention, is_admin
+from tier.manager import tier_manager
+from vacation.manager import vacation_manager
 
 # ========== КОМАНДЫ ==========
 from commands.info import setup as setup_info
@@ -29,9 +31,6 @@ from commands.log import setup as setup_log
 from files.core import file_manager
 from events.scheduler import setup as setup_scheduler
 from core.module_manager import setup as setup_modules
-
-# ========== СТАТИСТИКА ==========
-from server_stats.global_collector import set_collector, get_collector
 
 # ========== НАСТРОЙКА ==========
 load_dotenv()
@@ -78,22 +77,6 @@ async def on_ready():
         print(f"❌ Ошибка инициализации модулей: {e}")
         traceback.print_exc()
 
-    # Инициализация сборщика статистики
-    try:
-        print("📊 Инициализация сборщика статистики...")
-        from server_stats.initializer import setup as setup_stats_panel
-        await setup_stats_panel(bot)
-        
-        set_collector(bot)
-        collector = get_collector()
-        if collector:
-            await collector.start()
-        else:
-            print("❌ collector не инициализирован")
-    except Exception as e:
-        print(f"❌ Ошибка инициализации статистики: {e}")
-        traceback.print_exc()
-
     # Создаём единую панель настроек (если канал настроен)
     try:
         from core.module_manager import module_manager
@@ -119,11 +102,6 @@ async def on_command_error(ctx, error):
 
 @bot.event
 async def on_member_join(member):
-    # В систему статистики
-    collector = get_collector()
-    if collector:
-        collector.increment_new_members()
-
     try:
         from applications.manager import app_manager
         
@@ -173,12 +151,6 @@ async def on_member_join(member):
 
 @bot.event
 async def on_member_remove(member):
-    print(f"🔴 {member.name} (ID: {member.id}) покинул сервер")
-
-    collector = get_collector()
-    if collector:
-        collector.increment_left_members()
-
     try:
         # Закрытие заявок
         application_id = db.get_active_application_id(str(member.id))
@@ -234,158 +206,6 @@ async def on_member_remove(member):
         print(f"❌ Ошибка: {e}")
         traceback.print_exc()
 
-
-@bot.command(name="fix_tier_message")
-@commands.has_permissions(administrator=True)
-async def fix_tier_message(ctx, application_id: int):
-    """Восстановить испорченное сообщение заявки"""
-    app = tier_manager.get_application(application_id)
-    if not app:
-        await ctx.send("❌ Заявка не найдена")
-        return
-    
-    from tier.views import TierModerationView
-    
-    embed = discord.Embed(
-        title="🌟 НОВАЯ ЗАЯВКА НА TIER",
-        color=0xffa500,
-        timestamp=datetime.now()
-    )
-    embed.add_field(name="👤 Отправитель", value=f"<@{app['user_id']}>", inline=True)
-    embed.add_field(name="🎮 Игровой ник", value=app['nickname'], inline=True)
-    embed.add_field(name="🏆 Откат с арены", value=app['arena_link'], inline=False)
-    embed.add_field(name="📸 Скриншоты", value=app['screenshots'][:200], inline=False)
-    embed.add_field(name="📝 Дополнительно", value=app.get('additional', 'Нет'), inline=False)
-    embed.set_footer(text=f"Заявка ID: {application_id}")
-    
-    settings = tier_manager.get_settings()
-    channel_id = settings.get('tier_applications_channel')
-    channel = ctx.guild.get_channel(int(channel_id))
-    
-    if channel:
-        await channel.send(embed=embed, view=TierModerationView(application_id))
-        await ctx.send(f"✅ Заявка {application_id} восстановлена")
-
-@bot.tree.command(name="fix_tier_app", description="Восстановить испорченную заявку TIER")
-@commands.has_permissions(administrator=True)
-async def fix_tier_app(interaction: discord.Interaction, application_id: int):
-    """Восстановить испорченную заявку"""
-    
-    app = tier_manager.get_application(application_id)
-    if not app:
-        await interaction.response.send_message(f"❌ Заявка {application_id} не найдена", ephemeral=True)
-        return
-    
-    from tier.views import TierModerationView
-    from datetime import datetime
-    
-    # Создаём новый embed
-    embed = discord.Embed(
-        title="🌟 НОВАЯ ЗАЯВКА НА TIER",
-        color=0xffa500,
-        timestamp=datetime.now()
-    )
-    embed.add_field(name="👤 Отправитель", value=f"<@{app['user_id']}>", inline=True)
-    embed.add_field(name="🎮 Игровой ник", value=app['nickname'], inline=True)
-    embed.add_field(name="🏆 Откат с арены", value=app['arena_link'], inline=False)
-    embed.add_field(name="📸 Скриншоты", value=app['screenshots'][:200], inline=False)
-    embed.add_field(name="📝 Дополнительно", value=app.get('additional', 'Нет'), inline=False)
-    embed.set_footer(text=f"Заявка ID: {application_id}")
-    
-    settings = tier_manager.get_settings()
-    channel_id = settings.get('tier_applications_channel')
-    
-    if not channel_id:
-        await interaction.response.send_message("❌ Канал анкет не настроен", ephemeral=True)
-        return
-    
-    channel = interaction.guild.get_channel(int(channel_id))
-    if not channel:
-        await interaction.response.send_message("❌ Канал анкет не найден", ephemeral=True)
-        return
-    
-    # Удаляем старую запись о сообщении
-    tier_manager.delete_application_message(application_id)
-    
-    # Отправляем новое сообщение
-    sent_message = await channel.send(embed=embed, view=TierModerationView(application_id))
-    
-    # Сохраняем новую запись
-    tier_manager.save_application_message(
-        application_id=application_id,
-        channel_id=str(channel.id),
-        message_id=str(sent_message.id),
-        user_id=app['user_id']
-    )
-    
-    await interaction.response.send_message(f"✅ Заявка {application_id} восстановлена", ephemeral=True)
-
-@bot.tree.command(name="restore_tier_apps", description="СРОЧНО восстановить заявки TIER")
-@commands.has_permissions(administrator=True)
-async def restore_tier_apps(interaction: discord.Interaction):
-    """Принудительное восстановление заявок TIER"""
-    
-    from tier.views import TierModerationView
-    from tier.manager import tier_manager
-    
-    await interaction.response.defer(ephemeral=True)
-    
-    # Получаем все ожидающие заявки из БД напрямую
-    import sqlite3
-    conn = sqlite3.connect('bot_data.db')
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT id, user_id, user_name, nickname, arena_link, screenshots, additional FROM tier_applications WHERE status = 'pending'")
-    apps = cursor.fetchall()
-    conn.close()
-    
-    if not apps:
-        await interaction.followup.send("❌ Нет ожидающих заявок TIER в БД", ephemeral=True)
-        return
-    
-    settings = tier_manager.get_settings()
-    channel_id = settings.get('tier_applications_channel')
-    
-    if not channel_id:
-        await interaction.followup.send("❌ Канал анкет не настроен", ephemeral=True)
-        return
-    
-    channel = interaction.guild.get_channel(int(channel_id))
-    if not channel:
-        await interaction.followup.send("❌ Канал не найден", ephemeral=True)
-        return
-    
-    restored = 0
-    for app in apps:
-        app_id, user_id, user_name, nickname, arena_link, screenshots, additional = app
-        
-        embed = discord.Embed(
-            title="🌟 НОВАЯ ЗАЯВКА НА TIER",
-            color=0xffa500,
-            timestamp=datetime.now()
-        )
-        embed.add_field(name="👤 Отправитель", value=f"<@{user_id}>", inline=True)
-        embed.add_field(name="🎮 Игровой ник", value=nickname, inline=True)
-        embed.add_field(name="🏆 Откат с арены", value=arena_link, inline=False)
-        embed.add_field(name="📸 Скриншоты", value=screenshots[:200], inline=False)
-        embed.add_field(name="📝 Дополнительно", value=additional or "Нет", inline=False)
-        embed.set_footer(text=f"Заявка ID: {app_id}")
-        
-        sent = await channel.send(embed=embed, view=TierModerationView(app_id))
-        
-        # Обновляем запись о сообщении
-        conn = sqlite3.connect('bot_data.db')
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT OR REPLACE INTO tier_application_messages (application_id, channel_id, message_id, user_id)
-            VALUES (?, ?, ?, ?)
-        """, (app_id, str(channel.id), str(sent.id), user_id))
-        conn.commit()
-        conn.close()
-        
-        restored += 1
-    
-    await interaction.followup.send(f"✅ Восстановлено {restored} заявок TIER", ephemeral=True)
 
 # ========== ЗАПУСК ==========
 async def main():

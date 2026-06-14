@@ -7,7 +7,6 @@ import pytz
 from core.database import db
 from core.config import CONFIG
 from core.menus import BaseMenuView
-from server_stats.global_collector import get_collector
 
 # Настройка логирования
 file_logger = logging.getLogger('events_views')
@@ -191,11 +190,6 @@ class EventReminderView(discord.ui.View):
             self  # Передаем view для обратного вызова
         )
         await interaction.response.send_modal(modal)
-
-        collector = get_collector()
-        if collector:
-            collector.increment_mp_take()
-            print(f"📊 +1 взятие МП")
     
     async def update_taken_status(self, user_id: str, user_name: str, group_code: str, meeting_place: str):
         """Обновить статус после взятия МП во всех каналах"""
