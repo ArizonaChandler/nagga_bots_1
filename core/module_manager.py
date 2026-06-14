@@ -271,12 +271,10 @@ class ModuleManager:
             elif module_key == 'economy':
                 from economy import economy_manager
                 from economy.views import EconomyPanelView, AdminEconomyView
-                from economy.events import setup_economy_events
                 from economy.integration import setup_integration
                 from economy import set_bot_for_views
                 
                 economy_manager.set_bot(self.bot)
-                await setup_economy_events(self.bot)
                 setup_integration(self.bot)
                 set_bot_for_views(self.bot)
                 

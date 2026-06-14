@@ -222,40 +222,32 @@ async def on_member_remove(member):
 
 @bot.event
 async def on_voice_state_update(member: discord.Member, before, after):
-    """ТЕСТОВЫЙ ОБРАБОТЧИК — ПРОВЕРЯЕМ, ВЫЗЫВАЕТСЯ ЛИ СОБЫТИЕ"""
-    print(f"🔊🔊🔊 [VOICE_TEST] {member.name} | Before: {before.channel.name if before.channel else 'None'} | After: {after.channel.name if after.channel else 'None'}")
-    
+    """Единый обработчик голосовых событий"""
     from core.module_manager import MODULES
     
-    # Проверяем, включён ли модуль temp_voice
-    if not MODULES.get("temp_voice", {}).get("enabled", False):
-        print(f"🎤 [DEBUG] temp_voice выключен, пропускаем")
-        return
+    # 1. Экономика (начисление баллов за голосовой онлайн)
+    if MODULES.get("economy", {}).get("enabled", False):
+        from economy.manager import economy_manager
+        await economy_manager.process_voice_update(member, before, after)
     
-    from temp_voice.manager import temp_voice_manager
-    
-    # Проверяем, есть ли у пользователя комната
-    room = temp_voice_manager.get_user_room(member.id)
-    if not room:
-        print(f"🎤 [DEBUG] У {member.name} нет комнаты")
-        return
-    
-    channel = member.guild.get_channel(int(room['channel_id']))
-    if not channel:
-        print(f"🎤 [DEBUG] Комната {room['channel_id']} не найдена")
-        return
-    
-    print(f"🎤 [DEBUG] Комната найдена: {channel.name}")
-    
-    # Создатель вышел из комнаты
-    if before.channel == channel and after.channel != channel:
-        print(f"🎤 [DEBUG] Создатель {member.name} ВЫШЕЛ из комнаты, запускаем таймер")
-        await temp_voice_manager.schedule_deletion(channel, member.id)
-    
-    # Создатель вернулся в комнату
-    elif after.channel == channel and before.channel != channel:
-        print(f"🎤 [DEBUG] Создатель {member.name} ВЕРНУЛСЯ в комнату, отменяем таймер")
-        await temp_voice_manager.cancel_deletion(channel)
+    # 2. Временные комнаты
+    if MODULES.get("temp_voice", {}).get("enabled", False):
+        from temp_voice.manager import temp_voice_manager
+        
+        room = temp_voice_manager.get_user_room(member.id)
+        if not room:
+            return
+        
+        channel = member.guild.get_channel(int(room['channel_id']))
+        if not channel:
+            return
+        
+        if before.channel == channel and after.channel != channel:
+            print(f"🎤 [DEBUG] Создатель {member.name} ВЫШЕЛ из комнаты, запускаем таймер")
+            await temp_voice_manager.schedule_deletion(channel, member.id)
+        elif after.channel == channel and before.channel != channel:
+            print(f"🎤 [DEBUG] Создатель {member.name} ВЕРНУЛСЯ в комнату, отменяем таймер")
+            await temp_voice_manager.cancel_deletion(channel)
 
 
 # ========== ЗАПУСК ==========
