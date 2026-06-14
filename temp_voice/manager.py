@@ -172,7 +172,7 @@ class TempVoiceManager:
         creator_name = room['creator_name'] if room else "Неизвестно"
         
         # Удаляем из БД
-        self.delete_room(channel_id)
+        self.delete_room_from_db(channel_id)
         
         # Удаляем из активных комнат
         if channel_id in self.active_rooms:
@@ -309,7 +309,7 @@ class TempVoiceManager:
             channel = guild.get_channel(int(room['channel_id']))
             if not channel:
                 # Канал не найден — удаляем из БД
-                self.delete_room(int(room['channel_id']))
+                self.delete_room_from_db(int(room['channel_id']))
                 continue
             
             creator = guild.get_member(room['creator_id'])
@@ -345,6 +345,14 @@ class TempVoiceManager:
             timestamp=datetime.now()
         )
         await log_channel.send(embed=embed)
+
+    def delete_room_from_db(self, channel_id: int):
+        """Удалить комнату из БД (синхронно, без удаления канала)"""
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM temp_voice_rooms WHERE channel_id = ?', (str(channel_id),))
+            conn.commit()
+            print(f"🎤 [TEMP_VOICE] Комната {channel_id} удалена из БД")
     
     async def stop(self):
         """Остановка модуля"""
