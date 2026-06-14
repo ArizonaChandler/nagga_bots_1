@@ -1,7 +1,6 @@
 """Панель настроек логов"""
 import discord
 from core.admin_views import AdminOnlyView
-from action_logs.views import ActionLogsPanelView
 from action_logs.manager import action_logs_manager
 
 
@@ -47,12 +46,14 @@ class ActionLogsSettingsView(AdminOnlyView):
         self.add_item(back_btn)
     
     async def open_admin_panel(self, interaction: discord.Interaction):
+        """Открыть админ-панель настроек логов"""
         embed = discord.Embed(
             title="⚙️ **НАСТРОЙКА ЛОГОВ ДЕЙСТВИЙ**",
             description="Настройка канала логов и выбираемых событий",
             color=0x00ff00
         )
-        await interaction.response.edit_message(embed=embed, view=ActionLogsAdminView())
+        view = ActionLogsAdminView()
+        await interaction.response.edit_message(embed=embed, view=view)
 
 
 class ActionLogsAdminView(AdminOnlyView):
@@ -145,6 +146,15 @@ class SetLogChannelModal(discord.ui.Modal, title="📢 КАНАЛ ЛОГОВ"):
                 return
             action_logs_manager.save_setting('action_logs_channel', self.channel_id.value, str(interaction.user.id))
             await interaction.response.send_message(f"✅ Канал логов настроен: {channel.mention}", ephemeral=True)
+            
+            # Обновляем админ-панель
+            embed = discord.Embed(
+                title="⚙️ **НАСТРОЙКА ЛОГОВ ДЕЙСТВИЙ**",
+                description="Настройка канала логов и выбираемых событий",
+                color=0x00ff00
+            )
+            await interaction.message.edit(embed=embed, view=ActionLogsAdminView())
+            
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
@@ -173,6 +183,14 @@ class SelectEventsView(discord.ui.View):
             selected = select.values
             action_logs_manager.save_setting('action_logs_enabled_events', selected, str(interaction.user.id))
             await interaction.response.send_message(f"✅ Выбрано событий для логирования: {len(selected)}", ephemeral=True)
+            
+            # Обновляем админ-панель
+            embed = discord.Embed(
+                title="⚙️ **НАСТРОЙКА ЛОГОВ ДЕЙСТВИЙ**",
+                description="Настройка канала логов и выбираемых событий",
+                color=0x00ff00
+            )
+            await interaction.message.edit(embed=embed, view=ActionLogsAdminView())
         
         select.callback = select_callback
         self.add_item(select)
