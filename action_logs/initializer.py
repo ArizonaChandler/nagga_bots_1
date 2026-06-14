@@ -23,6 +23,12 @@ class ActionLogsInitializer:
         self.public_channel_id = db.get_setting('action_logs_channel')
         self.settings_channel_id = db.get_setting('action_logs_settings_channel')
         
+        # Очищаем от 'null' и None
+        if self.public_channel_id == 'null' or self.public_channel_id is None:
+            self.public_channel_id = None
+        if self.settings_channel_id == 'null' or self.settings_channel_id is None:
+            self.settings_channel_id = None
+        
         print(f"📋 [ACTION_LOGS] public_channel_id = {self.public_channel_id}")
         print(f"📋 [ACTION_LOGS] settings_channel_id = {self.settings_channel_id}")
         
@@ -40,9 +46,15 @@ class ActionLogsInitializer:
         print("📋 [ACTION_LOGS] Инициализация завершена")
     
     async def _init_public_channel(self):
-        channel = self.bot.get_channel(int(self.public_channel_id))
-        if not channel:
-            logger.error(f"❌ Канал логов {self.public_channel_id} не найден")
+        try:
+            if not self.public_channel_id:
+                return
+            channel = self.bot.get_channel(int(self.public_channel_id))
+            if not channel:
+                logger.error(f"❌ Канал логов {self.public_channel_id} не найден")
+                return
+        except (ValueError, TypeError) as e:
+            logger.error(f"❌ Ошибка ID канала логов {self.public_channel_id}: {e}")
             return
         
         found = False
@@ -68,11 +80,18 @@ class ActionLogsInitializer:
             print(f"📋 [ACTION_LOGS] Создана панель в #{channel.name}")
     
     async def _init_settings_channel(self):
-        channel = self.bot.get_channel(int(self.settings_channel_id))
-        if not channel:
-            logger.error(f"❌ Канал настроек {self.settings_channel_id} не найден")
+        try:
+            if not self.settings_channel_id:
+                return
+            channel = self.bot.get_channel(int(self.settings_channel_id))
+            if not channel:
+                logger.error(f"❌ Канал настроек {self.settings_channel_id} не найден")
+                return
+        except (ValueError, TypeError) as e:
+            logger.error(f"❌ Ошибка ID канала настроек {self.settings_channel_id}: {e}")
             return
         
+        # Очищаем старые сообщения
         async for msg in channel.history(limit=50):
             if msg.author == self.bot.user:
                 await msg.delete()
