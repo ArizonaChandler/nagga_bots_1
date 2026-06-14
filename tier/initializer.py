@@ -32,10 +32,7 @@ class TierInitializer:
         # 2. Канал для подачи заявок (только одна кнопка)
         await self._init_submit_channel(settings)
         
-        # 3. Канал настроек
-        await self._init_settings_channel()
-        
-        # 4. Восстанавливаем кнопки у активных заявок
+        # 3. Восстанавливаем кнопки у активных заявок
         await self._restore_application_buttons()
         
         logger.info("✅ Инициализация системы TIER завершена")
@@ -150,41 +147,6 @@ class TierInitializer:
             await channel.send(embed=embed, view=TierSubmitView())
             logger.info(f"✅ Создана панель подачи заявок TIER в #{channel.name}")
     
-    async def _init_settings_channel(self):
-        """Инициализация канала настроек TIER"""
-        from core.config import CONFIG
-        channel_id = CONFIG.get('tier_settings_channel')
-        
-        if not channel_id:
-            logger.warning("⚠️ Канал настроек TIER не настроен")
-            return
-        
-        channel = self.bot.get_channel(int(channel_id))
-        if not channel:
-            logger.error(f"❌ Канал настроек TIER {channel_id} не найден")
-            return
-        
-        from tier.settings_view import TierSettingsView
-        
-        # Ищем существующее сообщение
-        message_exists = False
-        async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user and msg.embeds:
-                if msg.embeds and "НАСТРОЙКИ TIER" in msg.embeds[0].title:
-                    await msg.edit(view=TierSettingsView())
-                    message_exists = True
-                    logger.info(f"✅ Обновлена панель настроек TIER в #{channel.name}")
-                    break
-        
-        if not message_exists:
-            embed = discord.Embed(
-                title="⚙️ **НАСТРОЙКИ TIER**",
-                description="Настройка системы повышения уровня",
-                color=0x00ff00
-            )
-            await channel.send(embed=embed, view=TierSettingsView())
-            logger.info(f"✅ Создана панель настроек TIER в #{channel.name}")
-
     async def _restore_application_buttons(self):
         """Восстановить кнопки у всех активных заявок TIER"""
         from tier.views import TierModerationView
@@ -302,6 +264,7 @@ class TierInitializer:
         
         # Переинициализируем остальные каналы
         await self.initialize_all()
+
 
 # Глобальный экземпляр
 initializer = None

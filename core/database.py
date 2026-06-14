@@ -1354,6 +1354,39 @@ class Database:
             ''', (field_name, field_description, placeholder, 1 if required else 0, field_id))
             conn.commit()
 
+    # ===== МЕТОДЫ ДЛЯ СТАТИСТИКИ ЗАЯВОК =====
+    
+    def get_accepted_applications(self) -> list:
+        """Получить принятые заявки"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM applications WHERE status = "accepted" ORDER BY reviewed_at DESC')
+            columns = [description[0] for description in cursor.description]
+            rows = cursor.fetchall()
+            return [dict(zip(columns, row)) for row in rows]
+    
+    def get_rejected_applications(self) -> list:
+        """Получить отклонённые заявки"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM applications WHERE status = "rejected" ORDER BY reviewed_at DESC')
+            columns = [description[0] for description in cursor.description]
+            rows = cursor.fetchall()
+            return [dict(zip(columns, row)) for row in rows]
+    
+    def update_application_field(self, field_id: int, field_name: str, field_description: str, 
+                                 placeholder: str, required: bool, field_order: int):
+        """Обновить существующее поле заявки"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE application_fields 
+                SET field_name = ?, field_description = ?, placeholder = ?, 
+                    required = ?, field_order = ?
+                WHERE id = ?
+            ''', (field_name, field_description, placeholder, 1 if required else 0, field_order, field_id))
+            conn.commit()
+
     # ===== МЕТОДЫ ДЛЯ ЗАКРЫТИЯ ЗАЯВОК ПРИ ВЫХОДЕ =====
 
     def get_active_application_id(self, user_id: str):

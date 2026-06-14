@@ -146,10 +146,11 @@ class ApplicationsSettingsView(AdminOnlyView):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
             return
         
-        total = len(db.get_all_applications())
+        # Используем существующие методы
         pending = len(db.get_pending_applications())
         accepted = len(db.get_accepted_applications())
         rejected = len(db.get_rejected_applications())
+        total = pending + accepted + rejected
         
         embed = discord.Embed(title="📊 СТАТИСТИКА ЗАЯВОК", color=0x7289da)
         embed.add_field(name="📝 Всего заявок", value=f"**{total}**", inline=True)
@@ -236,7 +237,11 @@ class ApplicationsFieldsView(AdminOnlyView):
         add_btn.callback = self.add_field
         self.add_item(add_btn)
         
-        remove_btn = discord.ui.Button(label="🗑️ Удалить поле", style=discord.ButtonStyle.danger, row=0, custom_id="apps_remove_field")
+        edit_btn = discord.ui.Button(label="✏️ Редактировать поле", style=discord.ButtonStyle.primary, row=0, custom_id="apps_edit_field")
+        edit_btn.callback = self.edit_field
+        self.add_item(edit_btn)
+        
+        remove_btn = discord.ui.Button(label="🗑️ Удалить поле", style=discord.ButtonStyle.danger, row=1, custom_id="apps_remove_field")
         remove_btn.callback = self.remove_field
         self.add_item(remove_btn)
         
@@ -244,12 +249,29 @@ class ApplicationsFieldsView(AdminOnlyView):
         list_btn.callback = self.list_fields
         self.add_item(list_btn)
         
-        back_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary, row=1, custom_id="apps_back")
+        back_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary, row=2, custom_id="apps_back")
         back_btn.callback = self.back
         self.add_item(back_btn)
     
     async def add_field(self, interaction: discord.Interaction):
         await interaction.response.send_modal(AddFieldModal())
+    
+    async def edit_field(self, interaction: discord.Interaction):
+        """Открыть модалку для выбора поля и редактирования"""
+        fields = db.get_application_fields()
+        
+        if not fields:
+            await interaction.response.send_message("📋 Нет полей для редактирования", ephemeral=True)
+            return
+        
+        # Создаём select для выбора поля
+        view = SelectFieldToEditView(fields)
+        embed = discord.Embed(
+            title="✏️ ВЫБЕРИТЕ ПОЛЕ ДЛЯ РЕДАКТИРОВАНИЯ",
+            description="Выберите поле из списка ниже",
+            color=0x7289da
+        )
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
     
     async def remove_field(self, interaction: discord.Interaction):
         await interaction.response.send_modal(RemoveFieldModal())
@@ -264,8 +286,8 @@ class ApplicationsFieldsView(AdminOnlyView):
         embed = discord.Embed(title="📋 ПОЛЯ ЗАЯВКИ", color=0x7289da)
         for field in fields:
             embed.add_field(
-                name=f"{field['name']}",
-                value=f"Описание: {field['description']}\nОбязательное: {'✅' if field['required'] else '❌'}",
+                name=f"ID: {field['id']} - {field['name']}",
+                value=f"📝 {field['description']}\n{'✅ Обязательное' if field['required'] else '❌ Необязательное'}\n📍 Порядок: {field['order']}",
                 inline=False
             )
         
@@ -274,6 +296,54 @@ class ApplicationsFieldsView(AdminOnlyView):
     async def back(self, interaction: discord.Interaction):
         embed = discord.Embed(title="⚙️ **НАСТРОЙКИ ЗАЯВОК**", description="Настройка системы заявок в семью", color=0x00ff00)
         await interaction.response.edit_message(embed=embed, view=ApplicationsSettingsView())
+
+
+class SelectFieldToEditView(discord.ui.View):
+    """View для выбора поля для редактирования"""
+    
+    def __init__(self, fields):
+        super().__init__(timeout=60)
+        
+        select = discord.ui.Select(
+            placeholder="Выберите поле для редактирования",
+            options=[
+                discord.SelectOption(
+                    label=f"{field['name']}",
+                    description=f"{field['description'][:50]}",
+                    value=str(field['id'])
+                )
+                for field in fields
+            ]
+        )
+        
+        async def select_callback(interaction: discord.Interaction):
+            field_id = int(select.values[0])
+            field = next((f for f in fields if f['id'] == field_id), None)
+            
+            if field:
+                await interaction.response.send_modal(EditFieldModal(
+                    field_id=field['id'],
+                    current_name=field['name'],
+                    current_description=field['description'],
+                    current_placeholder=field.get('placeholder', ''),
+                    current_required=field['required'],
+                    current_order=field['order']
+                ))
+            else:
+                await interaction.response.send_message("❌ Поле не найдено", ephemeral=True)
+        
+        select.callback = select_callback
+        self.add_item(select)
+        
+        # Кнопка отмены
+        cancel_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary)
+        
+        async def cancel_callback(interaction: discord.Interaction):
+            embed = discord.Embed(title="📝 **НАСТРОЙКА ПОЛЕЙ ЗАЯВКИ**", color=0x7289da)
+            await interaction.response.edit_message(embed=embed, view=ApplicationsFieldsView())
+        
+        cancel_btn.callback = cancel_callback
+        self.add_item(cancel_btn)
 
 
 class ApplicationsCombinedPanel(AdminOnlyView):
@@ -381,6 +451,52 @@ class ApplicationsCombinedPanel(AdminOnlyView):
     async def reset_user(self, interaction: discord.Interaction):
         """Сбросить пользователя"""
         await interaction.response.send_modal(ResetUserModal())
+
+
+class EditFieldModal(discord.ui.Modal, title="✏️ РЕДАКТИРОВАТЬ ПОЛЕ"):
+    def __init__(self, field_id: int, current_name: str, current_description: str, 
+                 current_placeholder: str, current_required: bool, current_order: int):
+        super().__init__()
+        self.field_id = field_id
+        
+        self.field_name = discord.ui.TextInput(label="Название поля", default=current_name, max_length=50, required=True)
+        self.add_item(self.field_name)
+        
+        self.field_description = discord.ui.TextInput(label="Описание", default=current_description, max_length=200, required=True)
+        self.add_item(self.field_description)
+        
+        self.placeholder = discord.ui.TextInput(label="Placeholder", default=current_placeholder or "", max_length=100, required=False)
+        self.add_item(self.placeholder)
+        
+        self.required = discord.ui.TextInput(
+            label="Обязательное (да/нет)", 
+            default="да" if current_required else "нет", 
+            max_length=3, 
+            required=False
+        )
+        self.add_item(self.required)
+        
+        self.order = discord.ui.TextInput(label="Порядок", default=str(current_order), max_length=3, required=False)
+        self.add_item(self.order)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        
+        required_bool = self.required.value.lower() in ['да', 'yes', 'true', '1']
+        order_int = int(self.order.value) if self.order.value else 999
+        
+        db.update_application_field(
+            field_id=self.field_id,
+            field_name=self.field_name.value,
+            field_description=self.field_description.value,
+            placeholder=self.placeholder.value or "",
+            required=required_bool,
+            field_order=order_int
+        )
+        
+        await interaction.response.send_message(f"✅ Поле {self.field_name.value} обновлено!", ephemeral=True)
 
 
 class SetChannelModal(discord.ui.Modal, title="📡 НАСТРОЙКА КАНАЛА"):

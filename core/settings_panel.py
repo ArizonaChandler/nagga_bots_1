@@ -90,6 +90,9 @@ class GlobalSettingsPanel(AdminOnlyView):
             elif module_key == "economy":
                 from economy.settings import EconomySettingsView
                 settings_view = EconomySettingsView()
+            elif module_key == "stats":
+                from stats.settings import StatsSettingsView
+                settings_view = StatsSettingsView()
             
             if settings_view:
                 embed = discord.Embed(
