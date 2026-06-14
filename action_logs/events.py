@@ -4,6 +4,8 @@ from action_logs.manager import action_logs_manager
 
 async def log_voice_state(member, before, after):
     """Логирование голосовых событий"""
+    print(f"📋 [ACTION_LOGS] log_voice_state вызван для {member.name}")
+    
     if not before.channel and after.channel:
         await action_logs_manager.log(
             guild_id=str(member.guild.id),

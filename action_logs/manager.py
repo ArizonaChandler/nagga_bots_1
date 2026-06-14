@@ -1,4 +1,5 @@
 """Менеджер логов действий"""
+from datetime import datetime
 from core.database import db
 from core.config import CONFIG
 
@@ -34,11 +35,15 @@ class ActionLogsManager:
                   before: str = None, after: str = None):
         """Записать лог и отправить в канал"""
         
+        print(f"📋 [ACTION_LOGS] log() вызван: event_type={event_type}, user_id={user_id}")
+        
         if not self.is_event_enabled(event_type):
+            print(f"📋 [ACTION_LOGS] Событие {event_type} отключено в настройках")
             return
         
         # Сохраняем в БД
         db.save_action_log(guild_id, event_type, user_id, target_id, details, before, after)
+        print(f"📋 [ACTION_LOGS] Лог сохранён в БД")
         
         # Отправляем в канал
         await self._send_to_channel(guild_id, event_type, user_id, target_id, details, before, after)
@@ -51,14 +56,17 @@ class ActionLogsManager:
         channel_id = settings.get('action_logs_channel')
         
         if not channel_id or not self.bot:
+            print(f"📋 [ACTION_LOGS] Канал логов не настроен: channel_id={channel_id}, bot={self.bot is not None}")
             return
         
         guild = self.bot.get_guild(int(guild_id))
         if not guild:
+            print(f"📋 [ACTION_LOGS] Гильдия {guild_id} не найдена")
             return
         
         channel = guild.get_channel(int(channel_id))
         if not channel:
+            print(f"📋 [ACTION_LOGS] Канал {channel_id} не найден в гильдии {guild.name}")
             return
         
         # Цвета для событий
@@ -121,6 +129,7 @@ class ActionLogsManager:
         embed.set_footer(text=f"ID: {user_id}")
         
         await channel.send(embed=embed)
+        print(f"📋 [ACTION_LOGS] Лог отправлен в канал #{channel.name}")
     
     def get_logs(self, guild_id: str, limit: int = 100, offset: int = 0,
                  user_id: str = None, event_type: str = None, days: int = None) -> list:

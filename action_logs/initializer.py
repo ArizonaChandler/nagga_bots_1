@@ -22,11 +22,19 @@ class ActionLogsInitializer:
         self.public_channel_id = db.get_setting('action_logs_channel')
         self.settings_channel_id = db.get_setting('action_logs_settings_channel')
         
+        # Принудительно выводим в консоль, чтобы увидеть что настроено
+        print(f"📋 [ACTION_LOGS] public_channel_id = {self.public_channel_id}")
+        print(f"📋 [ACTION_LOGS] settings_channel_id = {self.settings_channel_id}")
+        
         if self.public_channel_id:
             await self._init_public_channel()
+        else:
+            print("⚠️ [ACTION_LOGS] Публичный канал логов не настроен")
         
         if self.settings_channel_id:
             await self._init_settings_channel()
+        else:
+            print("⚠️ [ACTION_LOGS] Канал настроек логов не настроен")
         
         logger.info("✅ Инициализация системы логов завершена")
         print("📋 [ACTION_LOGS] Инициализация завершена")
@@ -65,22 +73,19 @@ class ActionLogsInitializer:
             logger.error(f"❌ Канал настроек {self.settings_channel_id} не найден")
             return
         
-        found = False
+        # Очищаем старые сообщения
         async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user and msg.embeds:
-                await msg.edit(view=ActionLogsSettingsView())
-                found = True
-                print(f"📋 [ACTION_LOGS] Обновлена панель настроек в #{channel.name}")
-                break
+            if msg.author == self.bot.user:
+                await msg.delete()
         
-        if not found:
-            embed = discord.Embed(
-                title="⚙️ **НАСТРОЙКА ЛОГОВ ДЕЙСТВИЙ**",
-                description="Настройка системы логирования",
-                color=0x00ff00
-            )
-            await channel.send(embed=embed, view=ActionLogsSettingsView())
-            print(f"📋 [ACTION_LOGS] Создана панель настроек в #{channel.name}")
+        from action_logs.settings_view import ActionLogsSettingsView
+        embed = discord.Embed(
+            title="⚙️ **НАСТРОЙКА ЛОГОВ ДЕЙСТВИЙ**",
+            description="Настройка системы логирования",
+            color=0x00ff00
+        )
+        await channel.send(embed=embed, view=ActionLogsSettingsView())
+        print(f"📋 [ACTION_LOGS] Создана панель настроек в #{channel.name}")
 
 
 initializer = None
