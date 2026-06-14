@@ -184,11 +184,6 @@ class TierChannelsView(AdminOnlyView):
         info_btn.callback = self.set_info_channel
         self.add_item(info_btn)
         
-        settings_btn = discord.ui.Button(label="⚙️ Канал настроек", style=discord.ButtonStyle.secondary, row=2, custom_id="tier_settings")
-        settings_btn.callback = self.set_settings_channel
-        self.add_item(settings_btn)
-        
-        # 🔥 КНОПКА — КАТЕГОРИЯ ДЛЯ ПРОФИЛЕЙ TIER
         profiles_btn = discord.ui.Button(label="📁 Категория профилей Tier", style=discord.ButtonStyle.secondary, row=2, custom_id="tier_profiles_category")
         profiles_btn.callback = self.set_profiles_category
         self.add_item(profiles_btn)
@@ -208,9 +203,6 @@ class TierChannelsView(AdminOnlyView):
     
     async def set_info_channel(self, interaction: discord.Interaction):
         await interaction.response.send_modal(SetTierChannelModal("tier_info_channel", "канал информации TIER"))
-    
-    async def set_settings_channel(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(SetTierChannelModal("tier_settings_channel", "канал настроек TIER"))
     
     async def set_profiles_category(self, interaction: discord.Interaction):
         await interaction.response.send_modal(SetTierCategoryModal("tier_profiles_category", "категория для профилей Tier"))
