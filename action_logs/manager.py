@@ -24,7 +24,6 @@ class ActionLogsManager:
         CONFIG[key] = value
     
     def is_event_enabled(self, event_type: str) -> bool:
-        """Проверить, включено ли логирование события"""
         enabled = self.get_settings().get('action_logs_enabled_events', [])
         if not enabled:
             return True
@@ -35,17 +34,10 @@ class ActionLogsManager:
                   before: str = None, after: str = None):
         """Записать лог и отправить в канал"""
         
-        print(f"📋 [ACTION_LOGS] log() вызван: event_type={event_type}, user_id={user_id}")
-        
         if not self.is_event_enabled(event_type):
-            print(f"📋 [ACTION_LOGS] Событие {event_type} отключено в настройках")
             return
         
-        # Сохраняем в БД
         db.save_action_log(guild_id, event_type, user_id, target_id, details, before, after)
-        print(f"📋 [ACTION_LOGS] Лог сохранён в БД")
-        
-        # Отправляем в канал
         await self._send_to_channel(guild_id, event_type, user_id, target_id, details, before, after)
     
     async def _send_to_channel(self, guild_id: str, event_type: str, user_id: str,
@@ -55,25 +47,17 @@ class ActionLogsManager:
         settings = self.get_settings()
         channel_id = settings.get('action_logs_channel')
         
-        print(f"📋 [ACTION_LOGS] _send_to_channel: channel_id={channel_id}")
-        
         if not channel_id or not self.bot:
-            print(f"📋 [ACTION_LOGS] Канал логов не настроен: channel_id={channel_id}, bot={self.bot is not None}")
             return
         
         guild = self.bot.get_guild(int(guild_id))
         if not guild:
-            print(f"📋 [ACTION_LOGS] Гильдия {guild_id} не найдена")
             return
         
         channel = guild.get_channel(int(channel_id))
         if not channel:
-            print(f"📋 [ACTION_LOGS] Канал {channel_id} не найден в гильдии {guild.name}")
             return
         
-        print(f"📋 [ACTION_LOGS] Канал найден: #{channel.name}, отправляем лог...")
-        
-        # Цвета для событий
         colors = {
             'voice_join': 0x00ff00,
             'voice_leave': 0xff0000,
@@ -90,6 +74,10 @@ class ActionLogsManager:
             'member_join': 0x00ff00,
             'member_leave': 0xff0000,
             'member_update': 0xffa500,
+            'member_ban': 0xff0000,
+            'member_unban': 0x00ff00,
+            'member_kick': 0xff0000,
+            'member_timeout': 0xffa500,
         }
         
         event_names = {
@@ -108,6 +96,10 @@ class ActionLogsManager:
             'member_join': '👤 ПРИСОЕДИНЕНИЕ К СЕРВЕРУ',
             'member_leave': '👤 ПОКИДАНИЕ СЕРВЕРА',
             'member_update': '👤 ИЗМЕНЕНИЕ ПРОФИЛЯ',
+            'member_ban': '🔨 БАН УЧАСТНИКА',
+            'member_unban': '🔓 РАЗБАН УЧАСТНИКА',
+            'member_kick': '👢 КИК УЧАСТНИКА',
+            'member_timeout': '⏰ ТАЙМ-АУТ УЧАСТНИКА',
         }
         
         embed = discord.Embed(
@@ -119,7 +111,7 @@ class ActionLogsManager:
         embed.add_field(name="👤 Пользователь", value=f"<@{user_id}>", inline=True)
         
         if target_id:
-            embed.add_field(name="🎯 Цель", value=f"<@{target_id}>", inline=True)
+            embed.add_field(name="🎯 Модератор", value=f"<@{target_id}>", inline=True)
         
         if before:
             embed.add_field(name="📝 Было", value=before[:1000], inline=False)
@@ -133,7 +125,6 @@ class ActionLogsManager:
         embed.set_footer(text=f"ID: {user_id}")
         
         await channel.send(embed=embed)
-        print(f"📋 [ACTION_LOGS] ✅ Лог отправлен в канал #{channel.name}")
     
     def get_logs(self, guild_id: str, limit: int = 100, offset: int = 0,
                  user_id: str = None, event_type: str = None, days: int = None) -> list:

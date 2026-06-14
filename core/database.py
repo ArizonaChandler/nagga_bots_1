@@ -612,9 +612,11 @@ class Database:
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            # Индексы для ускорения поиска
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_server_action_logs_user ON server_action_logs(user_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_server_action_logs_event ON server_action_logs(event_type)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_server_action_logs_time ON server_action_logs(timestamp)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_server_action_logs_guild ON server_action_logs(guild_id)')
 
             # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ ИГР =====
             cursor.execute('''

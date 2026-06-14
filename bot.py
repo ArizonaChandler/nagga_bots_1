@@ -47,11 +47,12 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 intents.voice_states = True
-intents.message_content = True
 intents.guilds = True
 intents.emojis = True
 intents.reactions = True
 intents.typing = False
+intents.bans = True
+intents.moderations = True
 
 bot = commands.Bot(
     command_prefix='!',
@@ -75,9 +76,6 @@ async def on_ready():
     print(f"🆔 ID: {bot.user.id}")
     print(f"🌐 Серверов: {len(bot.guilds)}")
     print(f"📁 Файловое хранилище: {file_manager.storage_path}")
-
-    # Проверка интентов
-    print(f"🎤 [DEBUG] voice_states intent: {bot.intents.voice_states}")
 
     # Регистрация persistent view для временных комнат
     try:
@@ -108,8 +106,6 @@ async def on_ready():
         name=f"{CONFIG.get('family_name', 'Семья')} | !info"
     ))
 
-    from core.config import CONFIG
-    print(f"📋 [DEBUG] action_logs_channel = {CONFIG.get('action_logs_channel')}")
     print("=" * 60 + "\n")
 
 
@@ -221,6 +217,17 @@ async def on_member_remove(member):
         # Очистка дней рождения
         db.remove_birthday(str(member.id))
         print(f"🗑️ [Birthday] {member.name} удалён из системы дней рождения")
+        
+        # Логирование кика (если пользователь был кикнут, а не вышел сам)
+        from core.module_manager import MODULES
+        if MODULES.get("action_logs", {}).get("enabled", False):
+            from action_logs.events import log_member_kick
+            
+            # Проверяем audit_log на предмет кика
+            async for entry in member.guild.audit_logs(action=discord.AuditLogAction.kick, limit=1):
+                if entry.target.id == member.id:
+                    await log_member_kick(member, entry.user, entry.reason)
+                    break
 
     except Exception as e:
         print(f"❌ Ошибка: {e}")
@@ -256,7 +263,7 @@ async def on_voice_state_update(member: discord.Member, before, after):
         await log_voice_state(member, before, after)
 
 
-# ========== ЛОГИ ДЕЙСТВИЙ (ОБРАБОТЧИКИ) ==========
+# ========== ЛОГИ ДЕЙСТВИЙ (СООБЩЕНИЯ) ==========
 @bot.event
 async def on_message_edit(before: discord.Message, after: discord.Message):
     from core.module_manager import MODULES
@@ -273,6 +280,7 @@ async def on_message_delete(message: discord.Message):
         await log_message_delete(message)
 
 
+# ========== ЛОГИ ДЕЙСТВИЙ (КАНАЛЫ) ==========
 @bot.event
 async def on_guild_channel_create(channel: discord.abc.GuildChannel):
     from core.module_manager import MODULES
@@ -297,6 +305,7 @@ async def on_guild_channel_update(before: discord.abc.GuildChannel, after: disco
         await log_channel_update(before, after)
 
 
+# ========== ЛОГИ ДЕЙСТВИЙ (УЧАСТНИКИ) ==========
 @bot.event
 async def on_member_update(before: discord.Member, after: discord.Member):
     from core.module_manager import MODULES
@@ -305,6 +314,7 @@ async def on_member_update(before: discord.Member, after: discord.Member):
         await log_member_update(before, after)
 
 
+# ========== ЛОГИ ДЕЙСТВИЙ (РОЛИ) ==========
 @bot.event
 async def on_guild_role_create(role: discord.Role):
     from core.module_manager import MODULES
@@ -319,6 +329,40 @@ async def on_guild_role_delete(role: discord.Role):
     if MODULES.get("action_logs", {}).get("enabled", False):
         from action_logs.events import log_role_delete
         await log_role_delete(role)
+
+
+# ========== ЛОГИ ДЕЙСТВИЙ (БАНЫ, КИКИ, ТАЙМ-АУТЫ) ==========
+@bot.event
+async def on_member_ban(guild: discord.Guild, user: discord.User):
+    from core.module_manager import MODULES
+    if MODULES.get("action_logs", {}).get("enabled", False):
+        from action_logs.events import log_member_ban
+        
+        # Получаем модератора и причину из audit_log
+        moderator = None
+        reason = None
+        async for entry in guild.audit_logs(action=discord.AuditLogAction.ban, limit=1):
+            if entry.target.id == user.id:
+                moderator = entry.user
+                reason = entry.reason
+                break
+        
+        await log_member_ban(guild, user, reason, moderator)
+
+
+@bot.event
+async def on_member_unban(guild: discord.Guild, user: discord.User):
+    from core.module_manager import MODULES
+    if MODULES.get("action_logs", {}).get("enabled", False):
+        from action_logs.events import log_member_unban
+        
+        moderator = None
+        async for entry in guild.audit_logs(action=discord.AuditLogAction.unban, limit=1):
+            if entry.target.id == user.id:
+                moderator = entry.user
+                break
+        
+        await log_member_unban(guild, user, moderator)
 
 
 # ========== ЗАПУСК ==========

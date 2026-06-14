@@ -1,11 +1,10 @@
 """Функции для логирования событий (вызываются из bot.py)"""
+from datetime import datetime
 from action_logs.manager import action_logs_manager
 
 
 async def log_voice_state(member, before, after):
     """Логирование голосовых событий"""
-    print(f"📋 [ACTION_LOGS] log_voice_state вызван для {member.name}")
-    
     if not before.channel and after.channel:
         await action_logs_manager.log(
             guild_id=str(member.guild.id),
@@ -30,19 +29,22 @@ async def log_voice_state(member, before, after):
 
 
 async def log_message_edit(before, after):
-    """Логирование редактирования сообщений"""
+    """Логирование редактирования сообщений (с сохранением что было и что стало)"""
     if before.author.bot:
         return
     if before.content == after.content:
         return
     
+    before_text = before.content[:500] if before.content else "(пусто)"
+    after_text = after.content[:500] if after.content else "(пусто)"
+    
     await action_logs_manager.log(
         guild_id=str(before.guild.id),
         event_type='message_edit',
         user_id=str(before.author.id),
-        details=f"Канал: {before.channel.mention}",
-        before=before.content[:500] if before.content else "(пусто)",
-        after=after.content[:500] if after.content else "(пусто)"
+        details=f"Канал: {before.channel.mention} | [Перейти к сообщению]({before.jump_url})",
+        before=before_text,
+        after=after_text
     )
 
 
@@ -123,7 +125,6 @@ async def log_member_update(before, after):
     if before.nick != after.nick:
         changes.append(f"ник: {before.nick or 'нет'} → {after.nick or 'нет'}")
     
-    # Роли
     before_roles = set(before.roles)
     after_roles = set(after.roles)
     
@@ -173,4 +174,49 @@ async def log_role_delete(role):
         event_type='role_delete',
         user_id='system',
         details=f"Удалена роль: {role.name}"
+    )
+
+
+async def log_member_ban(guild, user, reason=None, moderator=None):
+    """Логирование бана участника"""
+    await action_logs_manager.log(
+        guild_id=str(guild.id),
+        event_type='member_ban',
+        user_id=str(user.id),
+        target_id=str(moderator.id) if moderator else None,
+        details=f"Забанен участник: {user.name} (ID: {user.id})\nПричина: {reason if reason else 'Не указана'}"
+    )
+
+
+async def log_member_unban(guild, user, moderator=None):
+    """Логирование разбана участника"""
+    await action_logs_manager.log(
+        guild_id=str(guild.id),
+        event_type='member_unban',
+        user_id=str(user.id),
+        target_id=str(moderator.id) if moderator else None,
+        details=f"Разбанен участник: {user.name} (ID: {user.id})"
+    )
+
+
+async def log_member_kick(member, moderator=None, reason=None):
+    """Логирование кика участника"""
+    await action_logs_manager.log(
+        guild_id=str(member.guild.id),
+        event_type='member_kick',
+        user_id=str(member.id),
+        target_id=str(moderator.id) if moderator else None,
+        details=f"Кикнут участник: {member.name} (ID: {member.id})\nМодератор: {moderator.name if moderator else 'Система'}\nПричина: {reason if reason else 'Не указана'}"
+    )
+
+
+async def log_member_timeout(member, moderator=None, until=None, reason=None):
+    """Логирование тайм-аута участника"""
+    duration = (until - datetime.now()).total_seconds() // 60 if until else 0
+    await action_logs_manager.log(
+        guild_id=str(member.guild.id),
+        event_type='member_timeout',
+        user_id=str(member.id),
+        target_id=str(moderator.id) if moderator else None,
+        details=f"Тайм-аут участника: {member.name}\nМодератор: {moderator.name if moderator else 'Система'}\nДлительность: {int(duration)} минут\nДо: {until.strftime('%d.%m.%Y %H:%M') if until else 'Не указано'}\nПричина: {reason if reason else 'Не указана'}"
     )

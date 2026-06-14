@@ -39,6 +39,10 @@ class ActionLogsPanelView(PermanentView):
             'member_join': '👤 Присоединился',
             'member_leave': '👤 Покинул',
             'member_update': '👤 Изменён профиль',
+            'member_ban': '🔨 Бан',
+            'member_unban': '🔓 Разбан',
+            'member_kick': '👢 Кик',
+            'member_timeout': '⏰ Тайм-аут',
         }
         
         embed = discord.Embed(
@@ -101,15 +105,25 @@ class ActionLogsPanelView(PermanentView):
         stats = action_logs_manager.get_stats(str(interaction.guild.id), days=30)
         
         event_names = {
-            'voice_join': '🎙️ Вход в войс',
-            'voice_leave': '🎙️ Выход из войса',
-            'message_edit': '✏️ Редактирование',
-            'message_delete': '🗑️ Удаление',
-            'channel_create': '📝 Создание каналов',
-            'role_grant': '🎭 Выдача ролей',
-            'role_revoke': '🎭 Снятие ролей',
-            'member_join': '👤 Присоединения',
-            'member_leave': '👤 Уходы',
+            'voice_join': '🎙️ Вход в голосовой канал',
+            'voice_leave': '🎙️ Выход из голосового канала',
+            'voice_move': '🎙️ Перемещение в голосовом канале',
+            'message_edit': '✏️ Редактирование сообщения',
+            'message_delete': '🗑️ Удаление сообщения',
+            'channel_create': '📝 Создание канала',
+            'channel_delete': '📝 Удаление канала',
+            'channel_update': '📝 Изменение канала',
+            'role_grant': '🎭 Выдача роли',
+            'role_revoke': '🎭 Снятие роли',
+            'role_create': '🎭 Создание роли',
+            'role_delete': '🎭 Удаление роли',
+            'member_join': '👤 Присоединение к серверу',
+            'member_leave': '👤 Уход с сервера',
+            'member_update': '👤 Изменение профиля',
+            'member_ban': '🔨 Бан участника',
+            'member_unban': '🔓 Разбан участника',
+            'member_kick': '👢 Кик участника',
+            'member_timeout': '⏰ Тайм-аут участника',
         }
         
         embed = discord.Embed(
@@ -122,7 +136,7 @@ class ActionLogsPanelView(PermanentView):
         
         if stats['top_events']:
             top_text = ""
-            for e in stats['top_events'][:8]:
+            for e in stats['top_events'][:10]:
                 name = event_names.get(e['event_type'], e['event_type'])
                 top_text += f"• {name}: {e['count']}\n"
             embed.add_field(name="🏆 Топ событий", value=top_text, inline=False)
@@ -152,6 +166,9 @@ class SearchByUserModal(discord.ui.Modal, title="🔍 ПОИСК ПО ПОЛЬЗ
                 'message_delete': '🗑️ Удаление',
                 'role_grant': '🎭 Выдача роли',
                 'role_revoke': '🎭 Снятие роли',
+                'member_ban': '🔨 Бан',
+                'member_kick': '👢 Кик',
+                'member_timeout': '⏰ Тайм-аут',
             }
             
             embed = discord.Embed(
@@ -198,6 +215,10 @@ class SelectEventView(discord.ui.View):
             'member_join': '👤 Присоединение',
             'member_leave': '👤 Уход',
             'member_update': '👤 Изменение профиля',
+            'member_ban': '🔨 Бан',
+            'member_unban': '🔓 Разбан',
+            'member_kick': '👢 Кик',
+            'member_timeout': '⏰ Тайм-аут',
         }
         
         select = discord.ui.Select(
