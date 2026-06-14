@@ -67,6 +67,7 @@ class TempVoiceManager:
             return False, f"❌ У вас уже есть комната: <#{existing['channel_id']}>"
         
         default_slots = settings.get('temp_voice_default_slots', 2)
+        delete_delay = settings.get('temp_voice_delete_delay', 60)
         
         try:
             channel = await interaction.guild.create_voice_channel(
@@ -89,14 +90,14 @@ class TempVoiceManager:
             'channel': channel
         }
         
-        # Таймер на случай, если создатель не зайдёт в комнату
+        # Таймер на случай, если создатель не зайдёт в комнату (используем настройку)
         async def check_creator_join():
-            await asyncio.sleep(60)
+            await asyncio.sleep(delete_delay)
             room = self.get_room_by_channel(channel.id)
             if room:
                 member = interaction.guild.get_member(interaction.user.id)
                 if not member or not member.voice or member.voice.channel != channel:
-                    await self.delete_room(channel, "Создатель не зашёл в комнату в течение 60 секунд")
+                    await self.delete_room(channel, f"Создатель не зашёл в комнату в течение {delete_delay} секунд")
         
         asyncio.create_task(check_creator_join())
         
