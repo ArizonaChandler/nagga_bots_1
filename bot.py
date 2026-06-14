@@ -220,8 +220,13 @@ async def on_voice_state_update(member: discord.Member, before, after):
     """Отслеживание изменений голосового статуса для временных комнат"""
     from core.module_manager import MODULES
     
+    # ВРЕМЕННАЯ ОТЛАДКА
+    print(f"🎤 [DEBUG] on_voice_state_update ВЫЗВАН для {member.name}")
+    print(f"🎤 [DEBUG] temp_voice enabled: {MODULES.get('temp_voice', {}).get('enabled', False)}")
+    
     # Проверяем, включён ли модуль temp_voice
     if not MODULES.get("temp_voice", {}).get("enabled", False):
+        print(f"🎤 [DEBUG] temp_voice выключен, пропускаем")
         return
     
     from temp_voice.manager import temp_voice_manager
