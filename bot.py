@@ -52,7 +52,7 @@ intents.emojis = True
 intents.reactions = True
 intents.typing = False
 intents.bans = True
-intents.moderations = True
+intents.moderation = True
 
 bot = commands.Bot(
     command_prefix='!',
