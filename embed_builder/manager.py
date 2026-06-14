@@ -1,7 +1,8 @@
 """Менеджер для создания embed сообщений"""
+import discord
 from core.database import db
 from core.config import CONFIG
-import discord
+
 
 class EmbedBuilderManager:
     
@@ -26,51 +27,59 @@ class EmbedBuilderManager:
                          thumbnail_url: str = None, author_name: str = None,
                          author_icon: str = None, fields: list = None):
         """Отправить embed в канал"""
-        channel = self.bot.get_channel(channel_id)
-        if not channel:
-            return False, "❌ Канал не найден"
-        
-        embed = discord.Embed(
-            title=title[:256] if title else None,
-            description=description[:4096] if description else None,
-            color=color
-        )
-        
-        if image_url:
-            embed.set_image(url=image_url)
-        
-        if thumbnail_url:
-            embed.set_thumbnail(url=thumbnail_url)
-        
-        if footer:
-            embed.set_footer(text=footer[:2048])
-        
-        if author_name:
-            embed.set_author(name=author_name[:256], icon_url=author_icon)
-        
-        if fields:
-            for field in fields[:25]:
-                embed.add_field(
-                    name=field.get('name', '')[:256],
-                    value=field.get('value', '')[:1024],
-                    inline=field.get('inline', False)
-                )
-        
-        await channel.send(embed=embed)
-        return True, "✅ Embed отправлен!"
+        try:
+            channel = self.bot.get_channel(channel_id)
+            if not channel:
+                return False, "❌ Канал не найден"
+            
+            embed = discord.Embed(
+                title=title[:256] if title else None,
+                description=description[:4096] if description else None,
+                color=color
+            )
+            
+            if image_url and image_url.strip():
+                embed.set_image(url=image_url)
+            
+            if thumbnail_url and thumbnail_url.strip():
+                embed.set_thumbnail(url=thumbnail_url)
+            
+            if footer and footer.strip():
+                embed.set_footer(text=footer[:2048])
+            
+            if author_name and author_name.strip():
+                embed.set_author(name=author_name[:256], icon_url=author_icon if author_icon else None)
+            
+            if fields:
+                for field in fields[:25]:
+                    embed.add_field(
+                        name=field.get('name', '')[:256],
+                        value=field.get('value', '')[:1024],
+                        inline=field.get('inline', False)
+                    )
+            
+            await channel.send(embed=embed)
+            return True, "✅ Embed отправлен!"
+        except Exception as e:
+            print(f"❌ Ошибка отправки embed: {e}")
+            return False, f"❌ Ошибка: {e}"
     
     async def send_simple_embed(self, interaction: discord.Interaction, title: str, 
                                  description: str, color: int, image_url: str = None):
         """Отправить embed в ответ на interaction"""
-        embed = discord.Embed(
-            title=title[:256] if title else None,
-            description=description[:4096] if description else None,
-            color=color
-        )
-        if image_url:
-            embed.set_image(url=image_url)
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        try:
+            embed = discord.Embed(
+                title=title[:256] if title else None,
+                description=description[:4096] if description else None,
+                color=color
+            )
+            if image_url and image_url.strip():
+                embed.set_image(url=image_url)
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            print(f"❌ Ошибка: {e}")
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
 
 embed_builder_manager = EmbedBuilderManager()

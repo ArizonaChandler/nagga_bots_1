@@ -1,6 +1,6 @@
 """Модальные окна для создания embed"""
 import discord
-from embed_builder.manager import embed_builder_manager
+from embed_builder.manager import embed_builder_manager  # ← ДОБАВИТЬ
 
 
 class CreateEmbedModal(discord.ui.Modal, title="📝 СОЗДАНИЕ EMBED"):
@@ -50,6 +50,9 @@ class CreateEmbedModal(discord.ui.Modal, title="📝 СОЗДАНИЕ EMBED"):
         try:
             # Преобразуем цвет
             color_val = self.color.value
+            if not color_val:
+                color_val = "#00ff00"
+            
             if color_val.startswith('#'):
                 color_val = int(color_val[1:], 16)
             elif color_val.startswith('0x'):
@@ -131,6 +134,9 @@ class AdvancedEmbedModal(discord.ui.Modal, title="🎨 РАСШИРЕННОЕ С
     async def on_submit(self, interaction: discord.Interaction):
         try:
             color_val = self.color.value
+            if not color_val:
+                color_val = "#00ff00"
+            
             if color_val.startswith('#'):
                 color_val = int(color_val[1:], 16)
             elif color_val.startswith('0x'):
@@ -194,3 +200,75 @@ class AddFieldModal(discord.ui.Modal, title="➕ ДОБАВИТЬ ПОЛЕ"):
         })
         
         await interaction.response.send_message(f"✅ Поле **{self.field_name.value}** добавлено! Всего полей: {len(self.fields_list)}", ephemeral=True)
+
+
+class SendFieldsEmbedModal(discord.ui.Modal, title="📨 ОТПРАВКА EMBED"):
+    
+    title = discord.ui.TextInput(
+        label="Заголовок",
+        placeholder="Введите заголовок embed",
+        max_length=256,
+        required=False
+    )
+    
+    description = discord.ui.TextInput(
+        label="Текст",
+        placeholder="Введите основной текст embed",
+        style=discord.TextStyle.paragraph,
+        max_length=4000,
+        required=True
+    )
+    
+    color = discord.ui.TextInput(
+        label="Цвет (HEX)",
+        placeholder="#00ff00",
+        max_length=7,
+        required=False,
+        default="#00ff00"
+    )
+    
+    image_url = discord.ui.TextInput(
+        label="Ссылка на изображение",
+        placeholder="https://example.com/image.png",
+        max_length=500,
+        required=False
+    )
+    
+    footer = discord.ui.TextInput(
+        label="Футер",
+        placeholder="Текст внизу embed",
+        max_length=2048,
+        required=False
+    )
+    
+    def __init__(self, channel_id: int, fields: list):
+        super().__init__()
+        self.channel_id = channel_id
+        self.fields = fields
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            color_val = self.color.value
+            if not color_val:
+                color_val = "#00ff00"
+            
+            if color_val.startswith('#'):
+                color_val = int(color_val[1:], 16)
+            elif color_val.startswith('0x'):
+                color_val = int(color_val, 16)
+            else:
+                color_val = int(color_val, 16) if color_val else 0x00ff00
+        except:
+            color_val = 0x00ff00
+        
+        success, msg = await embed_builder_manager.send_embed(
+            channel_id=self.channel_id,
+            title=self.title.value,
+            description=self.description.value,
+            color=color_val,
+            image_url=self.image_url.value if self.image_url.value else None,
+            footer=self.footer.value if self.footer.value else None,
+            fields=self.fields
+        )
+        
+        await interaction.response.send_message(msg, ephemeral=True)
