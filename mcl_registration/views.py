@@ -7,7 +7,6 @@ from mcl_registration.mcl_core import mcl_core
 from mcl_registration.manager import mcl_manager
 from core.database import db
 from core.config import CONFIG
-from server_stats.global_collector import get_collector
 
 
 class StartModal(discord.ui.Modal, title="🎯 НАЧАТЬ РЕГИСТРАЦИЮ"):

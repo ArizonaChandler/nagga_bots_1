@@ -25,6 +25,18 @@ class StatsManager:
     def set_bot(self, bot):
         self.bot = bot
         
+    async def initialize(self):
+        """Инициализация системы статистики"""
+        print("📊 [STATS] Инициализация системы статистики...")
+        
+        self._load_config()
+        
+        # Запускаем планировщик бекапов, если включён
+        if self.backup_enabled:
+            await self.start_backup_scheduler()
+        
+        print("📊 [STATS] Инициализация завершена")
+        
     def _load_config(self):
         self.stats_channel_id = CONFIG.get('stats_channel')
         self.backup_enabled = CONFIG.get('stats_backup_enabled') == 'true'

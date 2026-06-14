@@ -4,8 +4,6 @@ import json
 from datetime import datetime
 from applications.manager import app_manager
 from core.database import db
-from server_stats.stat_collector import collector
-from server_stats.global_collector import get_collector
 
 
 class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"):
@@ -71,11 +69,6 @@ class ApplicationModal(discord.ui.Modal, title="📝 ЗАЯВКА В СЕМЬЮ"
             answers[field['name']] = field['input'].value
         
         print(f"🔍 [ЗАЯВКА] Ответы: {answers}")
-        
-        # Увеличиваем счётчик
-        collector = get_collector()
-        if collector:
-            collector.increment_new_applications()
         
         # Сохраняем заявку
         try:

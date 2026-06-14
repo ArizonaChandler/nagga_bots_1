@@ -36,10 +36,12 @@ class TierSettingsView(AdminOnlyView):
         req_btn.callback = self.requirements_menu
         self.add_item(req_btn)
         
-        # 🔥 КНОПКА — УДАЛЕНИЕ ПРОФИЛЯ ПРИ ВЫДАЧЕ TIER
+        # 🔥 КНОПКА — УДАЛЕНИЕ ПРОФИЛЯ ПРИ ВЫДАЧЕ TIER (с отображением статуса)
+        delete_profile_state = CONFIG.get('tier_delete_profile', 'false') == 'true'
+        delete_profile_status = "🟢 ВКЛЮЧЕНО" if delete_profile_state else "🔴 ВЫКЛЮЧЕНО"
         delete_profile_btn = discord.ui.Button(
-            label="🗑️ Удаление профиля при Tier",
-            style=discord.ButtonStyle.secondary,
+            label=f"🗑️ Удаление профиля ({delete_profile_status})",
+            style=discord.ButtonStyle.success if delete_profile_state else discord.ButtonStyle.secondary,
             emoji="🗑️",
             row=1,
             custom_id="tier_delete_profile"
@@ -47,10 +49,12 @@ class TierSettingsView(AdminOnlyView):
         delete_profile_btn.callback = self.toggle_delete_profile
         self.add_item(delete_profile_btn)
         
-        # 🔥 КНОПКА — СОЗДАНИЕ ПРОФИЛЯ ПРИ ВЫДАЧЕ TIER
+        # 🔥 КНОПКА — СОЗДАНИЕ ПРОФИЛЯ ПРИ ВЫДАЧЕ TIER (с отображением статуса)
+        create_profile_state = CONFIG.get('tier_create_profile', 'false') == 'true'
+        create_profile_status = "🟢 ВКЛЮЧЕНО" if create_profile_state else "🔴 ВЫКЛЮЧЕНО"
         create_profile_btn = discord.ui.Button(
-            label="📁 Создание профиля при Tier",
-            style=discord.ButtonStyle.secondary,
+            label=f"📁 Создание профиля ({create_profile_status})",
+            style=discord.ButtonStyle.success if create_profile_state else discord.ButtonStyle.secondary,
             emoji="📁",
             row=2,
             custom_id="tier_create_profile"
@@ -121,9 +125,12 @@ class TierSettingsView(AdminOnlyView):
         CONFIG['tier_delete_profile'] = str(new_state).lower()
         save_config(str(interaction.user.id))
         
+        # Обновляем кнопки
+        self._add_buttons()
+        await interaction.message.edit(view=self)
+        
         status = "включено ✅" if new_state else "выключено ❌"
         await interaction.response.send_message(f"🗑️ Удаление профилей при выдаче Tier: {status}", ephemeral=True)
-        await interaction.message.edit(view=self)
 
     async def toggle_create_profile(self, interaction: discord.Interaction):
         if not await is_admin(str(interaction.user.id)):
@@ -137,9 +144,12 @@ class TierSettingsView(AdminOnlyView):
         CONFIG['tier_create_profile'] = str(new_state).lower()
         save_config(str(interaction.user.id))
         
+        # Обновляем кнопки
+        self._add_buttons()
+        await interaction.message.edit(view=self)
+        
         status = "включено ✅" if new_state else "выключено ❌"
         await interaction.response.send_message(f"📁 Создание профиля при выдаче Tier: {status}", ephemeral=True)
-        await interaction.message.edit(view=self)
 
     async def show_stats(self, interaction: discord.Interaction):
         if not await is_admin(str(interaction.user.id)):

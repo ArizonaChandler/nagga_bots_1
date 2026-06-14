@@ -6,7 +6,6 @@ from core.database import db
 from applications.manager import app_manager
 from applications.base import PermanentView
 from applications.modals import ApplicationModal
-from server_stats.stat_collector import collector
 
 
 # ===== КЛАСС 1: ПУБЛИЧНАЯ КНОПКА ДЛЯ ПОДАЧИ ЗАЯВОК =====
@@ -220,11 +219,6 @@ class ApplicationModerationView(discord.ui.View):
         await interaction.message.edit(embed=embed, view=self)
 
         await self.cleanup_message_record()
-
-        from server_stats.global_collector import get_collector
-        collector = get_collector()
-        if collector:
-            collector.increment_accepted_applications()
 
         if not create_profiles:
             await interaction.followup.send("✅ Заявка принята", ephemeral=True)

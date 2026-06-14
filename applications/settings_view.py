@@ -44,10 +44,12 @@ class ApplicationsSettingsView(AdminOnlyView):
         welcome_btn.callback = self.set_welcome
         self.add_item(welcome_btn)
         
-        # 🔥 НОВАЯ КНОПКА — СОЗДАНИЕ ПРОФИЛЕЙ
+        # 🔥 КНОПКА — СОЗДАНИЕ ПРОФИЛЕЙ (с отображением статуса)
+        profiles_state = CONFIG.get('applications_create_profiles', 'true') == 'true'
+        profiles_status = "🟢 ВКЛЮЧЕНО" if profiles_state else "🔴 ВЫКЛЮЧЕНО"
         profile_btn = discord.ui.Button(
-            label="📁 Создание профилей",
-            style=discord.ButtonStyle.secondary,
+            label=f"📁 Создание профилей ({profiles_status})",
+            style=discord.ButtonStyle.success if profiles_state else discord.ButtonStyle.secondary,
             emoji="📁",
             row=2,
             custom_id="apps_profile_toggle"
@@ -118,7 +120,6 @@ class ApplicationsSettingsView(AdminOnlyView):
             return
         await interaction.response.send_modal(SetWelcomeMessageModal())
 
-    # 🔥 НОВЫЙ МЕТОД
     async def toggle_profiles(self, interaction: discord.Interaction):
         if not await is_admin(str(interaction.user.id)):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
@@ -131,9 +132,12 @@ class ApplicationsSettingsView(AdminOnlyView):
         CONFIG['applications_create_profiles'] = str(new_state).lower()
         save_config(str(interaction.user.id))
         
+        # Обновляем кнопки
+        self._add_buttons()
+        await interaction.message.edit(view=self)
+        
         status = "включено ✅" if new_state else "выключено ❌"
         await interaction.response.send_message(f"📁 Создание профилей при принятии заявок: {status}", ephemeral=True)
-        await interaction.message.edit(view=self)
 
     async def show_stats(self, interaction: discord.Interaction):
         if not await is_admin(str(interaction.user.id)):
