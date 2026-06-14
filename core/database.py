@@ -587,6 +587,17 @@ class Database:
                 )
             ''')
 
+            # Таблица для временных комнат
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS temp_voice_rooms (
+                    channel_id TEXT PRIMARY KEY,
+                    creator_id TEXT NOT NULL,
+                    creator_name TEXT NOT NULL,
+                    slots INTEGER DEFAULT 2,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
             # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ ИГР =====
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS active_games (

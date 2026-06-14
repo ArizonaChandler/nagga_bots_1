@@ -1,5 +1,6 @@
 """Панель настроек статистики"""
 import discord
+import re
 from core.admin_views import AdminOnlyView
 from core.database import db
 from core.config import CONFIG, save_config

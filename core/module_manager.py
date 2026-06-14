@@ -134,6 +134,16 @@ MODULES = {
         "initialize_method": "initialize",
         "toggleable": True
     },
+    "temp_voice": {
+        "name": "🎤 Временные комнаты",
+        "description": "Создание временных голосовых комнат",
+        "enabled": False,
+        "channels": ["temp_voice_public_channel", "temp_voice_log_channel", "temp_voice_category"],
+        "settings_channels": ["temp_voice_settings_channel"],
+        "initializer": "temp_voice.initializer",
+        "initialize_method": "setup",
+        "toggleable": True
+    },
 }
 
 
@@ -210,7 +220,7 @@ class ModuleManager:
             
             # Мероприятия
             elif module_key == 'events':
-                from events.scheduler import setup as setup_events, stop_scheduler
+                from events.scheduler import setup as setup_events
                 await setup_events(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
@@ -249,14 +259,15 @@ class ModuleManager:
                 from advertising.core import setup as setup_ad
                 await setup_ad(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
-
+            
+            # Расширенная статистика
             elif module_key == 'stats':
                 from stats.manager import stats_manager
                 stats_manager.set_bot(self.bot)
                 await stats_manager.initialize()
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
-            # ========== ЭКОНОМИКА (НОВАЯ) ==========
+            # Экономика
             elif module_key == 'economy':
                 from economy import economy_manager
                 from economy.views import EconomyPanelView, AdminEconomyView
@@ -302,6 +313,12 @@ class ModuleManager:
                         await channel.send(embed=embed, view=AdminEconomyView())
                         print(f"✅ [MODULE] {module['name']} админ-панель отправлена в #{channel.name}")
                 
+                print(f"✅ [MODULE] {module['name']} инициализирован")
+            
+            # Временные комнаты
+            elif module_key == 'temp_voice':
+                from temp_voice.initializer import setup as setup_temp_voice
+                await setup_temp_voice(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
             # Для остальных модулей (если добавятся)
@@ -412,11 +429,25 @@ class ModuleManager:
                     await advertiser.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
-            # ========== ЭКОНОМИКА (НОВАЯ) ==========
+            # Расширенная статистика
+            elif module_key == 'stats':
+                from stats.manager import stats_manager
+                if hasattr(stats_manager, 'stop'):
+                    await stats_manager.stop()
+                print(f"✅ [MODULE] {module['name']} остановлен")
+            
+            # Экономика
             elif module_key == 'economy':
                 from economy.manager import economy_manager
                 if hasattr(economy_manager, 'stop'):
                     await economy_manager.stop()
+                print(f"✅ [MODULE] {module['name']} остановлен")
+            
+            # Временные комнаты
+            elif module_key == 'temp_voice':
+                from temp_voice.initializer import initializer as temp_voice_initializer
+                if temp_voice_initializer and hasattr(temp_voice_initializer, 'stop'):
+                    await temp_voice_initializer.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
             # Для остальных модулей
@@ -505,7 +536,9 @@ class ModuleManager:
             "games": ["МОРСКОЙ БОЙ", "ИГРЫ"],
             "birthday": ["ДНИ РОЖДЕНИЯ", "BIRTHDAY"],
             "advertising": ["АВТО-РЕКЛАМА", "РЕКЛАМА"],
-            "economy": ["МАГАЗИН БАЛЛОВ", "ЭКОНОМИКА", "АДМИН-ПАНЕЛЬ ЭКОНОМИКИ"]
+            "economy": ["МАГАЗИН БАЛЛОВ", "ЭКОНОМИКА", "АДМИН-ПАНЕЛЬ ЭКОНОМИКИ"],
+            "stats": ["СТАТИСТИКА", "БЕКАП"],
+            "temp_voice": ["ВРЕМЕННЫЕ КОМНАТЫ", "ГОЛОСОВЫЕ КОМНАТЫ"]
         }
         
         titles = module_titles.get(module_key, [])

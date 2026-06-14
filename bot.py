@@ -207,6 +207,34 @@ async def on_member_remove(member):
         traceback.print_exc()
 
 
+@bot.event
+async def on_voice_state_update(member: discord.Member, before, after):
+    """Отслеживание изменений голосового статуса для временных комнат"""
+    from core.module_manager import MODULES
+    
+    # Проверяем, включён ли модуль temp_voice
+    if not MODULES.get("temp_voice", {}).get("enabled", False):
+        return
+    
+    from temp_voice.manager import temp_voice_manager
+    
+    # Проверяем, есть ли у пользователя комната
+    room = temp_voice_manager.get_user_room(member.id)
+    if not room:
+        return
+    
+    channel = member.guild.get_channel(int(room['channel_id']))
+    if not channel:
+        return
+    
+    # Создатель вышел из комнаты
+    if before.channel == channel and after.channel != channel:
+        await temp_voice_manager.schedule_deletion(channel, member.id)
+    
+    # Создатель вернулся в комнату (отменяем удаление)
+    elif after.channel == channel and before.channel != channel:
+        await temp_voice_manager.cancel_deletion(channel)
+
 # ========== ЗАПУСК ==========
 async def main():
     async with bot:
