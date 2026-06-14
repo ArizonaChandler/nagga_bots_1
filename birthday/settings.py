@@ -10,7 +10,7 @@ class BirthdaySettingsView(AdminOnlyView):
     """Панель управления системой дней рождения"""
 
     def __init__(self):
-        super().__init__()
+        super().__init__(timeout=None)
         self._add_buttons()
         self._add_back_button()
 

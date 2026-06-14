@@ -14,12 +14,19 @@ class ApplicationsSettingsView(AdminOnlyView):
     """Панель настроек системы заявок"""
 
     def __init__(self):
-        super().__init__()
+        super().__init__(timeout=None)
         self._add_buttons()
         self._add_back_button()
 
     def _add_buttons(self):
-        self.clear_items()
+        # Удаляем только основные кнопки, оставляя кнопку "Назад"
+        items_to_remove = []
+        for item in self.children:
+            if hasattr(item, 'custom_id') and item.custom_id not in ['apps_back_to_global', 'back_button']:
+                items_to_remove.append(item)
+        
+        for item in items_to_remove:
+            self.remove_item(item)
         
         # Каналы
         channels_btn = discord.ui.Button(label="📡 Настройка каналов", style=discord.ButtonStyle.primary, emoji="📡", row=0, custom_id="apps_channels")
@@ -46,7 +53,7 @@ class ApplicationsSettingsView(AdminOnlyView):
         welcome_btn.callback = self.set_welcome
         self.add_item(welcome_btn)
         
-        # 🔥 КНОПКА — СОЗДАНИЕ ПРОФИЛЕЙ (с отображением статуса)
+        # Кнопка — создание профилей
         profiles_state = CONFIG.get('applications_create_profiles', 'true') == 'true'
         profiles_status = "🟢 ВКЛЮЧЕНО" if profiles_state else "🔴 ВЫКЛЮЧЕНО"
         profile_btn = discord.ui.Button(
@@ -65,6 +72,11 @@ class ApplicationsSettingsView(AdminOnlyView):
         self.add_item(stats_btn)
 
     def _add_back_button(self):
+        # Проверяем, есть ли уже кнопка "Назад"
+        for child in self.children:
+            if hasattr(child, 'custom_id') and child.custom_id == 'apps_back_to_global':
+                return
+        
         back_btn = discord.ui.Button(
             label="◀ Назад в главное меню",
             style=discord.ButtonStyle.secondary,
@@ -134,11 +146,9 @@ class ApplicationsSettingsView(AdminOnlyView):
         CONFIG['applications_create_profiles'] = str(new_state).lower()
         save_config(str(interaction.user.id))
         
-        # Отправляем подтверждение
         status = "включено ✅" if new_state else "выключено ❌"
         await interaction.response.send_message(f"📁 Создание профилей при принятии заявок: {status}", ephemeral=True)
         
-        # Обновляем кнопки в существующем сообщении (не создаём новый view!)
         self._add_buttons()
         await interaction.message.edit(view=self)
 
@@ -147,7 +157,6 @@ class ApplicationsSettingsView(AdminOnlyView):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
             return
         
-        # Используем существующие методы
         pending = len(db.get_pending_applications())
         accepted = len(db.get_accepted_applications())
         rejected = len(db.get_rejected_applications())
@@ -164,7 +173,7 @@ class ApplicationsSettingsView(AdminOnlyView):
 
 class ApplicationsChannelsView(AdminOnlyView):
     def __init__(self):
-        super().__init__(timeout=60)
+        super().__init__(timeout=None)
         
         submit_btn = discord.ui.Button(label="📝 Канал подачи заявок", style=discord.ButtonStyle.secondary, row=0, custom_id="apps_submit")
         submit_btn.callback = self.set_submit_channel
@@ -205,7 +214,7 @@ class ApplicationsChannelsView(AdminOnlyView):
 
 class ApplicationsRolesView(AdminOnlyView):
     def __init__(self):
-        super().__init__(timeout=60)
+        super().__init__(timeout=None)
         
         recruit_btn = discord.ui.Button(label="🎭 Роль рекрута", style=discord.ButtonStyle.secondary, row=0, custom_id="apps_recruit")
         recruit_btn.callback = self.set_recruit_role
@@ -232,7 +241,7 @@ class ApplicationsRolesView(AdminOnlyView):
 
 class ApplicationsFieldsView(AdminOnlyView):
     def __init__(self):
-        super().__init__(timeout=60)
+        super().__init__(timeout=None)
         
         add_btn = discord.ui.Button(label="➕ Добавить поле", style=discord.ButtonStyle.success, row=0, custom_id="apps_add_field")
         add_btn.callback = self.add_field
@@ -258,14 +267,12 @@ class ApplicationsFieldsView(AdminOnlyView):
         await interaction.response.send_modal(AddFieldModal())
     
     async def edit_field(self, interaction: discord.Interaction):
-        """Открыть модалку для выбора поля и редактирования"""
         fields = db.get_application_fields()
         
         if not fields:
             await interaction.response.send_message("📋 Нет полей для редактирования", ephemeral=True)
             return
         
-        # Создаём select для выбора поля
         view = SelectFieldToEditView(fields)
         embed = discord.Embed(
             title="✏️ ВЫБЕРИТЕ ПОЛЕ ДЛЯ РЕДАКТИРОВАНИЯ",
@@ -300,8 +307,6 @@ class ApplicationsFieldsView(AdminOnlyView):
 
 
 class SelectFieldToEditView(discord.ui.View):
-    """View для выбора поля для редактирования"""
-    
     def __init__(self, fields):
         super().__init__(timeout=60)
         
@@ -336,28 +341,22 @@ class SelectFieldToEditView(discord.ui.View):
         select.callback = select_callback
         self.add_item(select)
         
-        # Кнопка отмены
         cancel_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary)
-        
         async def cancel_callback(interaction: discord.Interaction):
             embed = discord.Embed(title="📝 **НАСТРОЙКА ПОЛЕЙ ЗАЯВКИ**", color=0x7289da)
             await interaction.response.edit_message(embed=embed, view=ApplicationsFieldsView())
-        
         cancel_btn.callback = cancel_callback
         self.add_item(cancel_btn)
 
 
 class ApplicationsCombinedPanel(AdminOnlyView):
-    """Объединённая панель управления и модерации заявок"""
-    
     def __init__(self):
-        super().__init__()
+        super().__init__(timeout=None)
         self._add_buttons()
     
     def _add_buttons(self):
         self.clear_items()
         
-        # Управление заявками
         manage_btn = discord.ui.Button(
             label="📋 Управление заявками",
             style=discord.ButtonStyle.primary,
@@ -368,7 +367,6 @@ class ApplicationsCombinedPanel(AdminOnlyView):
         manage_btn.callback = self.show_pending
         self.add_item(manage_btn)
         
-        # Настройки системы
         settings_btn = discord.ui.Button(
             label="⚙️ Настройки системы",
             style=discord.ButtonStyle.secondary,
@@ -379,7 +377,6 @@ class ApplicationsCombinedPanel(AdminOnlyView):
         settings_btn.callback = self.show_settings
         self.add_item(settings_btn)
         
-        # Сброс пользователя
         reset_btn = discord.ui.Button(
             label="🔄 Сбросить пользователя",
             style=discord.ButtonStyle.danger,
@@ -390,7 +387,6 @@ class ApplicationsCombinedPanel(AdminOnlyView):
         reset_btn.callback = self.reset_user
         self.add_item(reset_btn)
         
-        # Кнопка "Назад" в глобальные настройки
         back_btn = discord.ui.Button(
             label="◀ Назад в главное меню",
             style=discord.ButtonStyle.secondary,
@@ -413,7 +409,6 @@ class ApplicationsCombinedPanel(AdminOnlyView):
         self.add_item(back_btn)
     
     async def show_pending(self, interaction: discord.Interaction):
-        """Показать ожидающие заявки"""
         await interaction.response.defer(ephemeral=True)
         
         apps = app_manager.get_pending_applications()
@@ -441,7 +436,6 @@ class ApplicationsCombinedPanel(AdminOnlyView):
         await interaction.followup.send(embed=embed, ephemeral=True)
     
     async def show_settings(self, interaction: discord.Interaction):
-        """Показать настройки системы"""
         embed = discord.Embed(
             title="⚙️ **НАСТРОЙКИ ЗАЯВОК**",
             description="Настройка системы заявок в семью",
@@ -450,7 +444,6 @@ class ApplicationsCombinedPanel(AdminOnlyView):
         await interaction.response.edit_message(embed=embed, view=ApplicationsSettingsView())
     
     async def reset_user(self, interaction: discord.Interaction):
-        """Сбросить пользователя"""
         await interaction.response.send_modal(ResetUserModal())
 
 
@@ -521,7 +514,6 @@ class SetChannelModal(discord.ui.Modal, title="📡 НАСТРОЙКА КАНА�
             CONFIG[self.setting_key] = self.channel_id.value
             save_config(str(interaction.user.id))
             
-            # Обновляем панель в канале настроек
             settings_channel_id = CONFIG.get('applications_settings_channel')
             if settings_channel_id:
                 settings_channel = interaction.guild.get_channel(int(settings_channel_id))

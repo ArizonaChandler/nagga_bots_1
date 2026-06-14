@@ -11,7 +11,7 @@ class GamesSettingsView(AdminOnlyView):
     """Панель настроек игр"""
 
     def __init__(self):
-        super().__init__()
+        super().__init__(timeout=None)
         self._add_buttons()
         self._add_back_button()
 
@@ -69,7 +69,7 @@ class GamesSettingsView(AdminOnlyView):
 
 class GamesChannelsView(AdminOnlyView):
     def __init__(self):
-        super().__init__(timeout=60)
+        super().__init__(timeout=None)
 
         rules_btn = discord.ui.Button(label="📜 Канал правил", style=discord.ButtonStyle.secondary, row=0, custom_id="games_rules")
         rules_btn.callback = self.set_rules_channel
@@ -117,7 +117,7 @@ class GamesChannelsView(AdminOnlyView):
 
 class SetChannelModal(discord.ui.Modal, title="📡 НАСТРОЙКА КАНАЛА"):
     def __init__(self, setting_key: str, description: str):
-        super().__init__()
+        super().__init__(timeout=None)
         self.setting_key = setting_key
         self.channel_id = discord.ui.TextInput(label=f"ID {description}", placeholder="123456789012345678", max_length=20, required=True)
         self.add_item(self.channel_id)

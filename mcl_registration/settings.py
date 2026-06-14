@@ -11,7 +11,7 @@ class MCLSettingsView(AdminOnlyView):
     """Панель управления системой MCL"""
 
     def __init__(self):
-        super().__init__()
+        super().__init__(timeout=None)
         self._add_buttons()
         self._add_back_button()
 
@@ -85,7 +85,7 @@ class MCLSettingsView(AdminOnlyView):
 
 class MCLChannelsView(AdminOnlyView):
     def __init__(self):
-        super().__init__(timeout=60)
+        super().__init__(timeout=None)
 
         main_btn = discord.ui.Button(label="🔴 Канал модерации", style=discord.ButtonStyle.secondary, row=0, custom_id="mcl_main")
         main_btn.callback = self.set_main_channel
@@ -112,7 +112,7 @@ class MCLChannelsView(AdminOnlyView):
 
 class SetMCLChannelModal(discord.ui.Modal, title="📡 НАСТРОЙКА КАНАЛА"):
     def __init__(self, setting_key: str, description: str):
-        super().__init__()
+        super().__init__(timeout=None)
         self.setting_key = setting_key
         self.channel_id = discord.ui.TextInput(label=f"ID {description}", placeholder="123456789012345678", max_length=20, required=True)
         self.add_item(self.channel_id)

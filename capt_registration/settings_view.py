@@ -12,7 +12,7 @@ class CaptSettingsView(AdminOnlyView):
     """Постоянные кнопки для настройки системы CAPT"""
     
     def __init__(self):
-        super().__init__()
+        super().__init__(timeout=None)
         self._add_buttons()
         self._add_back_button()
     

@@ -10,7 +10,7 @@ from economy.manager import economy_manager
 class EconomySettingsView(AdminOnlyView):
     
     def __init__(self):
-        super().__init__()
+        super().__init__(timeout=None)
         self._add_buttons()
         self._add_back_button()
     
@@ -123,7 +123,7 @@ class EconomySettingsView(AdminOnlyView):
 
 class EconomyChannelsView(AdminOnlyView):
     def __init__(self):
-        super().__init__(timeout=60)
+        super().__init__(timeout=None)
     
     @discord.ui.button(label="🛒 Публичный канал (магазин)", style=discord.ButtonStyle.primary, row=0, custom_id="eco_channel_shop")
     async def set_shop_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -145,7 +145,7 @@ class EconomyChannelsView(AdminOnlyView):
 
 class SetEconomyChannelModal(discord.ui.Modal, title="📡 НАСТРОЙКА КАНАЛА"):
     def __init__(self, setting_key: str, description: str):
-        super().__init__()
+        super().__init__(timeout=None)
         self.setting_key = setting_key
         self.channel_input = discord.ui.TextInput(
             label=f"ID {description}",
@@ -203,7 +203,7 @@ class SetEconomyChannelModal(discord.ui.Modal, title="📡 НАСТРОЙКА К
 # ===== ОСТАЛЬНЫЕ КЛАССЫ (без изменений) =====
 class SetNumberModal(discord.ui.Modal, title="📝 НАСТРОЙКА"):
     def __init__(self, key: str, label: str, current: int):
-        super().__init__()
+        super().__init__(timeout=None)
         self.key = key
         self.input = discord.ui.TextInput(label=label, placeholder=str(current), required=True)
         self.add_item(self.input)
@@ -224,7 +224,7 @@ class SetNumberModal(discord.ui.Modal, title="📝 НАСТРОЙКА"):
 
 class SetTwoNumbersModal(discord.ui.Modal, title="📝 НАСТРОЙКА"):
     def __init__(self, key1: str, key2: str, label: str, val1: int, val2: int):
-        super().__init__()
+        super().__init__(timeout=None)
         self.key1, self.key2 = key1, key2
         self.input1 = discord.ui.TextInput(label=f"{label} (основной)", placeholder=str(val1), required=True)
         self.add_item(self.input1)
@@ -250,7 +250,7 @@ class SetTwoNumbersModal(discord.ui.Modal, title="📝 НАСТРОЙКА"):
 
 class SetThreeNumbersModal(discord.ui.Modal, title="📝 НАСТРОЙКА"):
     def __init__(self, key1: str, key2: str, key3: str, label: str, v1: int, v2: int, v3: int):
-        super().__init__()
+        super().__init__(timeout=None)
         self.key1, self.key2, self.key3 = key1, key2, key3
         self.input1 = discord.ui.TextInput(label=f"{label} (T3)", placeholder=str(v1), required=True)
         self.add_item(self.input1)
@@ -281,7 +281,7 @@ class SetThreeNumbersModal(discord.ui.Modal, title="📝 НАСТРОЙКА"):
 
 class SetDailyModal(discord.ui.Modal, title="📝 ЕЖЕДНЕВНЫЙ БОНУС"):
     def __init__(self, base: int, inc: int, limit: int):
-        super().__init__()
+        super().__init__(timeout=None)
         self.input_base = discord.ui.TextInput(label="Базовая награда", placeholder=str(base), required=True)
         self.add_item(self.input_base)
         self.input_inc = discord.ui.TextInput(label="Прирост за 2 дня", placeholder=str(inc), required=True)

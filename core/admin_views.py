@@ -9,6 +9,7 @@ class AdminOnlyView(discord.ui.View):
     """Базовый класс для всех панелей настроек — только для админов бота"""
     
     def __init__(self, timeout=None):
+        # По умолчанию timeout=None — бесконечный
         super().__init__(timeout=timeout)
     
     async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item):

@@ -10,7 +10,7 @@ from stats.manager import stats_manager
 class StatsSettingsView(AdminOnlyView):
     
     def __init__(self):
-        super().__init__()
+        super().__init__(timeout=None)
         self._add_buttons()
         self._add_back_button()
     

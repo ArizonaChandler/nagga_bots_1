@@ -14,12 +14,19 @@ class TierSettingsView(AdminOnlyView):
     """Постоянные кнопки для настройки системы TIER"""
 
     def __init__(self):
-        super().__init__()
+        super().__init__(timeout=None)
         self._add_buttons()
         self._add_back_button()
 
     def _add_buttons(self):
-        self.clear_items()
+        # Удаляем только основные кнопки, оставляя кнопку "Назад"
+        items_to_remove = []
+        for item in self.children:
+            if hasattr(item, 'custom_id') and item.custom_id not in ['tier_back_to_global', 'back_button']:
+                items_to_remove.append(item)
+        
+        for item in items_to_remove:
+            self.remove_item(item)
         
         # Каналы
         channels_btn = discord.ui.Button(label="📡 Настройка каналов", style=discord.ButtonStyle.primary, emoji="📡", row=0, custom_id="tier_channels")
@@ -36,7 +43,7 @@ class TierSettingsView(AdminOnlyView):
         req_btn.callback = self.requirements_menu
         self.add_item(req_btn)
         
-        # 🔥 КНОПКА — УДАЛЕНИЕ ПРОФИЛЯ ПРИ ВЫДАЧЕ TIER (с отображением статуса)
+        # Кнопка — удаление профиля
         delete_profile_state = CONFIG.get('tier_delete_profile', 'false') == 'true'
         delete_profile_status = "🟢 ВКЛЮЧЕНО" if delete_profile_state else "🔴 ВЫКЛЮЧЕНО"
         delete_profile_btn = discord.ui.Button(
@@ -49,7 +56,7 @@ class TierSettingsView(AdminOnlyView):
         delete_profile_btn.callback = self.toggle_delete_profile
         self.add_item(delete_profile_btn)
         
-        # 🔥 КНОПКА — СОЗДАНИЕ ПРОФИЛЯ ПРИ ВЫДАЧЕ TIER (с отображением статуса)
+        # Кнопка — создание профиля
         create_profile_state = CONFIG.get('tier_create_profile', 'false') == 'true'
         create_profile_status = "🟢 ВКЛЮЧЕНО" if create_profile_state else "🔴 ВЫКЛЮЧЕНО"
         create_profile_btn = discord.ui.Button(
@@ -68,6 +75,11 @@ class TierSettingsView(AdminOnlyView):
         self.add_item(stats_btn)
 
     def _add_back_button(self):
+        # Проверяем, есть ли уже кнопка "Назад"
+        for child in self.children:
+            if hasattr(child, 'custom_id') and child.custom_id == 'tier_back_to_global':
+                return
+        
         back_btn = discord.ui.Button(
             label="◀ Назад в главное меню",
             style=discord.ButtonStyle.secondary,
@@ -164,7 +176,7 @@ class TierSettingsView(AdminOnlyView):
 
 class TierChannelsView(AdminOnlyView):
     def __init__(self):
-        super().__init__(timeout=60)
+        super().__init__(timeout=None)
         
         submit_btn = discord.ui.Button(label="📝 Канал подачи заявок", style=discord.ButtonStyle.secondary, row=0, custom_id="tier_submit")
         submit_btn.callback = self.set_submit_channel
@@ -212,7 +224,7 @@ class TierChannelsView(AdminOnlyView):
 
 class TierRolesView(AdminOnlyView):
     def __init__(self):
-        super().__init__(timeout=60)
+        super().__init__(timeout=None)
         
         checker_btn = discord.ui.Button(label="👑 Роль Tier Checker", style=discord.ButtonStyle.secondary, row=0, custom_id="tier_checker")
         checker_btn.callback = self.set_checker_role
@@ -253,7 +265,7 @@ class TierRolesView(AdminOnlyView):
 
 class TierRequirementsView(AdminOnlyView):
     def __init__(self):
-        super().__init__(timeout=60)
+        super().__init__(timeout=None)
         
         tier1_btn = discord.ui.Button(label="🔴 Требования Tier 1", style=discord.ButtonStyle.secondary, row=0, custom_id="tier1_req")
         tier1_btn.callback = self.set_tier1_req
@@ -292,6 +304,7 @@ class SetTierChannelModal(discord.ui.Modal, title="📡 НАСТРОЙКА КА�
     def __init__(self, setting_key: str, description: str):
         super().__init__()
         self.setting_key = setting_key
+        self.description = description
         self.channel_id = discord.ui.TextInput(label=f"ID {description}", placeholder="123456789012345678", max_length=20, required=True)
         self.add_item(self.channel_id)
 
@@ -307,7 +320,7 @@ class SetTierChannelModal(discord.ui.Modal, title="📡 НАСТРОЙКА КА�
             db.set_setting(self.setting_key, self.channel_id.value, str(interaction.user.id))
             CONFIG[self.setting_key] = self.channel_id.value
             save_config(str(interaction.user.id))
-            await interaction.response.send_message(f"✅ {self.channel_id.label} настроен: {channel.mention}", ephemeral=True)
+            await interaction.response.send_message(f"✅ {self.description} настроен: {channel.mention}", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
@@ -316,6 +329,7 @@ class SetTierCategoryModal(discord.ui.Modal, title="📁 НАСТРОЙКА КА
     def __init__(self, setting_key: str, description: str):
         super().__init__()
         self.setting_key = setting_key
+        self.description = description
         self.category_id = discord.ui.TextInput(label=f"ID {description}", placeholder="123456789012345678", max_length=20, required=True)
         self.add_item(self.category_id)
 
@@ -331,7 +345,7 @@ class SetTierCategoryModal(discord.ui.Modal, title="📁 НАСТРОЙКА КА
             db.set_setting(self.setting_key, self.category_id.value, str(interaction.user.id))
             CONFIG[self.setting_key] = self.category_id.value
             save_config(str(interaction.user.id))
-            await interaction.response.send_message(f"✅ {self.category_id.label} настроена: {category.name}", ephemeral=True)
+            await interaction.response.send_message(f"✅ {self.description} настроена: {category.name}", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
@@ -340,6 +354,7 @@ class SetTierRoleModal(discord.ui.Modal, title="🎭 НАСТРОЙКА РОЛИ
     def __init__(self, setting_key: str, description: str):
         super().__init__()
         self.setting_key = setting_key
+        self.description = description
         self.role_id = discord.ui.TextInput(label=f"ID {description}", placeholder="123456789012345678", max_length=20, required=True)
         self.add_item(self.role_id)
 
@@ -355,7 +370,7 @@ class SetTierRoleModal(discord.ui.Modal, title="🎭 НАСТРОЙКА РОЛИ
             db.set_setting(self.setting_key, self.role_id.value, str(interaction.user.id))
             CONFIG[self.setting_key] = self.role_id.value
             save_config(str(interaction.user.id))
-            await interaction.response.send_message(f"✅ {self.role_id.label} настроена: {role.mention}", ephemeral=True)
+            await interaction.response.send_message(f"✅ {self.description} настроена: {role.mention}", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
@@ -382,7 +397,6 @@ class SetTierRequirementsModal(discord.ui.Modal, title="📝 НАСТРОЙКА 
             tier_manager.save_tier_requirements(self.tier, self.requirements.value, str(interaction.user.id))
             await interaction.response.send_message(f"✅ Требования для {self.tier.upper()} обновлены!", ephemeral=True)
             
-            # Обновляем embed в канале информации
             info_channel_id = CONFIG.get('tier_info_channel')
             if info_channel_id:
                 from tier.views import update_tier_embed
