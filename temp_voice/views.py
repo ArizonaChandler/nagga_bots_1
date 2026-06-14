@@ -74,10 +74,8 @@ class TempVoiceManageView(CreatorOnlyView):
     def __init__(self, creator_id: int, channel_id: int):
         super().__init__(creator_id, timeout=None)
         self.channel_id = channel_id
-        self._add_buttons()
-    
-    def _add_buttons(self):
-        # Расширить слоты
+        
+        # Создаём кнопки прямо в __init__, без отдельного метода
         self.expand_btn = discord.ui.Button(
             label="➕ РАСШИРИТЬ (+2 СЛОТА)",
             style=discord.ButtonStyle.success,
@@ -88,7 +86,6 @@ class TempVoiceManageView(CreatorOnlyView):
         self.expand_btn.callback = self.expand_slots
         self.add_item(self.expand_btn)
         
-        # Кикнуть пользователя
         self.kick_btn = discord.ui.Button(
             label="👢 КИКНУТЬ ПОЛЬЗОВАТЕЛЯ",
             style=discord.ButtonStyle.danger,
@@ -99,7 +96,6 @@ class TempVoiceManageView(CreatorOnlyView):
         self.kick_btn.callback = self.kick_user
         self.add_item(self.kick_btn)
         
-        # Закрыть комнату
         self.close_btn = discord.ui.Button(
             label="🔒 ЗАКРЫТЬ КОМНАТУ",
             style=discord.ButtonStyle.danger,
@@ -120,12 +116,14 @@ class TempVoiceManageView(CreatorOnlyView):
     async def expand_slots(self, interaction: discord.Interaction, button: discord.ui.Button):
         print(f"🎤 [DEBUG] expand_slots callback вызван")
         
+        await interaction.response.defer(ephemeral=True)
+        
         channel = await self.get_channel(interaction)
         if not channel:
             return
         
         success, msg = await temp_voice_manager.expand_slots(interaction, channel)
-        await interaction.response.send_message(msg, ephemeral=True)
+        await interaction.followup.send(msg, ephemeral=True)
         
         if success:
             room = temp_voice_manager.get_room_by_channel(channel.id)
@@ -142,24 +140,30 @@ class TempVoiceManageView(CreatorOnlyView):
     async def kick_user(self, interaction: discord.Interaction, button: discord.ui.Button):
         print(f"🎤 [DEBUG] kick_user callback вызван")
         
+        await interaction.response.defer(ephemeral=True)
+        
         channel = await self.get_channel(interaction)
         if not channel:
             return
         
         if not channel.members:
-            await interaction.response.send_message("❌ В комнате никого нет", ephemeral=True)
+            await interaction.followup.send("❌ В комнате никого нет", ephemeral=True)
             return
         
-        await interaction.response.send_modal(KickUserModal(channel.id))
+        # Отправляем модалку (она требует response, не followup)
+        # Поэтому нужно отдельно
+        await interaction.edit_original_response(view=None)
+        await interaction.followup.send_modal(KickUserModal(channel.id))
     
     async def close_room(self, interaction: discord.Interaction, button: discord.ui.Button):
         print(f"🎤 [DEBUG] close_room callback вызван")
+        
+        await interaction.response.defer(ephemeral=True)
         
         channel = await self.get_channel(interaction)
         if not channel:
             return
         
-        await interaction.response.send_message("🔒 Закрываю комнату...", ephemeral=True)
         await temp_voice_manager.close_room(interaction, channel)
-        await interaction.edit_original_response(content="✅ Комната закрыта")
+        await interaction.followup.send("✅ Комната закрыта", ephemeral=True)
         self.stop()

@@ -29,6 +29,7 @@ class KickUserModal(discord.ui.Modal, title="👢 КИКНУТЬ ПОЛЬЗОВ�
         self.channel_id = channel_id
     
     async def on_submit(self, interaction: discord.Interaction):
+        # Извлекаем ID пользователя из упоминания
         user_id = None
         for word in self.user_mention.value.split():
             if word.startswith('<@') and word.endswith('>'):
