@@ -149,6 +149,10 @@ CONFIG = {
     'action_logs_channel': None,
     'action_logs_settings_channel': None,
     'action_logs_enabled_events': [],
+
+    # ===== СОЗДАНИЕ EMBED =====
+    'embed_builder_channel': None,
+    'embed_builder_settings_channel': None,
 }
 
 

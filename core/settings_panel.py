@@ -99,6 +99,9 @@ class GlobalSettingsPanel(AdminOnlyView):
             elif module_key == "action_logs":
                 from action_logs.settings_view import ActionLogsSettingsView
                 settings_view = ActionLogsSettingsView()
+            elif module_key == "embed_builder":
+                from embed_builder.settings_view import EmbedBuilderSettingsView
+                settings_view = EmbedBuilderSettingsView()
             
             if settings_view:
                 embed = discord.Embed(

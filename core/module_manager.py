@@ -154,6 +154,16 @@ MODULES = {
         "initialize_method": "setup",
         "toggleable": True
     },
+    "embed_builder": {
+        "name": "📦 Создание embed",
+        "description": "Создание красивых embed сообщений через бота",
+        "enabled": False,
+        "channels": ["embed_builder_channel"],
+        "settings_channels": ["embed_builder_settings_channel"],
+        "initializer": "embed_builder.initializer",
+        "initialize_method": "setup",
+        "toggleable": True
+    },
 }
 
 
@@ -313,6 +323,11 @@ class ModuleManager:
                 from action_logs.initializer import setup as setup_action_logs
                 await setup_action_logs(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
+
+            elif module_key == 'embed_builder':
+                from embed_builder.initializer import setup as setup_embed_builder
+                await setup_embed_builder(self.bot)
+                print(f"✅ [MODULE] {module['name']} инициализирован")
             
             else:
                 initializer_path = module.get("initializer")
@@ -432,6 +447,12 @@ class ModuleManager:
                 from action_logs.initializer import initializer as action_logs_initializer
                 if action_logs_initializer and hasattr(action_logs_initializer, 'stop'):
                     await action_logs_initializer.stop()
+                print(f"✅ [MODULE] {module['name']} остановлен")
+
+            elif module_key == 'embed_builder':
+                from embed_builder.initializer import initializer as embed_builder_initializer
+                if embed_builder_initializer and hasattr(embed_builder_initializer, 'stop'):
+                    await embed_builder_initializer.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
             else:
