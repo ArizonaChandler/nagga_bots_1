@@ -125,12 +125,11 @@ class TierSettingsView(AdminOnlyView):
         CONFIG['tier_delete_profile'] = str(new_state).lower()
         save_config(str(interaction.user.id))
         
-        # Обновляем кнопки
-        self._add_buttons()
-        await interaction.message.edit(view=self)
-        
         status = "включено ✅" if new_state else "выключено ❌"
         await interaction.response.send_message(f"🗑️ Удаление профилей при выдаче Tier: {status}", ephemeral=True)
+        
+        self._add_buttons()
+        await interaction.message.edit(view=self)
 
     async def toggle_create_profile(self, interaction: discord.Interaction):
         if not await is_admin(str(interaction.user.id)):
@@ -144,12 +143,11 @@ class TierSettingsView(AdminOnlyView):
         CONFIG['tier_create_profile'] = str(new_state).lower()
         save_config(str(interaction.user.id))
         
-        # Обновляем кнопки
-        self._add_buttons()
-        await interaction.message.edit(view=self)
-        
         status = "включено ✅" if new_state else "выключено ❌"
         await interaction.response.send_message(f"📁 Создание профиля при выдаче Tier: {status}", ephemeral=True)
+        
+        self._add_buttons()
+        await interaction.message.edit(view=self)
 
     async def show_stats(self, interaction: discord.Interaction):
         if not await is_admin(str(interaction.user.id)):

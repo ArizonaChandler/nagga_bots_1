@@ -134,12 +134,13 @@ class ApplicationsSettingsView(AdminOnlyView):
         CONFIG['applications_create_profiles'] = str(new_state).lower()
         save_config(str(interaction.user.id))
         
-        # Обновляем кнопки
-        self._add_buttons()
-        await interaction.message.edit(view=self)
-        
+        # Отправляем подтверждение
         status = "включено ✅" if new_state else "выключено ❌"
         await interaction.response.send_message(f"📁 Создание профилей при принятии заявок: {status}", ephemeral=True)
+        
+        # Обновляем кнопки в существующем сообщении (не создаём новый view!)
+        self._add_buttons()
+        await interaction.message.edit(view=self)
 
     async def show_stats(self, interaction: discord.Interaction):
         if not await is_admin(str(interaction.user.id)):
