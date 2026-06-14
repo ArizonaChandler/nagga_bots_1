@@ -124,12 +124,14 @@ class TempVoiceManager:
         if channel_id in self.pending_deletions:
             del self.pending_deletions[channel_id]
         
+        print(f"🎤 [DEBUG] delete_room: вызываем delete_room_from_db для {channel_id}")
         self.delete_room_from_db(channel_id)
+        print(f"🎤 [DEBUG] delete_room: delete_room_from_db выполнен")
         
         if channel_id in self.active_rooms:
             del self.active_rooms[channel_id]
         
-        # УДАЛЕНИЕ КАНАЛА БЕЗ reason (для диагностики)
+        print(f"🎤 [DEBUG] delete_room: пытаемся удалить канал {channel.name}")
         try:
             await channel.delete()
             print(f"🎤 [TEMP_VOICE] ✅ КАНАЛ {channel.name} УСПЕШНО УДАЛЁН")
@@ -139,9 +141,6 @@ class TempVoiceManager:
             print(f"⚠️ [TEMP_VOICE] Канал {channel.name} уже удалён")
         except Exception as e:
             print(f"❌ [TEMP_VOICE] Ошибка удаления: {type(e).__name__}: {e}")
-        
-        if self.bot:
-            await self.log_action(channel.guild, f"🗑️ Удалена временная комната: {channel.name}")
     
     async def schedule_deletion(self, channel: discord.VoiceChannel, creator_id: int):
         settings = self.get_settings()

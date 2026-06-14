@@ -2662,21 +2662,26 @@ class Database:
 
     def get_temp_voice_room_by_channel(self, channel_id: str) -> dict:
         """Получить комнату по ID канала"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                'SELECT channel_id, creator_id, creator_name, slots, created_at FROM temp_voice_rooms WHERE channel_id = ?',
-                (channel_id,)
-            )
-            row = cursor.fetchone()
-            if row:
-                return {
-                    'channel_id': row[0],
-                    'creator_id': int(row[1]),
-                    'creator_name': row[2],
-                    'slots': row[3],
-                    'created_at': row[4]
-                }
+        print(f"🗄️ [DB] get_temp_voice_room_by_channel: channel_id={channel_id}")
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    'SELECT channel_id, creator_id, creator_name, slots, created_at FROM temp_voice_rooms WHERE channel_id = ?',
+                    (channel_id,)
+                )
+                row = cursor.fetchone()
+                if row:
+                    return {
+                        'channel_id': row[0],
+                        'creator_id': int(row[1]),
+                        'creator_name': row[2],
+                        'slots': row[3],
+                        'created_at': row[4]
+                    }
+                return None
+        except Exception as e:
+            print(f"❌ [DB] Ошибка get_temp_voice_room_by_channel: {e}")
             return None
 
     def get_all_temp_voice_rooms(self) -> list:
@@ -2695,20 +2700,32 @@ class Database:
 
     def save_temp_voice_room(self, channel_id: str, creator_id: str, creator_name: str, slots: int):
         """Сохранить комнату в БД"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                INSERT OR REPLACE INTO temp_voice_rooms (channel_id, creator_id, creator_name, slots, created_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ''', (channel_id, creator_id, creator_name, slots))
-            conn.commit()
+        print(f"🗄️ [DB] save_temp_voice_room: channel_id={channel_id}, creator={creator_name}")
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT OR REPLACE INTO temp_voice_rooms (channel_id, creator_id, creator_name, slots, created_at)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ''', (channel_id, creator_id, creator_name, slots))
+                conn.commit()
+                print(f"🗄️ [DB] save_temp_voice_room: успешно")
+        except Exception as e:
+            print(f"❌ [DB] Ошибка save_temp_voice_room: {e}")
+            raise
 
     def delete_temp_voice_room(self, channel_id: str):
         """Удалить комнату из БД"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM temp_voice_rooms WHERE channel_id = ?', (channel_id,))
-            conn.commit()
+        print(f"🗄️ [DB] delete_temp_voice_room: channel_id={channel_id}")
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM temp_voice_rooms WHERE channel_id = ?', (channel_id,))
+                conn.commit()
+                print(f"🗄️ [DB] delete_temp_voice_room: удалено {cursor.rowcount} записей")
+        except Exception as e:
+            print(f"❌ [DB] Ошибка delete_temp_voice_room: {type(e).__name__}: {e}")
+            raise
 
     def update_temp_voice_room_slots(self, channel_id: str, slots: int):
         """Обновить количество слотов в комнате"""
