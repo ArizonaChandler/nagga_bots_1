@@ -1,4 +1,5 @@
 """Инициализация системы создания embed"""
+import discord
 import logging
 from core.database import db
 from embed_builder.settings_view import EmbedBuilderSettingsView

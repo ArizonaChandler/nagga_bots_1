@@ -1,7 +1,7 @@
 """Менеджер для создания embed сообщений"""
 from core.database import db
 from core.config import CONFIG
-
+import discord
 
 class EmbedBuilderManager:
     
