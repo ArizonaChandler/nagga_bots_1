@@ -8,7 +8,6 @@ from temp_voice.manager import temp_voice_manager
 
 
 class TempVoiceSettingsView(AdminOnlyView):
-    """Панель настроек системы временных комнат"""
 
     def __init__(self):
         super().__init__(timeout=None)
@@ -18,7 +17,6 @@ class TempVoiceSettingsView(AdminOnlyView):
     def _add_buttons(self):
         self.clear_items()
         
-        # Категория для комнат
         category_btn = discord.ui.Button(
             label="📁 Категория для комнат",
             style=discord.ButtonStyle.primary,
@@ -29,7 +27,6 @@ class TempVoiceSettingsView(AdminOnlyView):
         category_btn.callback = self.set_category
         self.add_item(category_btn)
         
-        # Публичный канал
         public_btn = discord.ui.Button(
             label="📢 Публичный канал",
             style=discord.ButtonStyle.primary,
@@ -40,7 +37,6 @@ class TempVoiceSettingsView(AdminOnlyView):
         public_btn.callback = self.set_public_channel
         self.add_item(public_btn)
         
-        # Канал логов
         log_btn = discord.ui.Button(
             label="📜 Канал логов",
             style=discord.ButtonStyle.primary,
@@ -51,7 +47,6 @@ class TempVoiceSettingsView(AdminOnlyView):
         log_btn.callback = self.set_log_channel
         self.add_item(log_btn)
         
-        # Максимум слотов
         max_slots_btn = discord.ui.Button(
             label="📊 Максимум слотов",
             style=discord.ButtonStyle.secondary,
@@ -62,7 +57,6 @@ class TempVoiceSettingsView(AdminOnlyView):
         max_slots_btn.callback = self.set_max_slots
         self.add_item(max_slots_btn)
         
-        # Задержка удаления
         delay_btn = discord.ui.Button(
             label="⏰ Задержка удаления (сек)",
             style=discord.ButtonStyle.secondary,
@@ -73,7 +67,6 @@ class TempVoiceSettingsView(AdminOnlyView):
         delay_btn.callback = self.set_delete_delay
         self.add_item(delay_btn)
         
-        # Показать настройки
         show_btn = discord.ui.Button(
             label="📊 Текущие настройки",
             style=discord.ButtonStyle.secondary,
@@ -97,8 +90,7 @@ class TempVoiceSettingsView(AdminOnlyView):
             from core.settings_panel import GlobalSettingsPanel
             embed = discord.Embed(
                 title="⚙️ **ЦЕНТР УПРАВЛЕНИЯ СИСТЕМАМИ**",
-                description="Настройка всех модулей бота.\n\n"
-                            "Здесь отображаются кнопки только для **включённых** систем.",
+                description="Настройка всех модулей бота.",
                 color=0x7289da
             )
             await interaction.response.edit_message(embed=embed, view=GlobalSettingsPanel(interaction.client))

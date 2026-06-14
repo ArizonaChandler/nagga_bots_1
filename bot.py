@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Unit Management System v1.3
+Management System v0.27
 Модульная архитектура с системой автоматических оповещений
 """
 import asyncio

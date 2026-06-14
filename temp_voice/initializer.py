@@ -2,7 +2,6 @@
 import discord
 import logging
 from core.database import db
-from core.config import CONFIG
 from temp_voice.views import TempVoicePublicView
 from temp_voice.settings_view import TempVoiceSettingsView
 from temp_voice.manager import temp_voice_manager
@@ -17,34 +16,24 @@ class TempVoiceInitializer:
         self.bot = bot
     
     async def initialize_all(self):
-        """Инициализировать все каналы системы"""
         logger.info("🔄 Инициализация системы временных комнат...")
-        print("🎤 [TEMP_VOICE] Инициализация системы временных комнат...")
+        print("🎤 [TEMP_VOICE] Инициализация системы...")
         
-        # Устанавливаем бота в менеджер
         temp_voice_manager.set_bot(self.bot)
         
-        # Загружаем настройки из БД
         self.public_channel_id = db.get_setting('temp_voice_public_channel')
         self.settings_channel_id = db.get_setting('temp_voice_settings_channel')
         
-        # 1. Публичный канал с кнопками
         await self._init_public_channel()
-        
-        # 2. Канал настроек
         await self._init_settings_channel()
-        
-        # 3. Проверяем создателей комнат после перезапуска
         await self._restore_rooms()
         
         logger.info("✅ Инициализация системы временных комнат завершена")
         print("🎤 [TEMP_VOICE] Инициализация завершена")
     
     async def _init_public_channel(self):
-        """Публичный канал с кнопками создания комнат"""
         if not self.public_channel_id:
             logger.warning("⚠️ Публичный канал временных комнат не настроен")
-            print("⚠️ [TEMP_VOICE] Публичный канал не настроен")
             return
         
         channel = self.bot.get_channel(int(self.public_channel_id))
@@ -52,15 +41,13 @@ class TempVoiceInitializer:
             logger.error(f"❌ Публичный канал {self.public_channel_id} не найден")
             return
         
-        # Ищем существующее сообщение с кнопками
         found = False
         async for msg in channel.history(limit=50):
             if msg.author == self.bot.user and msg.components:
-                if msg.components and len(msg.components) > 0:
-                    await msg.edit(view=TempVoicePublicView())
-                    found = True
-                    print(f"🎤 [TEMP_VOICE] Обновлена панель в #{channel.name}")
-                    break
+                await msg.edit(view=TempVoicePublicView())
+                found = True
+                print(f"🎤 [TEMP_VOICE] Обновлена панель в #{channel.name}")
+                break
         
         if not found:
             embed = discord.Embed(
@@ -82,7 +69,6 @@ class TempVoiceInitializer:
             print(f"🎤 [TEMP_VOICE] Создана панель в #{channel.name}")
     
     async def _init_settings_channel(self):
-        """Канал настроек системы"""
         if not self.settings_channel_id:
             logger.warning("⚠️ Канал настроек временных комнат не настроен")
             return
@@ -92,7 +78,6 @@ class TempVoiceInitializer:
             logger.error(f"❌ Канал настроек {self.settings_channel_id} не найден")
             return
         
-        # Ищем существующую панель
         found = False
         async for msg in channel.history(limit=50):
             if msg.author == self.bot.user and msg.embeds:
@@ -112,20 +97,14 @@ class TempVoiceInitializer:
             print(f"🎤 [TEMP_VOICE] Создана панель настроек в #{channel.name}")
     
     async def _restore_rooms(self):
-        """Восстановить комнаты после перезапуска"""
         print("🎤 [TEMP_VOICE] Проверка комнат после перезапуска...")
         
-        # Устанавливаем бота в менеджер
-        temp_voice_manager.set_bot(self.bot)
-        
-        # Получаем все серверы бота
         for guild in self.bot.guilds:
             await temp_voice_manager.check_creator_presence(guild)
         
         print("🎤 [TEMP_VOICE] Проверка комнат завершена")
     
     async def stop(self):
-        """Остановка системы"""
         await temp_voice_manager.stop()
         print("🎤 [TEMP_VOICE] Система остановлена")
 

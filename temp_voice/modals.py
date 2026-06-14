@@ -4,8 +4,6 @@ from temp_voice.manager import temp_voice_manager
 
 
 class CreateRoomModal(discord.ui.Modal, title="🎤 СОЗДАНИЕ КОМНАТЫ"):
-    """Модалка для создания временной комнаты"""
-    
     room_name = discord.ui.TextInput(
         label="Название комнаты",
         placeholder="Например: Комната Нагги",
@@ -19,8 +17,6 @@ class CreateRoomModal(discord.ui.Modal, title="🎤 СОЗДАНИЕ КОМНА�
 
 
 class KickUserModal(discord.ui.Modal, title="👢 КИКНУТЬ ПОЛЬЗОВАТЕЛЯ"):
-    """Модалка для выбора пользователя для кика"""
-    
     user_mention = discord.ui.TextInput(
         label="Упоминание пользователя",
         placeholder="@username",
@@ -33,7 +29,6 @@ class KickUserModal(discord.ui.Modal, title="👢 КИКНУТЬ ПОЛЬЗОВ�
         self.channel_id = channel_id
     
     async def on_submit(self, interaction: discord.Interaction):
-        # Извлекаем ID пользователя из упоминания
         user_id = None
         for word in self.user_mention.value.split():
             if word.startswith('<@') and word.endswith('>'):
