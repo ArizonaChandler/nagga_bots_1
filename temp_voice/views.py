@@ -77,35 +77,38 @@ class TempVoiceManageView(CreatorOnlyView):
         self._add_buttons()
     
     def _add_buttons(self):
-        expand_btn = discord.ui.Button(
+        # Расширить слоты
+        self.expand_btn = discord.ui.Button(
             label="➕ РАСШИРИТЬ (+2 СЛОТА)",
             style=discord.ButtonStyle.success,
             emoji="➕",
             row=0,
             custom_id="temp_voice_expand"
         )
-        expand_btn.callback = self.expand_slots
-        self.add_item(expand_btn)
+        self.expand_btn.callback = self.expand_slots
+        self.add_item(self.expand_btn)
         
-        kick_btn = discord.ui.Button(
+        # Кикнуть пользователя
+        self.kick_btn = discord.ui.Button(
             label="👢 КИКНУТЬ ПОЛЬЗОВАТЕЛЯ",
             style=discord.ButtonStyle.danger,
             emoji="👢",
             row=1,
             custom_id="temp_voice_kick"
         )
-        kick_btn.callback = self.kick_user
-        self.add_item(kick_btn)
+        self.kick_btn.callback = self.kick_user
+        self.add_item(self.kick_btn)
         
-        close_btn = discord.ui.Button(
+        # Закрыть комнату
+        self.close_btn = discord.ui.Button(
             label="🔒 ЗАКРЫТЬ КОМНАТУ",
             style=discord.ButtonStyle.danger,
             emoji="🔒",
             row=2,
             custom_id="temp_voice_close"
         )
-        close_btn.callback = self.close_room
-        self.add_item(close_btn)
+        self.close_btn.callback = self.close_room
+        self.add_item(self.close_btn)
     
     async def get_channel(self, interaction: discord.Interaction):
         channel = interaction.guild.get_channel(self.channel_id)
@@ -115,7 +118,7 @@ class TempVoiceManageView(CreatorOnlyView):
         return channel
     
     async def expand_slots(self, interaction: discord.Interaction, button: discord.ui.Button):
-        print(f"🎤 [DEBUG] expand_slots вызвана пользователем {interaction.user.id}")
+        print(f"🎤 [DEBUG] expand_slots callback вызван")
         
         channel = await self.get_channel(interaction)
         if not channel:
@@ -137,7 +140,7 @@ class TempVoiceManageView(CreatorOnlyView):
                 await interaction.edit_original_response(embed=embed)
     
     async def kick_user(self, interaction: discord.Interaction, button: discord.ui.Button):
-        print(f"🎤 [DEBUG] kick_user вызвана пользователем {interaction.user.id}")
+        print(f"🎤 [DEBUG] kick_user callback вызван")
         
         channel = await self.get_channel(interaction)
         if not channel:
@@ -150,7 +153,7 @@ class TempVoiceManageView(CreatorOnlyView):
         await interaction.response.send_modal(KickUserModal(channel.id))
     
     async def close_room(self, interaction: discord.Interaction, button: discord.ui.Button):
-        print(f"🎤 [DEBUG] close_room вызвана пользователем {interaction.user.id}")
+        print(f"🎤 [DEBUG] close_room callback вызван")
         
         channel = await self.get_channel(interaction)
         if not channel:
