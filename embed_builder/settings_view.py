@@ -5,6 +5,7 @@ from core.database import db
 from core.config import CONFIG, save_config
 from core.utils import is_admin
 from embed_builder.views import EmbedBuilderPanelView
+from embed_builder.manager import embed_builder_manager
 
 
 class EmbedBuilderSettingsView(AdminOnlyView):
