@@ -218,21 +218,29 @@ async def on_voice_state_update(member: discord.Member, before, after):
     
     from temp_voice.manager import temp_voice_manager
     
+    print(f"🎤 [DEBUG] Voice state update: {member.name} | Before: {before.channel.name if before.channel else None} | After: {after.channel.name if after.channel else None}")
+    
     # Проверяем, есть ли у пользователя комната
     room = temp_voice_manager.get_user_room(member.id)
     if not room:
+        print(f"🎤 [DEBUG] У {member.name} нет комнаты")
         return
     
     channel = member.guild.get_channel(int(room['channel_id']))
     if not channel:
+        print(f"🎤 [DEBUG] Комната {room['channel_id']} не найдена")
         return
+    
+    print(f"🎤 [DEBUG] Комната найдена: {channel.name}")
     
     # Создатель вышел из комнаты
     if before.channel == channel and after.channel != channel:
+        print(f"🎤 [DEBUG] Создатель {member.name} вышел из комнаты, запускаем таймер")
         await temp_voice_manager.schedule_deletion(channel, member.id)
     
     # Создатель вернулся в комнату (отменяем удаление)
     elif after.channel == channel and before.channel != channel:
+        print(f"🎤 [DEBUG] Создатель {member.name} вернулся в комнату, отменяем таймер")
         await temp_voice_manager.cancel_deletion(channel)
 
 # ========== ЗАПУСК ==========

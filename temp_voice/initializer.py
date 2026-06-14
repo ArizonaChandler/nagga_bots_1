@@ -21,6 +21,9 @@ class TempVoiceInitializer:
         logger.info("🔄 Инициализация системы временных комнат...")
         print("🎤 [TEMP_VOICE] Инициализация системы временных комнат...")
         
+        # Устанавливаем бота в менеджер
+        temp_voice_manager.set_bot(self.bot)
+        
         # Загружаем настройки из БД
         self.public_channel_id = db.get_setting('temp_voice_public_channel')
         self.settings_channel_id = db.get_setting('temp_voice_settings_channel')

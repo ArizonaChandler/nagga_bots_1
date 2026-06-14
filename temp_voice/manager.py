@@ -157,6 +157,8 @@ class TempVoiceManager:
         """Удалить временную комнату"""
         channel_id = channel.id
         
+        print(f"🎤 [TEMP_VOICE] delete_room вызван для {channel.name}, причина: {reason}")
+        
         # Отменяем задачу удаления, если есть
         if channel_id in self.delete_tasks:
             self.delete_tasks[channel_id].cancel()
@@ -179,8 +181,9 @@ class TempVoiceManager:
         # Удаляем канал
         try:
             await channel.delete(reason=reason or f"Удаление временной комнаты ({creator_name})")
+            print(f"🎤 [TEMP_VOICE] Канал {channel.name} удалён")
         except Exception as e:
-            print(f"❌ Ошибка удаления канала {channel.name}: {e}")
+            print(f"❌ [TEMP_VOICE] Ошибка удаления канала {channel.name}: {e}")
         
         # Логируем
         if self.bot:
@@ -192,28 +195,42 @@ class TempVoiceManager:
         delay = settings.get('temp_voice_delete_delay', 60)
         channel_id = channel.id
         
+        print(f"🎤 [TEMP_VOICE] Запланировано удаление комнаты {channel.name} через {delay} сек (создатель {creator_id} вышел)")
+        
         # Если уже есть задача на удаление — отменяем
         if channel_id in self.delete_tasks:
             self.delete_tasks[channel_id].cancel()
+            print(f"🎤 [TEMP_VOICE] Отменена предыдущая задача удаления для {channel.name}")
         
         async def delete_task():
-            await asyncio.sleep(delay)
-            
-            # Проверяем, не зашёл ли создатель обратно
-            guild = channel.guild
-            member = guild.get_member(creator_id)
-            
-            if member and member.voice and member.voice.channel == channel:
-                # Создатель вернулся — отменяем удаление
-                if channel_id in self.delete_tasks:
-                    del self.delete_tasks[channel_id]
-                if channel_id in self.pending_deletions:
-                    del self.pending_deletions[channel_id]
-                await self.log_action(guild, f"🔄 Отмена удаления комнаты {channel.name} — создатель вернулся")
-                return
-            
-            # Удаляем комнату
-            await self.delete_room(channel, "Создатель покинул комнату")
+            try:
+                print(f"🎤 [TEMP_VOICE] Таймер запущен для {channel.name}, ждём {delay} сек...")
+                await asyncio.sleep(delay)
+                
+                print(f"🎤 [TEMP_VOICE] Таймер сработал для {channel.name}, проверяем...")
+                
+                # Проверяем, не зашёл ли создатель обратно
+                guild = channel.guild
+                member = guild.get_member(creator_id)
+                
+                if member and member.voice and member.voice.channel == channel:
+                    # Создатель вернулся — отменяем удаление
+                    print(f"🎤 [TEMP_VOICE] Создатель {member.display_name} вернулся в {channel.name}, отмена удаления")
+                    if channel_id in self.delete_tasks:
+                        del self.delete_tasks[channel_id]
+                    if channel_id in self.pending_deletions:
+                        del self.pending_deletions[channel_id]
+                    await self.log_action(guild, f"🔄 Отмена удаления комнаты {channel.name} — создатель вернулся")
+                    return
+                
+                # Удаляем комнату
+                print(f"🎤 [TEMP_VOICE] Удаляем комнату {channel.name} (создатель не вернулся)")
+                await self.delete_room(channel, "Создатель покинул комнату")
+                
+            except asyncio.CancelledError:
+                print(f"🎤 [TEMP_VOICE] Задача удаления для {channel.name} отменена")
+            except Exception as e:
+                print(f"❌ [TEMP_VOICE] Ошибка при удалении комнаты {channel.name}: {e}")
         
         task = asyncio.create_task(delete_task())
         self.delete_tasks[channel_id] = task
@@ -227,6 +244,7 @@ class TempVoiceManager:
         if channel_id in self.delete_tasks:
             self.delete_tasks[channel_id].cancel()
             del self.delete_tasks[channel_id]
+            print(f"🎤 [TEMP_VOICE] Отменено удаление комнаты {channel.name} (создатель вернулся)")
         if channel_id in self.pending_deletions:
             del self.pending_deletions[channel_id]
     

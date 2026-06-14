@@ -77,7 +77,7 @@ class TempVoiceManageView(CreatorOnlyView):
     """Панель управления комнатой (только для создателя)"""
     
     def __init__(self, creator_id: int, channel_id: int):
-        super().__init__(creator_id)
+        super().__init__(creator_id, timeout=None)  # ← timeout=None обязательно
         self.channel_id = channel_id
         self._add_buttons()
     
@@ -163,8 +163,13 @@ class TempVoiceManageView(CreatorOnlyView):
         if not channel:
             return
         
+        # Отвечаем сразу, чтобы interaction не истёк
+        await interaction.response.send_message("🔒 Закрываю комнату...", ephemeral=True)
+        
         success, msg = await temp_voice_manager.close_room(interaction, channel)
-        await interaction.response.send_message(msg, ephemeral=True)
+        
+        # Обновляем сообщение с результатом
+        await interaction.edit_original_response(content=msg)
         
         # Закрываем view
         self.stop()
