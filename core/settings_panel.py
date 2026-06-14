@@ -96,6 +96,9 @@ class GlobalSettingsPanel(AdminOnlyView):
             elif module_key == "temp_voice":
                 from temp_voice.settings_view import TempVoiceSettingsView
                 settings_view = TempVoiceSettingsView()
+            elif module_key == "action_logs":
+                from action_logs.settings_view import ActionLogsSettingsView
+                settings_view = ActionLogsSettingsView()
             
             if settings_view:
                 embed = discord.Embed(

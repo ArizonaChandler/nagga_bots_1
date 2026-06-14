@@ -212,21 +212,30 @@ class TempVoiceManager:
         return True, f"✅ Количество слотов уменьшено до **{new_slots}**"
     
     async def lock_room(self, interaction: discord.Interaction, channel: discord.VoiceChannel) -> tuple:
-        """Заблокировать комнату — запретить подключение новых пользователей"""
-        # Получаем роль @everyone
-        everyone = interaction.guild.default_role
+        """Заблокировать комнату — запретить подключение для роли, кроме создателя"""
         
-        # Запрещаем подключаться
-        await channel.set_permissions(everyone, connect=False)
+        # Получаем роль, у которой есть права на подключение (кроме создателя)
+        # Просто запрещаем всем, кроме создателя
+        for target, overwrite in channel.overwrites.items():
+            if target == interaction.user:
+                continue
+            if isinstance(target, discord.Role):
+                await channel.set_permissions(target, connect=False)
         
         await self.log_action(interaction.guild, f"🔒 {interaction.user.display_name} заблокировал комнату {channel.name}")
         
         return True, "✅ Комната заблокирована. Новые пользователи не смогут подключиться."
-    
+
+
     async def unlock_room(self, interaction: discord.Interaction, channel: discord.VoiceChannel) -> tuple:
-        """Разблокировать комнату — разрешить подключение"""
-        everyone = interaction.guild.default_role
-        await channel.set_permissions(everyone, connect=True)
+        """Разблокировать комнату — восстановить права"""
+        
+        # Восстанавливаем права для ролей (убираем запрет)
+        for target, overwrite in channel.overwrites.items():
+            if target == interaction.user:
+                continue
+            if isinstance(target, discord.Role):
+                await channel.set_permissions(target, connect=None)
         
         await self.log_action(interaction.guild, f"🔓 {interaction.user.display_name} разблокировал комнату {channel.name}")
         

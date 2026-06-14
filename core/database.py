@@ -598,6 +598,24 @@ class Database:
                 )
             ''')
 
+            # Таблица для логов действий сервера
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS server_action_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    target_id TEXT,
+                    details TEXT,
+                    before TEXT,
+                    after TEXT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_server_action_logs_user ON server_action_logs(user_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_server_action_logs_event ON server_action_logs(event_type)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_server_action_logs_time ON server_action_logs(timestamp)')
+
             # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ ИГР =====
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS active_games (
@@ -2733,5 +2751,95 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('UPDATE temp_voice_rooms SET slots = ? WHERE channel_id = ?', (slots, channel_id))
             conn.commit()
+
+    # ===== МЕТОДЫ ДЛЯ ЛОГОВ ДЕЙСТВИЙ =====
+
+    def save_action_log(self, guild_id: str, event_type: str, user_id: str, 
+                        target_id: str = None, details: str = None, 
+                        before: str = None, after: str = None):
+        """Сохранить лог действия"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO server_action_logs (guild_id, event_type, user_id, target_id, details, before, after)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (guild_id, event_type, user_id, target_id, details, before, after))
+            conn.commit()
+
+    def get_action_logs(self, limit: int = 100, offset: int = 0, 
+                        user_id: str = None, event_type: str = None, 
+                        guild_id: str = None, days: int = None) -> list:
+        """Получить логи с фильтрацией"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            query = 'SELECT id, guild_id, event_type, user_id, target_id, details, before, after, timestamp FROM server_action_logs WHERE 1=1'
+            params = []
+            
+            if guild_id:
+                query += ' AND guild_id = ?'
+                params.append(guild_id)
+            
+            if user_id:
+                query += ' AND user_id = ?'
+                params.append(user_id)
+            
+            if event_type:
+                query += ' AND event_type = ?'
+                params.append(event_type)
+            
+            if days:
+                query += ' AND timestamp >= datetime("now", ?)'
+                params.append(f'-{days} days')
+            
+            query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?'
+            params.extend([limit, offset])
+            
+            cursor.execute(query, params)
+            columns = [description[0] for description in cursor.description]
+            rows = cursor.fetchall()
+            return [dict(zip(columns, row)) for row in rows]
+
+    def get_unique_action_log_events(self, guild_id: str = None) -> list:
+        """Получить уникальные типы событий"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if guild_id:
+                cursor.execute('SELECT DISTINCT event_type FROM server_action_logs WHERE guild_id = ? ORDER BY event_type', (guild_id,))
+            else:
+                cursor.execute('SELECT DISTINCT event_type FROM server_action_logs ORDER BY event_type')
+            return [row[0] for row in cursor.fetchall()]
+
+    def get_action_logs_stats(self, guild_id: str, days: int = 30) -> dict:
+        """Получить статистику по логам"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT COUNT(*) FROM server_action_logs 
+                WHERE guild_id = ? AND timestamp >= datetime("now", ?)
+            ''', (guild_id, f'-{days} days'))
+            total = cursor.fetchone()[0]
+            
+            cursor.execute('''
+                SELECT COUNT(DISTINCT user_id) FROM server_action_logs 
+                WHERE guild_id = ? AND timestamp >= datetime("now", ?)
+            ''', (guild_id, f'-{days} days'))
+            unique_users = cursor.fetchone()[0]
+            
+            cursor.execute('''
+                SELECT event_type, COUNT(*) as count 
+                FROM server_action_logs 
+                WHERE guild_id = ? AND timestamp >= datetime("now", ?)
+                GROUP BY event_type 
+                ORDER BY count DESC 
+                LIMIT 10
+            ''', (guild_id, f'-{days} days'))
+            top_events = cursor.fetchall()
+            
+            return {
+                'total': total,
+                'unique_users': unique_users,
+                'top_events': [{'event_type': row[0], 'count': row[1]} for row in top_events]
+            }
 
 db = Database()

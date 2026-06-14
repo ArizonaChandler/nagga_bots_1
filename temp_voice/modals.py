@@ -16,10 +16,10 @@ class CreateRoomModal(discord.ui.Modal, title="🎤 СОЗДАНИЕ КОМНА�
         await interaction.response.send_message(msg, ephemeral=True)
 
 
-class ExpandSlotsModal(discord.ui.Modal, title="➕ РАСШИРИТЬ КОМНАТУ"):
+class SetSlotsModal(discord.ui.Modal, title="⚙️ УСТАНОВИТЬ КОЛИЧЕСТВО СЛОТОВ"):
     slots = discord.ui.TextInput(
-        label="Новое количество слотов",
-        placeholder="Введите число",
+        label="Количество слотов",
+        placeholder="Введите число от 1 до максимума",
         max_length=2,
         required=True
     )
@@ -34,8 +34,8 @@ class ExpandSlotsModal(discord.ui.Modal, title="➕ РАСШИРИТЬ КОМН�
     async def on_submit(self, interaction: discord.Interaction):
         try:
             new_slots = int(self.slots.value)
-            if new_slots <= self.current_slots:
-                await interaction.response.send_message("❌ Новое количество должно быть больше текущего", ephemeral=True)
+            if new_slots < 1:
+                await interaction.response.send_message("❌ Минимум 1 слот", ephemeral=True)
                 return
             
             if new_slots > self.max_slots:
@@ -47,44 +47,22 @@ class ExpandSlotsModal(discord.ui.Modal, title="➕ РАСШИРИТЬ КОМН�
                 await interaction.response.send_message("❌ Комната не найдена", ephemeral=True)
                 return
             
-            success, msg = await temp_voice_manager.expand_slots_to(interaction, channel, new_slots)
-            await interaction.response.send_message(msg, ephemeral=True)
-            
-        except ValueError:
-            await interaction.response.send_message("❌ Введите число", ephemeral=True)
-
-
-class ReduceSlotsModal(discord.ui.Modal, title="➖ УМЕНЬШИТЬ КОМНАТУ"):
-    slots = discord.ui.TextInput(
-        label="Новое количество слотов",
-        placeholder="Введите число",
-        max_length=2,
-        required=True
-    )
-    
-    def __init__(self, channel_id: int, current_slots: int):
-        super().__init__()
-        self.channel_id = channel_id
-        self.current_slots = current_slots
-        self.slots.placeholder = f"Текущее: {current_slots}, минимум: 1"
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        try:
-            new_slots = int(self.slots.value)
-            if new_slots >= self.current_slots:
-                await interaction.response.send_message("❌ Новое количество должно быть меньше текущего", ephemeral=True)
+            # Проверяем, что в комнате не больше участников, чем новый лимит
+            if len(channel.members) > new_slots:
+                await interaction.response.send_message(
+                    f"❌ В комнате {len(channel.members)} участников, нельзя уменьшить до {new_slots}",
+                    ephemeral=True
+                )
                 return
             
-            if new_slots < 1:
-                await interaction.response.send_message("❌ Минимум 1 слот", ephemeral=True)
+            if new_slots > self.current_slots:
+                success, msg = await temp_voice_manager.expand_slots_to(interaction, channel, new_slots)
+            elif new_slots < self.current_slots:
+                success, msg = await temp_voice_manager.reduce_slots_to(interaction, channel, new_slots)
+            else:
+                await interaction.response.send_message("ℹ️ Количество слотов не изменилось", ephemeral=True)
                 return
             
-            channel = interaction.guild.get_channel(self.channel_id)
-            if not channel:
-                await interaction.response.send_message("❌ Комната не найдена", ephemeral=True)
-                return
-            
-            success, msg = await temp_voice_manager.reduce_slots(interaction, channel, new_slots)
             await interaction.response.send_message(msg, ephemeral=True)
             
         except ValueError:

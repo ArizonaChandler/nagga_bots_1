@@ -2,7 +2,7 @@
 import discord
 from temp_voice.base import PermanentView
 from temp_voice.manager import temp_voice_manager
-from temp_voice.modals import CreateRoomModal, ExpandSlotsModal, ReduceSlotsModal, KickUserModal
+from temp_voice.modals import CreateRoomModal, SetSlotsModal, KickUserModal
 
 
 class TempVoicePublicView(PermanentView):
@@ -29,13 +29,13 @@ class TempVoicePublicView(PermanentView):
         await interaction.response.send_modal(CreateRoomModal())
     
     @discord.ui.button(
-        label="➕ РАСШИРИТЬ",
+        label="⚙️ УСТАНОВИТЬ СЛОТЫ",
         style=discord.ButtonStyle.primary,
-        emoji="➕",
+        emoji="⚙️",
         row=1,
-        custom_id="temp_voice_expand"
+        custom_id="temp_voice_set_slots"
     )
-    async def expand_room(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def set_slots(self, interaction: discord.Interaction, button: discord.ui.Button):
         room = temp_voice_manager.get_user_room(interaction.user.id)
         if not room:
             await interaction.response.send_message(
@@ -52,35 +52,7 @@ class TempVoicePublicView(PermanentView):
         settings = temp_voice_manager.get_settings()
         max_slots = settings.get('temp_voice_max_slots', 10)
         
-        modal = ExpandSlotsModal(channel.id, room['slots'], max_slots)
-        await interaction.response.send_modal(modal)
-    
-    @discord.ui.button(
-        label="➖ УМЕНЬШИТЬ",
-        style=discord.ButtonStyle.primary,
-        emoji="➖",
-        row=1,
-        custom_id="temp_voice_reduce"
-    )
-    async def reduce_room(self, interaction: discord.Interaction, button: discord.ui.Button):
-        room = temp_voice_manager.get_user_room(interaction.user.id)
-        if not room:
-            await interaction.response.send_message(
-                "❌ У вас нет активной комнаты.\nСначала создайте комнату кнопкой 'СОЗДАТЬ КОМНАТУ'",
-                ephemeral=True
-            )
-            return
-        
-        channel = interaction.guild.get_channel(int(room['channel_id']))
-        if not channel:
-            await interaction.response.send_message("❌ Ваша комната не найдена", ephemeral=True)
-            return
-        
-        if room['slots'] <= 1:
-            await interaction.response.send_message("❌ Нельзя уменьшить меньше 1 слота", ephemeral=True)
-            return
-        
-        modal = ReduceSlotsModal(channel.id, room['slots'])
+        modal = SetSlotsModal(channel.id, room['slots'], max_slots)
         await interaction.response.send_modal(modal)
     
     @discord.ui.button(

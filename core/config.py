@@ -144,6 +144,11 @@ CONFIG = {
     'temp_voice_default_slots': 2,
     'temp_voice_max_slots': 10,
     'temp_voice_delete_delay': 60,
+
+    # ===== ЛОГИРОВАНИЕ DISCORD =====
+    'action_logs_channel': None,
+    'action_logs_settings_channel': None,
+    'action_logs_enabled_events': [],
 }
 
 

@@ -121,7 +121,7 @@ MODULES = {
         "channels": ["economy_channel", "economy_admin_channel"],
         "settings_channels": ["economy_settings_channel"],
         "initializer": "economy.manager",
-        "initialize_method": "initialize_buttons",
+        "initialize_method": "set_bot",
         "toggleable": True
     },
     "stats": {
@@ -141,6 +141,16 @@ MODULES = {
         "channels": ["temp_voice_public_channel", "temp_voice_log_channel", "temp_voice_category"],
         "settings_channels": ["temp_voice_settings_channel"],
         "initializer": "temp_voice.initializer",
+        "initialize_method": "setup",
+        "toggleable": True
+    },
+    "action_logs": {
+        "name": "📋 Логи действий",
+        "description": "Логирование действий на сервере (войс, сообщения, роли, каналы)",
+        "enabled": False,
+        "channels": ["action_logs_channel"],
+        "settings_channels": ["action_logs_settings_channel"],
+        "initializer": "action_logs.initializer",
         "initialize_method": "setup",
         "toggleable": True
     },
@@ -187,7 +197,6 @@ class ModuleManager:
         else:
             await self._disable_module(module_key)
 
-        # Обновляем единую панель настроек
         await self.update_settings_panel()
 
         return True, f"Модуль **{MODULES[module_key]['name']}** {'включён' if enabled else 'выключен'}"
@@ -196,19 +205,16 @@ class ModuleManager:
         module = MODULES[module_key]
         
         try:
-            # CAPT Регистрация
             if module_key == 'capt':
                 from capt_registration.manager import capt_reg_manager
                 await capt_reg_manager.initialize_buttons(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
-            # MCL/ВЗМ Регистрация
             elif module_key == 'mcl':
                 from mcl_registration.manager import mcl_manager
                 await mcl_manager.initialize_buttons(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
-            # Заявки в семью
             elif module_key == 'applications':
                 from applications.initializer import initializer as apps_initializer
                 if apps_initializer:
@@ -218,56 +224,47 @@ class ModuleManager:
                     await setup_apps(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
-            # Мероприятия
             elif module_key == 'events':
                 from events.scheduler import setup as setup_events
                 await setup_events(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
-            # AFK система
             elif module_key == 'afk':
                 from afk.initializer import setup as setup_afk
                 await setup_afk(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
-            # Tier система
             elif module_key == 'tier':
                 from tier.initializer import setup as setup_tier
                 await setup_tier(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
-            # Отпуска
             elif module_key == 'vacation':
                 from vacation.initializer import setup as setup_vacation
                 await setup_vacation(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
-            # Игры
             elif module_key == 'games':
                 from games.initializer import setup as setup_games
                 await setup_games(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
-            # Дни рождения
             elif module_key == 'birthday':
                 from birthday.initializer import setup as setup_birthday
                 await setup_birthday(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
-            # Авто-реклама
             elif module_key == 'advertising':
                 from advertising.core import setup as setup_ad
                 await setup_ad(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
-            # Расширенная статистика
             elif module_key == 'stats':
                 from stats.manager import stats_manager
                 stats_manager.set_bot(self.bot)
                 await stats_manager.initialize()
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
-            # Экономика
             elif module_key == 'economy':
                 from economy import economy_manager
                 from economy.views import EconomyPanelView, AdminEconomyView
@@ -278,23 +275,18 @@ class ModuleManager:
                 setup_integration(self.bot)
                 set_bot_for_views(self.bot)
                 
-                # Отправляем панель магазина в публичный канал
                 channel_id = CONFIG.get("economy_channel")
                 if channel_id and channel_id != "null":
                     channel = self.bot.get_channel(int(channel_id))
                     if channel:
-                        # Удаляем старые сообщения бота
                         async for msg in channel.history(limit=50):
                             if msg.author == self.bot.user:
                                 await msg.delete()
-                        
-                        # Создаём view и отправляем embed с товарами
                         view = EconomyPanelView()
                         embed = await view.get_shop_embed()
                         await channel.send(embed=embed, view=view)
                         print(f"✅ [MODULE] {module['name']} панель магазина отправлена в #{channel.name}")
                 
-                # Отправляем админ-панель
                 admin_channel_id = CONFIG.get("economy_admin_channel")
                 if admin_channel_id and admin_channel_id != "null":
                     channel = self.bot.get_channel(int(admin_channel_id))
@@ -302,7 +294,6 @@ class ModuleManager:
                         async for msg in channel.history(limit=50):
                             if msg.author == self.bot.user:
                                 await msg.delete()
-                        
                         embed = discord.Embed(
                             title="⚙️ АДМИН-ПАНЕЛЬ ЭКОНОМИКИ",
                             description="Управление баллами и магазином",
@@ -313,13 +304,16 @@ class ModuleManager:
                 
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
-            # Временные комнаты
             elif module_key == 'temp_voice':
                 from temp_voice.initializer import setup as setup_temp_voice
                 await setup_temp_voice(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
-            # Для остальных модулей (если добавятся)
+            elif module_key == 'action_logs':
+                from action_logs.initializer import setup as setup_action_logs
+                await setup_action_logs(self.bot)
+                print(f"✅ [MODULE] {module['name']} инициализирован")
+            
             else:
                 initializer_path = module.get("initializer")
                 if not initializer_path:
@@ -355,100 +349,91 @@ class ModuleManager:
             import traceback
             traceback.print_exc()
 
-
     async def _disable_module(self, module_key: str):
         module = MODULES[module_key]
         
         try:
-            # CAPT Регистрация
             if module_key == 'capt':
                 from capt_registration.manager import capt_reg_manager
                 await capt_reg_manager.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
-            # MCL/ВЗМ Регистрация
             elif module_key == 'mcl':
                 from mcl_registration.manager import mcl_manager
                 await mcl_manager.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
-            # Заявки в семью
             elif module_key == 'applications':
                 from applications.initializer import initializer as apps_initializer
                 if apps_initializer and hasattr(apps_initializer, 'stop'):
                     await apps_initializer.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
-            # Мероприятия
             elif module_key == 'events':
                 from events.scheduler import stop_scheduler
                 await stop_scheduler()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
-            # AFK система
             elif module_key == 'afk':
                 from afk.initializer import initializer as afk_initializer
                 if afk_initializer and hasattr(afk_initializer, 'stop'):
                     await afk_initializer.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
-            # Tier система
             elif module_key == 'tier':
                 from tier.initializer import initializer as tier_initializer
                 if tier_initializer and hasattr(tier_initializer, 'stop'):
                     await tier_initializer.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
-            # Отпуска
             elif module_key == 'vacation':
                 from vacation.initializer import initializer as vacation_initializer
                 if vacation_initializer and hasattr(vacation_initializer, 'stop'):
                     await vacation_initializer.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
-            # Игры
             elif module_key == 'games':
                 from games.initializer import initializer as games_initializer
                 if games_initializer and hasattr(games_initializer, 'stop'):
                     await games_initializer.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
-            # Дни рождения
             elif module_key == 'birthday':
                 from birthday.initializer import initializer as birthday_initializer
                 if birthday_initializer and hasattr(birthday_initializer, 'stop'):
                     await birthday_initializer.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
-            # Авто-реклама
             elif module_key == 'advertising':
                 from advertising.core import advertiser
                 if advertiser and hasattr(advertiser, 'stop'):
                     await advertiser.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
-            # Расширенная статистика
             elif module_key == 'stats':
                 from stats.manager import stats_manager
                 if hasattr(stats_manager, 'stop'):
                     await stats_manager.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
-            # Экономика
             elif module_key == 'economy':
                 from economy.manager import economy_manager
                 if hasattr(economy_manager, 'stop'):
                     await economy_manager.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
-            # Временные комнаты
             elif module_key == 'temp_voice':
                 from temp_voice.initializer import initializer as temp_voice_initializer
                 if temp_voice_initializer and hasattr(temp_voice_initializer, 'stop'):
                     await temp_voice_initializer.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
-            # Для остальных модулей
+            elif module_key == 'action_logs':
+                from action_logs.initializer import initializer as action_logs_initializer
+                if action_logs_initializer and hasattr(action_logs_initializer, 'stop'):
+                    await action_logs_initializer.stop()
+                print(f"✅ [MODULE] {module['name']} остановлен")
+            
             else:
                 initializer_path = module.get("initializer")
                 if initializer_path:
@@ -470,7 +455,6 @@ class ModuleManager:
         except Exception as e:
             print(f"⚠️ [MODULE] Ошибка остановки {module['name']}: {e}")
         
-        # Отключаем все embed в каналах модуля
         await self._disable_all_embeds(module_key)
 
     async def _disable_all_embeds(self, module_key: str):
@@ -480,13 +464,12 @@ class ModuleManager:
         for channel_key in all_keys:
             channel_id = db.get_setting(channel_key)
             
-            # Обработка JSON-массива (для alarm_channels, announce_channels и т.д.)
             if channel_id and channel_id.startswith('['):
                 try:
                     import json
                     channel_list = json.loads(channel_id)
                     if channel_list:
-                        channel_id = channel_list[0]  # берём первый канал
+                        channel_id = channel_list[0]
                 except:
                     pass
             
@@ -516,13 +499,11 @@ class ModuleManager:
                 print(f"❌ [MODULE] Ошибка отключения {channel_key}: {e}")
 
     def _is_module_embed(self, msg, module_key: str) -> bool:
-        """Проверяет, относится ли embed к данному модулю"""
         if not msg.embeds:
             return False
         
         title = msg.embeds[0].title or ""
         
-        # Карта заголовков для каждого модуля
         module_titles = {
             "capt": ["РЕГИСТРАЦИЯ НА CAPT", "CAPT"],
             "mcl": ["РЕГИСТРАЦИЯ НА MCL", "MCL", "ВЗМ"],
@@ -536,7 +517,8 @@ class ModuleManager:
             "advertising": ["АВТО-РЕКЛАМА", "РЕКЛАМА"],
             "economy": ["МАГАЗИН БАЛЛОВ", "ЭКОНОМИКА", "АДМИН-ПАНЕЛЬ ЭКОНОМИКИ"],
             "stats": ["СТАТИСТИКА", "БЕКАП"],
-            "temp_voice": ["ВРЕМЕННЫЕ КОМНАТЫ", "ГОЛОСОВЫЕ КОМНАТЫ"]
+            "temp_voice": ["ВРЕМЕННЫЕ КОМНАТЫ", "ГОЛОСОВЫЕ КОМНАТЫ"],
+            "action_logs": ["ЛОГИ ДЕЙСТВИЙ", "ACTION LOGS"],
         }
         
         titles = module_titles.get(module_key, [])
@@ -556,7 +538,6 @@ class ModuleManager:
         print("📋 [MODULE] Инициализация завершена")
 
     async def update_settings_panel(self):
-        """Обновить единую панель настроек (добавить/убрать кнопки модулей)"""
         channel_id = db.get_setting('global_settings_channel')
         if not channel_id:
             return
@@ -582,7 +563,6 @@ class ModuleManager:
         await channel.send(embed=embed, view=GlobalSettingsPanel(self.bot))
 
     async def restore_global_settings_panel(self):
-        """Восстановить глобальную панель настроек после перезапуска"""
         channel_id = db.get_setting('global_settings_channel_id')
         message_id = db.get_setting('global_settings_message_id')
         

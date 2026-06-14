@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Management System v0.27
+Management System v0.28
 Модульная архитектура с системой автоматических оповещений
 """
 import asyncio
@@ -46,7 +46,12 @@ if not BOT_TOKEN:
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
-intents.voice_states = True  # ← КЛЮЧЕВОЙ ИНТЕНТ ДЛЯ ВОЙСА
+intents.voice_states = True
+intents.message_content = True
+intents.guilds = True
+intents.emojis = True
+intents.reactions = True
+intents.typing = False
 
 bot = commands.Bot(
     command_prefix='!',
@@ -220,9 +225,10 @@ async def on_member_remove(member):
         traceback.print_exc()
 
 
+# ========== ЕДИНЫЙ ОБРАБОТЧИК ГОЛОСОВЫХ СОБЫТИЙ ==========
 @bot.event
 async def on_voice_state_update(member: discord.Member, before, after):
-    """Единый обработчик голосовых событий"""
+    """Единый обработчик голосовых событий для всех модулей"""
     from core.module_manager import MODULES
     
     # 1. Экономика (начисление баллов за голосовой онлайн)
@@ -233,21 +239,84 @@ async def on_voice_state_update(member: discord.Member, before, after):
     # 2. Временные комнаты
     if MODULES.get("temp_voice", {}).get("enabled", False):
         from temp_voice.manager import temp_voice_manager
-        
         room = temp_voice_manager.get_user_room(member.id)
-        if not room:
-            return
-        
-        channel = member.guild.get_channel(int(room['channel_id']))
-        if not channel:
-            return
-        
-        if before.channel == channel and after.channel != channel:
-            print(f"🎤 [DEBUG] Создатель {member.name} ВЫШЕЛ из комнаты, запускаем таймер")
-            await temp_voice_manager.schedule_deletion(channel, member.id)
-        elif after.channel == channel and before.channel != channel:
-            print(f"🎤 [DEBUG] Создатель {member.name} ВЕРНУЛСЯ в комнату, отменяем таймер")
-            await temp_voice_manager.cancel_deletion(channel)
+        if room:
+            channel = member.guild.get_channel(int(room['channel_id']))
+            if channel:
+                if before.channel == channel and after.channel != channel:
+                    await temp_voice_manager.schedule_deletion(channel, member.id)
+                elif after.channel == channel and before.channel != channel:
+                    await temp_voice_manager.cancel_deletion(channel)
+    
+    # 3. Логи действий
+    if MODULES.get("action_logs", {}).get("enabled", False):
+        from action_logs.events import log_voice_state
+        await log_voice_state(member, before, after)
+
+
+# ========== ЛОГИ ДЕЙСТВИЙ (ОБРАБОТЧИКИ) ==========
+@bot.event
+async def on_message_edit(before: discord.Message, after: discord.Message):
+    from core.module_manager import MODULES
+    if MODULES.get("action_logs", {}).get("enabled", False):
+        from action_logs.events import log_message_edit
+        await log_message_edit(before, after)
+
+
+@bot.event
+async def on_message_delete(message: discord.Message):
+    from core.module_manager import MODULES
+    if MODULES.get("action_logs", {}).get("enabled", False):
+        from action_logs.events import log_message_delete
+        await log_message_delete(message)
+
+
+@bot.event
+async def on_guild_channel_create(channel: discord.abc.GuildChannel):
+    from core.module_manager import MODULES
+    if MODULES.get("action_logs", {}).get("enabled", False):
+        from action_logs.events import log_channel_create
+        await log_channel_create(channel)
+
+
+@bot.event
+async def on_guild_channel_delete(channel: discord.abc.GuildChannel):
+    from core.module_manager import MODULES
+    if MODULES.get("action_logs", {}).get("enabled", False):
+        from action_logs.events import log_channel_delete
+        await log_channel_delete(channel)
+
+
+@bot.event
+async def on_guild_channel_update(before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
+    from core.module_manager import MODULES
+    if MODULES.get("action_logs", {}).get("enabled", False):
+        from action_logs.events import log_channel_update
+        await log_channel_update(before, after)
+
+
+@bot.event
+async def on_member_update(before: discord.Member, after: discord.Member):
+    from core.module_manager import MODULES
+    if MODULES.get("action_logs", {}).get("enabled", False):
+        from action_logs.events import log_member_update
+        await log_member_update(before, after)
+
+
+@bot.event
+async def on_guild_role_create(role: discord.Role):
+    from core.module_manager import MODULES
+    if MODULES.get("action_logs", {}).get("enabled", False):
+        from action_logs.events import log_role_create
+        await log_role_create(role)
+
+
+@bot.event
+async def on_guild_role_delete(role: discord.Role):
+    from core.module_manager import MODULES
+    if MODULES.get("action_logs", {}).get("enabled", False):
+        from action_logs.events import log_role_delete
+        await log_role_delete(role)
 
 
 # ========== ЗАПУСК ==========
