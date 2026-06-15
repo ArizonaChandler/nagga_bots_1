@@ -2585,6 +2585,23 @@ class Database:
             columns = [description[0] for description in cursor.description]
             return [dict(zip(columns, row)) for row in rows]
 
+    def get_stats_for_date(self, date: str) -> dict:
+        """Получить статистику за конкретную дату"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT date, new_members, left_members, new_applications, 
+                    accepted_applications, max_voice_online, capt_registrations,
+                    mcl_registrations, mp_takes
+                FROM daily_stats 
+                WHERE date = ?
+            ''', (date,))
+            row = cursor.fetchone()
+            if row:
+                columns = [description[0] for description in cursor.description]
+                return dict(zip(columns, row))
+            return None
+
     # ===== ПОЧАСОВАЯ СТАТИСТИКА =====
 
     def update_hourly_stats(self, date: str, hour: int, messages: int, voice_users: int):
