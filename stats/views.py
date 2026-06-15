@@ -1,6 +1,7 @@
 """Кнопки для статистики и бекапа"""
 import discord
 import json
+import io  # ← ДОБАВИТЬ ЭТУ СТРОКУ
 from datetime import datetime
 from stats.base import PermanentView, ConfirmView
 from stats.manager import stats_manager
