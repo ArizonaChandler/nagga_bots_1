@@ -1,7 +1,7 @@
 """Кнопки для статистики и бекапа"""
 import discord
 import json
-import io  # ← ДОБАВИТЬ ЭТУ СТРОКУ
+import io
 from datetime import datetime
 from stats.base import PermanentView, ConfirmView
 from stats.manager import stats_manager
@@ -183,8 +183,41 @@ class BackupPanelView(PermanentView):
     def __init__(self):
         super().__init__()
         print("📊 [STATS] BackupPanelView создан")
+        self._add_buttons()
     
-    @discord.ui.button(label="💾 Создать бекап", style=discord.ButtonStyle.success, row=0, custom_id="backup_create")
+    def _add_buttons(self):
+        self.clear_items()
+        
+        create_btn = discord.ui.Button(
+            label="💾 Создать бекап",
+            style=discord.ButtonStyle.success,
+            emoji="💾",
+            row=0,
+            custom_id="backup_create"
+        )
+        create_btn.callback = self.create_backup
+        self.add_item(create_btn)
+        
+        restore_btn = discord.ui.Button(
+            label="🔄 Восстановить из бекапа",
+            style=discord.ButtonStyle.danger,
+            emoji="🔄",
+            row=0,
+            custom_id="backup_restore"
+        )
+        restore_btn.callback = self.restore_backup
+        self.add_item(restore_btn)
+        
+        list_btn = discord.ui.Button(
+            label="📋 Список бекапов",
+            style=discord.ButtonStyle.secondary,
+            emoji="📋",
+            row=1,
+            custom_id="backup_list"
+        )
+        list_btn.callback = self.list_backups
+        self.add_item(list_btn)
+    
     async def create_backup(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Создать бекап сервера"""
         print("📊 [STATS] create_backup нажата")
@@ -215,7 +248,34 @@ class BackupPanelView(PermanentView):
             print(f"❌ Ошибка: {e}")
             await interaction.followup.send(f"❌ Ошибка: {e}", ephemeral=True)
     
-    @discord.ui.button(label="📋 Список бекапов", style=discord.ButtonStyle.secondary, row=1, custom_id="backup_list")
+    async def restore_backup(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Восстановить сервер из бекапа"""
+        print("📊 [STATS] restore_backup нажата")
+        
+        if not await is_super_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только супер-администратор!", ephemeral=True)
+            return
+        
+        backups = db.get_server_backups(10)
+        
+        if not backups:
+            await interaction.response.send_message("❌ Нет доступных бекапов", ephemeral=True)
+            return
+        
+        view = BackupRestoreView(backups)
+        embed = discord.Embed(
+            title="🔄 ВЫБЕРИТЕ БЕКАП ДЛЯ ВОССТАНОВЛЕНИЯ",
+            description="Введите ID бекапа из списка",
+            color=0xffa500
+        )
+        for backup in backups:
+            embed.add_field(
+                name=f"ID: {backup['id']}",
+                value=f"📅 Дата: {backup['backup_date']}",
+                inline=False
+            )
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+    
     async def list_backups(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Показать список бекапов"""
         print("📊 [STATS] list_backups нажата")
@@ -244,3 +304,62 @@ class BackupPanelView(PermanentView):
             )
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+class BackupRestoreView(discord.ui.View):
+    def __init__(self, backups):
+        super().__init__(timeout=60)
+        self.backups = backups
+    
+    @discord.ui.button(label="✅ Выбрать бекап", style=discord.ButtonStyle.primary, row=0)
+    async def select_backup(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(RestoreBackupModal(self.backups))
+
+
+class RestoreBackupModal(discord.ui.Modal, title="🔄 ВОССТАНОВЛЕНИЕ ИЗ БЕКАПА"):
+    backup_id = discord.ui.TextInput(
+        label="ID бекапа",
+        placeholder="Введите ID из списка",
+        max_length=10,
+        required=True
+    )
+    
+    def __init__(self, backups):
+        super().__init__()
+        self.backups = backups
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            backup_id = int(self.backup_id.value)
+            backup_data = db.get_server_backup(backup_id)
+            
+            if not backup_data:
+                await interaction.response.send_message("❌ Бекап не найден", ephemeral=True)
+                return
+            
+            view = ConfirmView(interaction.user.id)
+            await interaction.response.send_message(
+                "⚠️ **ВНИМАНИЕ!** Восстановление сервера удалит все текущие каналы и роли.\n"
+                "Процесс может занять несколько минут.\n\n"
+                "Подтвердите действие:",
+                view=view,
+                ephemeral=True
+            )
+            
+            await view.wait()
+            
+            if view.confirmed:
+                await interaction.followup.send("🔄 Начинаю восстановление сервера...", ephemeral=True)
+                
+                backup_json = json.loads(backup_data['backup_data'])
+                success = await stats_manager.restore_server(interaction, backup_json)
+                
+                if success:
+                    await interaction.followup.send("✅ Сервер успешно восстановлен!", ephemeral=True)
+                else:
+                    await interaction.followup.send("❌ Ошибка при восстановлении", ephemeral=True)
+            else:
+                await interaction.followup.send("❌ Восстановление отменено", ephemeral=True)
+                
+        except ValueError:
+            await interaction.response.send_message("❌ Введите число", ephemeral=True)

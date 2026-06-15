@@ -358,7 +358,7 @@ class StatsManager:
         print("📊 [STATS] Планировщик бекапов запущен")
     
     async def _backup_loop(self):
-        """Цикл ежедневного бекапа"""
+        """Цикл ежедневного бекапа (только для основного сервера)"""
         while True:
             try:
                 now = datetime.now()
@@ -374,44 +374,45 @@ class StatsManager:
                 
                 print("📊 [STATS] Время бекапа! Создаю бекап...")
                 
-                # Создаём бекап и отправляем супер-админу
                 if self.bot and self.backup_enabled:
-                    for guild in self.bot.guilds:
-                        backup = await self.create_backup(guild, 'system')
-                        
-                        # Отправляем супер-админу в ЛС
-                        super_admin_id = CONFIG.get('super_admin_id')
-                        if super_admin_id:
-                            try:
-                                user = await self.bot.fetch_user(int(super_admin_id))
-                                if user:
-                                    # Создаём JSON файл бекапа
-                                    backup_json = json.dumps(backup, ensure_ascii=False, indent=2)
-                                    file = discord.File(
-                                        io.BytesIO(backup_json.encode('utf-8')),
-                                        filename=f"backup_discord_{guild.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-                                    )
+                    # Бекапим ТОЛЬКО основной сервер (где настроен канал статистики)
+                    main_server_id = CONFIG.get('server_id')
+                    if main_server_id:
+                        guild = self.bot.get_guild(int(main_server_id))
+                        if guild:
+                            backup = await self.create_backup(guild, 'system')
+                            
+                            # Отправляем супер-админу в ЛС
+                            super_admin_id = CONFIG.get('super_admin_id')
+                            if super_admin_id:
+                                try:
+                                    user = await self.bot.fetch_user(int(super_admin_id))
+                                    if user:
+                                        # Создаём JSON файл бекапа
+                                        backup_json = json.dumps(backup, ensure_ascii=False, indent=2)
+                                        file = discord.File(
+                                            io.BytesIO(backup_json.encode('utf-8')),
+                                            filename=f"backup_discord_{guild.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                                        )
+                                        
+                                        # Бекап БД
+                                        db_backup_path = f"/tmp/backup_db_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+                                        import shutil
+                                        shutil.copy('bot_data.db', db_backup_path)
+                                        db_file = discord.File(db_backup_path, filename=f"backup_db_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db")
+                                        
+                                        await user.send(
+                                            content=f"💾 **ЕЖЕДНЕВНЫЙ БЕКАП**\n📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}\n📊 Сервер: {guild.name}",
+                                            files=[file, db_file]
+                                        )
+                                        
+                                        os.remove(db_backup_path)
+                                        print(f"📊 [STATS] Бекап отправлен супер-админу")
+                                except Exception as e:
+                                    print(f"❌ Ошибка отправки бекапа: {e}")
+                    else:
+                        print("⚠️ [STATS] Основной сервер не настроен (server_id)")
                                     
-                                    # Бекап БД
-                                    db_backup_path = f"/tmp/backup_db_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
-                                    import shutil
-                                    shutil.copy('bot_data.db', db_backup_path)
-                                    db_file = discord.File(db_backup_path, filename=f"backup_db_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db")
-                                    
-                                    # Отправляем
-                                    await user.send(
-                                        content=f"💾 **ЕЖЕДНЕВНЫЙ БЕКАП**\n📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}\n📊 Сервер: {guild.name}",
-                                        files=[file, db_file]
-                                    )
-                                    
-                                    # Чистим временный файл
-                                    os.remove(db_backup_path)
-                                    
-                                    print(f"📊 [STATS] Бекап отправлен супер-админу")
-                                    
-                            except Exception as e:
-                                print(f"❌ Ошибка отправки бекапа: {e}")
-                                
             except asyncio.CancelledError:
                 break
             except Exception as e:

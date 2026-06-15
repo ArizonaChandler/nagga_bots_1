@@ -85,6 +85,15 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Ошибка регистрации view: {e}")
 
+    # Регистрация persistent view для статистики
+    try:
+        from stats.views import StatsPanelView, BackupPanelView
+        bot.add_view(StatsPanelView())
+        bot.add_view(BackupPanelView())
+        print("✅ Зарегистрированы persistent view для статистики")
+    except Exception as e:
+        print(f"❌ Ошибка регистрации view статистики: {e}")
+
     # Инициализация системы модулей
     try:
         print("🎛️ Инициализация системы модулей...")
