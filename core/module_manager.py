@@ -270,9 +270,8 @@ class ModuleManager:
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
             elif module_key == 'stats':
-                from stats.manager import stats_manager
-                stats_manager.set_bot(self.bot)
-                await stats_manager.initialize()
+                from stats.initializer import setup as setup_stats
+                await setup_stats(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
             elif module_key == 'economy':
