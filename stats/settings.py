@@ -18,16 +18,16 @@ class StatsSettingsView(AdminOnlyView):
     def _add_buttons(self):
         self.clear_items()
         
-        channel_btn = discord.ui.Button(label="📡 Канал статистики", style=discord.ButtonStyle.primary, row=0)
+        channel_btn = discord.ui.Button(label="📡 Канал статистики", style=discord.ButtonStyle.primary, row=0, custom_id="stats_channel")
         channel_btn.callback = self.set_channel
         self.add_item(channel_btn)
         
-        backup_btn = discord.ui.Button(label="💾 Настройка бекапа", style=discord.ButtonStyle.primary, row=0)
+        backup_btn = discord.ui.Button(label="💾 Настройка бекапа", style=discord.ButtonStyle.primary, row=0, custom_id="stats_backup")
         backup_btn.callback = self.backup_settings
         self.add_item(backup_btn)
     
     def _add_back_button(self):
-        back_btn = discord.ui.Button(label="◀ Назад в главное меню", style=discord.ButtonStyle.secondary, row=4)
+        back_btn = discord.ui.Button(label="◀ Назад в главное меню", style=discord.ButtonStyle.secondary, row=4, custom_id="stats_back_to_global")
         
         async def back_callback(interaction: discord.Interaction):
             from core.settings_panel import GlobalSettingsPanel
@@ -80,14 +80,12 @@ class SetStatsChannelModal(discord.ui.Modal, title="📡 КАНАЛ СТАТИС
             await channel.send(embed=embed, view=StatsPanelView())
             
             # Админ-панель (только для супер-админа)
-            admin_channel = interaction.guild.get_channel(int(self.channel_id.value))
-            if admin_channel:
-                embed2 = discord.Embed(
-                    title="💾 ПАНЕЛЬ БЕКАПА",
-                    description="Управление бекапами сервера (только для супер-админа)",
-                    color=0xffa500
-                )
-                await admin_channel.send(embed=embed2, view=BackupPanelView())
+            embed2 = discord.Embed(
+                title="💾 ПАНЕЛЬ БЕКАПА",
+                description="Управление бекапами сервера (только для супер-админа)",
+                color=0xffa500
+            )
+            await channel.send(embed=embed2, view=BackupPanelView())
                 
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)

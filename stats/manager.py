@@ -24,6 +24,7 @@ class StatsManager:
         
     def set_bot(self, bot):
         self.bot = bot
+        print("📊 [STATS] Бот установлен в менеджер")
         
     async def initialize(self):
         """Инициализация системы статистики"""
@@ -41,6 +42,7 @@ class StatsManager:
         self.stats_channel_id = CONFIG.get('stats_channel')
         self.backup_enabled = CONFIG.get('stats_backup_enabled') == 'true'
         self.backup_time = CONFIG.get('stats_backup_time', '00:00')
+        print(f"📊 [STATS] Настройки: канал={self.stats_channel_id}, бекап={self.backup_enabled}, время={self.backup_time}")
     
     # ==================== ЕЖЕДНЕВНАЯ СТАТИСТИКА ====================
     
@@ -121,6 +123,8 @@ class StatsManager:
     
     async def create_backup(self, guild: discord.Guild, created_by: str = None) -> dict:
         """Создать полный бекап сервера"""
+        print(f"📊 [STATS] Создание бекапа для сервера {guild.name}")
+        
         backup = {
             'timestamp': datetime.now().isoformat(),
             'guild_id': str(guild.id),
@@ -137,6 +141,7 @@ class StatsManager:
         backup_json = json.dumps(backup, ensure_ascii=False, default=str)
         backup_id = db.save_server_backup(backup_json, created_by)
         
+        print(f"📊 [STATS] Бекап сохранён в БД с ID {backup_id}")
         return backup
     
     async def _backup_categories(self, guild: discord.Guild) -> list:
@@ -235,6 +240,7 @@ class StatsManager:
     async def restore_server(self, interaction: discord.Interaction, backup_data: dict) -> bool:
         """Восстановить сервер из бекапа"""
         guild = interaction.guild
+        print(f"📊 [STATS] Восстановление сервера {guild.name} из бекапа")
         
         # 1. Создаём канал для уведомлений
         try:
@@ -349,6 +355,7 @@ class StatsManager:
             self.backup_task.cancel()
         
         self.backup_task = asyncio.create_task(self._backup_loop())
+        print("📊 [STATS] Планировщик бекапов запущен")
     
     async def _backup_loop(self):
         """Цикл ежедневного бекапа"""
@@ -362,7 +369,10 @@ class StatsManager:
                     target_datetime += timedelta(days=1)
                 
                 wait_seconds = (target_datetime - now).total_seconds()
+                print(f"📊 [STATS] Следующий бекап через {wait_seconds // 3600:.0f} часов")
                 await asyncio.sleep(wait_seconds)
+                
+                print("📊 [STATS] Время бекапа! Создаю бекап...")
                 
                 # Создаём бекап и отправляем супер-админу
                 if self.bot and self.backup_enabled:
@@ -383,9 +393,10 @@ class StatsManager:
                                     )
                                     
                                     # Бекап БД
-                                    db_backup_path = f"backup_db_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
-                                    os.system(f"cp bot_data.db /tmp/{db_backup_path}")
-                                    db_file = discord.File(f"/tmp/{db_backup_path}", filename=db_backup_path)
+                                    db_backup_path = f"/tmp/backup_db_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+                                    import shutil
+                                    shutil.copy('bot_data.db', db_backup_path)
+                                    db_file = discord.File(db_backup_path, filename=f"backup_db_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db")
                                     
                                     # Отправляем
                                     await user.send(
@@ -394,7 +405,9 @@ class StatsManager:
                                     )
                                     
                                     # Чистим временный файл
-                                    os.system(f"rm /tmp/{db_backup_path}")
+                                    os.remove(db_backup_path)
+                                    
+                                    print(f"📊 [STATS] Бекап отправлен супер-админу")
                                     
                             except Exception as e:
                                 print(f"❌ Ошибка отправки бекапа: {e}")
