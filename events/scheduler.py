@@ -47,6 +47,13 @@ class EventScheduler:
     
     async def start(self):
         """Запуск планировщика (только если не запущен)"""
+        from core.module_manager import MODULES
+        
+        # Проверяем, включён ли модуль
+        if not MODULES.get("events", {}).get("enabled", False):
+            file_logger.info("⏭️ Модуль мероприятий выключен, планировщик не запускается")
+            return
+        
         if self.running:
             file_logger.warning("⚠️ Планировщик уже запущен, пропускаю")
             return
@@ -56,45 +63,6 @@ class EventScheduler:
         logger.info("🕐 Event Scheduler запущен")
         
         self.task = asyncio.create_task(self._run())
-    
-    async def stop(self):
-        """Остановка планировщика"""
-        if not self.running:
-            return
-        
-        self.running = False
-        if self.task and not self.task.done():
-            self.task.cancel()
-            try:
-                await self.task
-            except asyncio.CancelledError:
-                pass
-        
-        file_logger.info("🕐 Event Scheduler остановлен")
-        logger.info("🕐 Event Scheduler остановлен")
-    
-    async def _run(self):
-        file_logger.debug("Запуск основного цикла")
-        while self.running:
-            try:
-                now = datetime.now(MSK_TZ)
-                
-                await self.check_events()
-                await self.check_timeouts()
-                
-                if now.hour == 0 and now.minute == 0:
-                    file_logger.info("Генерация расписания на 14 дней")
-                    db.generate_schedule(days_ahead=14)
-                    self.cleanup_old_reminders()
-                    
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                file_logger.error(f"Ошибка в планировщике: {e}")
-                file_logger.error(traceback.format_exc())
-                logger.error(f"Ошибка в планировщике: {e}")
-            
-            await asyncio.sleep(self.check_interval)
     
     async def check_events(self):
         """Проверка предстоящих мероприятий"""

@@ -377,7 +377,13 @@ async def on_member_unban(guild: discord.Guild, user: discord.User):
 # ========== ЗАПУСК ==========
 async def main():
     async with bot:
-        await setup_scheduler(bot)
+        # Запускаем планировщик мероприятий только если модуль включён
+        from core.module_manager import MODULES
+        if MODULES.get("events", {}).get("enabled", False):
+            await setup_scheduler(bot)
+        else:
+            print("⏭️ [EVENTS] Модуль мероприятий выключен, планировщик не запущен")
+        
         await bot.start(BOT_TOKEN)
 
 
