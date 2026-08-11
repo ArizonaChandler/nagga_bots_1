@@ -30,6 +30,14 @@ class BirthdayInitializer:
         self.greeting_channel_id = db.get_setting('birthday_greeting_channel')
         self.settings_channel_id = db.get_setting('birthday_settings_channel')
 
+        # Очищаем от 'null'
+        if self.channel_id == 'null' or self.channel_id is None:
+            self.channel_id = None
+        if self.greeting_channel_id == 'null' or self.greeting_channel_id is None:
+            self.greeting_channel_id = None
+        if self.settings_channel_id == 'null' or self.settings_channel_id is None:
+            self.settings_channel_id = None
+
         # 1. Очистка ушедших пользователей (ДО создания embed)
         await self._cleanup_left_users()
 
@@ -52,9 +60,13 @@ class BirthdayInitializer:
             print("⚠️ [Birthday] Публичный канал дней рождения не настроен")
             return
 
-        channel = self.bot.get_channel(int(self.channel_id))
-        if not channel:
-            logger.error(f"❌ Публичный канал {self.channel_id} не найден")
+        try:
+            channel = self.bot.get_channel(int(self.channel_id))
+            if not channel:
+                logger.error(f"❌ Публичный канал {self.channel_id} не найден")
+                return
+        except (ValueError, TypeError) as e:
+            logger.error(f"❌ Ошибка ID канала {self.channel_id}: {e}")
             return
 
         # Ищем существующий embed с кнопками
@@ -82,9 +94,13 @@ class BirthdayInitializer:
             print("⚠️ [Birthday] Канал настроек дней рождения не настроен")
             return
 
-        channel = self.bot.get_channel(int(self.settings_channel_id))
-        if not channel:
-            logger.error(f"❌ Канал настроек {self.settings_channel_id} не найден")
+        try:
+            channel = self.bot.get_channel(int(self.settings_channel_id))
+            if not channel:
+                logger.error(f"❌ Канал настроек {self.settings_channel_id} не найден")
+                return
+        except (ValueError, TypeError) as e:
+            logger.error(f"❌ Ошибка ID канала настроек {self.settings_channel_id}: {e}")
             return
 
         # Ищем существующую панель управления
@@ -140,8 +156,11 @@ class BirthdayInitializer:
         if not channel_id:
             return
 
-        channel = self.bot.get_channel(int(channel_id))
-        if not channel:
+        try:
+            channel = self.bot.get_channel(int(channel_id))
+            if not channel:
+                return
+        except (ValueError, TypeError):
             return
 
         today_birthdays = birthday_manager.get_today_birthdays()
@@ -192,7 +211,7 @@ class BirthdayInitializer:
                 print(f"✅ [Birthday] Очищено {removed_count} записей о днях рождения покинувших участников")
                 # Обновляем embed
                 channel_id = db.get_setting('birthday_channel')
-                if channel_id:
+                if channel_id and channel_id != 'null':
                     await update_birthday_embed(self.bot, channel_id)
                     
         except Exception as e:
@@ -206,34 +225,41 @@ class BirthdayInitializer:
             self.task.cancel()
         
         if self.channel_id:
-            channel = self.bot.get_channel(int(self.channel_id))
-            if channel:
-                async for msg in channel.history(limit=50):
-                    if msg.author == self.bot.user and msg.embeds:
-                        await msg.edit(
-                            embed=discord.Embed(
-                                title="🎂 **ДНИ РОЖДЕНИЯ**",
-                                description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
-                                color=0x808080
-                            ),
-                            view=None
-                        )
-                        break
+            try:
+                channel = self.bot.get_channel(int(self.channel_id))
+                if channel:
+                    async for msg in channel.history(limit=50):
+                        if msg.author == self.bot.user and msg.embeds:
+                            await msg.edit(
+                                embed=discord.Embed(
+                                    title="🎂 **ДНИ РОЖДЕНИЯ**",
+                                    description="⛔ **Система отключена администратором**\nОбратитесь к администрации для включения.",
+                                    color=0x808080
+                                ),
+                                view=None
+                            )
+                            break
+            except (ValueError, TypeError):
+                pass
 
     async def enable(self):
         """Включить систему дней рождения"""
         print("🎂 [BIRTHDAY] Включение системы дней рождения...")
         
         if self.channel_id:
-            channel = self.bot.get_channel(int(self.channel_id))
-            if channel:
-                async for msg in channel.history(limit=50):
-                    if msg.author == self.bot.user and msg.embeds:
-                        if "⛔ **Система отключена**" in msg.embeds[0].description:
-                            await msg.delete()
-                            break
+            try:
+                channel = self.bot.get_channel(int(self.channel_id))
+                if channel:
+                    async for msg in channel.history(limit=50):
+                        if msg.author == self.bot.user and msg.embeds:
+                            if "⛔ **Система отключена**" in msg.embeds[0].description:
+                                await msg.delete()
+                                break
+            except (ValueError, TypeError):
+                pass
         
         await self.initialize_all()
+
 
 # Глобальный экземпляр
 initializer = None
