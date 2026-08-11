@@ -3,6 +3,7 @@ import logging
 from birthday.initializer import setup as setup_birthday
 from birthday.manager import birthday_manager
 from birthday.views import BirthdayPublicView, BirthdayModal, RemoveBirthdayModal
+from birthday.settings import BirthdaySettingsView
 
 logger = logging.getLogger(__name__)
 logger.info("🎂 Модуль дней рождения загружен")
@@ -12,5 +13,6 @@ __all__ = [
     'setup_birthday',
     'BirthdayPublicView',
     'BirthdayModal',
-    'RemoveBirthdayModal'
+    'RemoveBirthdayModal',
+    'BirthdaySettingsView'
 ]
