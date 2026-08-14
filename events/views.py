@@ -56,6 +56,7 @@ class EventsParticipantView(PermanentView):
         self.collect_minutes = collect_minutes
         self.remaining_minutes = collect_minutes
         self.update_task = None
+        self.is_disabled = False  # Флаг, чтобы не дублировать отключение
     
     def set_message(self, message):
         self.message = message
@@ -124,20 +125,37 @@ class EventsParticipantView(PermanentView):
             content += f"\n**Участники (0):**\n"
             content += "└ *Пока никого нет*"
         
-        await self.message.edit(content=content)
+        try:
+            await self.message.edit(content=content)
+        except Exception as e:
+            print(f"⚠️ [EVENTS] Ошибка обновления сообщения: {e}")
     
     async def disable_buttons(self):
         """Отключает кнопки по истечению времени"""
+        if self.is_disabled:
+            return
+        
+        self.is_disabled = True
+        
         if not self.message:
             return
         
         try:
-            for child in self.message.components[0].children:
-                child.disabled = True
-            await self.message.edit(view=self.message.components[0])
+            # Создаём новый view с отключёнными кнопками
+            new_view = discord.ui.View(timeout=None)
+            for child in self.children:
+                if isinstance(child, discord.ui.Button):
+                    child.disabled = True
+                    new_view.add_item(child)
+            
+            await self.message.edit(view=new_view)
+            print(f"✅ [EVENTS] Кнопки сессии {self.session_id} отключены")
+        except discord.NotFound:
+            print(f"⚠️ [EVENTS] Сообщение сессии {self.session_id} не найдено")
         except Exception as e:
             print(f"⚠️ [EVENTS] Ошибка отключения кнопок: {e}")
         
+        # Завершаем сессию
         session = events_manager.get_session(self.session_id)
         if session and session['status'] == 'active':
             participants = events_manager.get_participants(self.session_id)
@@ -151,6 +169,10 @@ class EventsParticipantView(PermanentView):
     
     async def end_session_early(self, interaction: discord.Interaction):
         """Досрочное завершение сбора (для создателя и админов)"""
+        if self.is_disabled:
+            await interaction.response.send_message("❌ Сбор уже завершён", ephemeral=True)
+            return
+        
         session = events_manager.get_session(self.session_id)
         if not session or session['status'] != 'active':
             await interaction.response.send_message("❌ Сессия уже завершена", ephemeral=True)
@@ -160,13 +182,19 @@ class EventsParticipantView(PermanentView):
         db.finalize_event_participants(self.session_id, participants)
         events_manager.end_session(self.session_id)
         
+        self.is_disabled = True
+        
         # Отключаем кнопки
         try:
-            for child in self.message.components[0].children:
-                child.disabled = True
-            await self.message.edit(view=self.message.components[0])
+            new_view = discord.ui.View(timeout=None)
+            for child in self.children:
+                if isinstance(child, discord.ui.Button):
+                    child.disabled = True
+                    new_view.add_item(child)
+            
+            await self.message.edit(view=new_view)
         except Exception as e:
-            print(f"⚠️ [EVENTS] Ошибка отключения кнопок: {e}")
+            print(f"⚠️ [EVENTS] Ошибка отключения кнопок при досрочном завершении: {e}")
         
         await events_manager.log_action(
             self.session_id,
@@ -177,6 +205,10 @@ class EventsParticipantView(PermanentView):
     
     @discord.ui.button(label="✅ ПРИСОЕДИНИТЬСЯ", style=discord.ButtonStyle.success, emoji="✅", row=0)
     async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.is_disabled:
+            await interaction.response.send_message("❌ Сбор уже завершён", ephemeral=True)
+            return
+        
         session = events_manager.get_session(self.session_id)
         if not session or session['status'] != 'active':
             await interaction.response.send_message("❌ Мероприятие уже завершено", ephemeral=True)
@@ -196,6 +228,10 @@ class EventsParticipantView(PermanentView):
     
     @discord.ui.button(label="❌ ОТСОЕДИНИТЬСЯ", style=discord.ButtonStyle.danger, emoji="❌", row=0)
     async def leave(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.is_disabled:
+            await interaction.response.send_message("❌ Сбор уже завершён", ephemeral=True)
+            return
+        
         session = events_manager.get_session(self.session_id)
         if not session or session['status'] != 'active':
             await interaction.response.send_message("❌ Мероприятие уже завершено", ephemeral=True)
@@ -212,6 +248,10 @@ class EventsParticipantView(PermanentView):
     @discord.ui.button(label="⏹️ ЗАВЕРШИТЬ СБОР", style=discord.ButtonStyle.danger, emoji="⏹️", row=1)
     async def end_early(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Кнопка завершения сбора (только для создателя и админов)"""
+        if self.is_disabled:
+            await interaction.response.send_message("❌ Сбор уже завершён", ephemeral=True)
+            return
+        
         # Сразу отвечаем, чтобы избежать timeout
         await interaction.response.defer(ephemeral=True)
         
@@ -232,4 +272,3 @@ class EventsParticipantView(PermanentView):
             return
         
         await self.end_session_early(interaction)
-        await interaction.followup.send("✅ Сбор досрочно завершён", ephemeral=True)
