@@ -2994,5 +2994,15 @@ class Database:
             ''', (f'-{days} days',))
             rows = cursor.fetchall()
             return [{'user_id': row[0], 'count': row[1]} for row in rows]
+    
+    def get_event_organizer_stats_by_user(self, user_id: str, days: int = 30) -> int:
+        """Получить количество МП, организованных пользователем за N дней"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT COUNT(*) FROM event_sessions
+                WHERE creator_id = ? AND created_at >= datetime('now', ?) AND status = 'ended'
+            ''', (user_id, f'-{days} days'))
+            return cursor.fetchone()[0] or 0
 
 db = Database()

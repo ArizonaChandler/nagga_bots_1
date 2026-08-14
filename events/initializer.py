@@ -194,6 +194,246 @@ class ModerationMainView(discord.ui.View):
         
         await interaction.response.send_modal(CreateEventWithTemplateModal(self.templates))
     
+    @discord.ui.button(label="📋 ШАБЛОНЫ МП", style=discord.ButtonStyle.primary, emoji="📋", row=0)
+    async def manage_templates(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Управление шаблонами мероприятий (для администраторов)"""
+        # Проверяем, что пользователь администратор
+        from core.utils import is_admin
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы могут управлять шаблонами!", ephemeral=True)
+            return
+        
+        # Открываем меню управления шаблонами
+        view = TemplateManagementView()
+        embed = discord.Embed(
+            title="📋 УПРАВЛЕНИЕ ШАБЛОНАМИ МЕРОПРИЯТИЙ",
+            description="Создание и удаление шаблонов для мероприятий",
+            color=0x00bfff
+        )
+        await interaction.response.edit_message(embed=embed, view=view)
+    
+    @discord.ui.button(label="📊 СТАТИСТИКА", style=discord.ButtonStyle.secondary, emoji="📊", row=1)
+    async def show_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Показать общую статистику"""
+        embed = discord.Embed(
+            title="📊 СТАТИСТИКА МЕРОПРИЯТИЙ",
+            color=0x00bfff,
+            timestamp=datetime.now()
+        )
+        
+        org_stats = db.get_event_organizer_stats(7)
+        if org_stats:
+            text = ""
+            for i, stat in enumerate(org_stats[:5], 1):
+                text += f"{i}. <@{stat['user_id']}> — **{stat['count']}** МП\n"
+            embed.add_field(name="🏆 Топ организаторов (7 дней)", value=text, inline=False)
+        else:
+            embed.add_field(name="🏆 Топ организаторов", value="Нет данных", inline=False)
+        
+        total_sessions = len(db.get_active_event_sessions()) + len(db.get_all_event_sessions())
+        embed.add_field(name="📋 Всего сессий", value=f"**{total_sessions}**", inline=True)
+        
+        # Кнопки для детальной статистики
+        view = StatsMenuView()
+        await interaction.response.edit_message(embed=embed, view=view)
+    
+    @discord.ui.button(label="👤 СТАТИСТИКА ПОЛЬЗОВАТЕЛЯ", style=discord.ButtonStyle.primary, emoji="👤", row=1)
+    async def user_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Статистика по конкретному пользователю"""
+        await interaction.response.send_modal(UserStatsModal())
+
+
+class StatsMenuView(discord.ui.View):
+    """Дополнительные кнопки для статистики"""
+    
+    def __init__(self):
+        super().__init__(timeout=None)
+    
+    @discord.ui.button(label="📊 Топ организаторов (все время)", style=discord.ButtonStyle.secondary, emoji="📊", row=0)
+    async def all_time_orgs(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Показать топ организаторов за всё время"""
+        stats = db.get_event_organizer_stats(9999)
+        
+        embed = discord.Embed(
+            title="🏆 ТОП ОРГАНИЗАТОРОВ (ВСЕ ВРЕМЯ)",
+            color=0xffd700,
+            timestamp=datetime.now()
+        )
+        
+        if stats:
+            text = ""
+            medals = ["🥇", "🥈", "🥉"]
+            for i, stat in enumerate(stats[:10], 1):
+                medal = medals[i-1] if i <= 3 else f"{i}."
+                text += f"{medal} <@{stat['user_id']}> — **{stat['count']}** МП\n"
+            embed.description = text
+        else:
+            embed.description = "Нет данных"
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @discord.ui.button(label="📋 ВСЕ СЕССИИ", style=discord.ButtonStyle.secondary, emoji="📋", row=1)
+    async def all_sessions(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Показать все сессии"""
+        sessions = db.get_all_event_sessions()
+        
+        if not sessions:
+            await interaction.response.send_message("📭 Нет завершённых сессий", ephemeral=True)
+            return
+        
+        embed = discord.Embed(
+            title="📋 ВСЕ СЕССИИ МЕРОПРИЯТИЙ",
+            color=0x7289da,
+            timestamp=datetime.now()
+        )
+        
+        for session in sessions[:10]:
+            participants = db.get_event_participants(session['id'])
+            embed.add_field(
+                name=f"ID: {session['id']} | {session['event_time']}",
+                value=f"👤 Организатор: <@{session['creator_id']}>\n👥 Участников: {len(participants)}",
+                inline=False
+            )
+        
+        if len(sessions) > 10:
+            embed.set_footer(text=f"Показано 10 из {len(sessions)} сессий")
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @discord.ui.button(label="◀ НАЗАД", style=discord.ButtonStyle.secondary, emoji="◀", row=2)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Вернуться в главное меню"""
+        templates = get_event_templates()
+        embed = discord.Embed(
+            title="🎯 **ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ**",
+            description="Создание и управление мероприятиями\n\n"
+                        f"📋 **Доступно шаблонов:** {len(templates)}\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"Нажмите кнопку «➕ СОЗДАТЬ МП» чтобы начать",
+            color=0x00bfff
+        )
+        await interaction.response.edit_message(embed=embed, view=ModerationMainView(templates))
+
+
+class TemplateManagementView(discord.ui.View):
+    """Управление шаблонами мероприятий"""
+    
+    def __init__(self):
+        super().__init__(timeout=None)
+    
+    @discord.ui.button(label="➕ СОЗДАТЬ ШАБЛОН", style=discord.ButtonStyle.success, emoji="➕", row=0)
+    async def create_template(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Создать новый шаблон"""
+        from core.utils import is_admin
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        
+        # Отправляем модалку из event_scheduler
+        from event_scheduler.modals import AddEventSettingsModal
+        await interaction.response.send_modal(AddEventSettingsModal())
+    
+    @discord.ui.button(label="📋 СПИСОК ШАБЛОНОВ", style=discord.ButtonStyle.secondary, emoji="📋", row=0)
+    async def list_templates(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Показать список шаблонов"""
+        from core.utils import is_admin
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        
+        templates = get_event_templates(enabled_only=False)
+        
+        if not templates:
+            await interaction.response.send_message("📭 Нет созданных шаблонов", ephemeral=True)
+            return
+        
+        days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+        embed = discord.Embed(
+            title="📋 ШАБЛОНЫ МЕРОПРИЯТИЙ",
+            color=0x00bfff,
+            timestamp=datetime.now()
+        )
+        
+        text = ""
+        for t in templates:
+            status = "✅" if t['enabled'] else "❌"
+            text += f"{status} **{t['name']}** — {days[t['weekday']]} {t['event_time']}\n"
+        
+        embed.description = text
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @discord.ui.button(label="◀ НАЗАД", style=discord.ButtonStyle.secondary, emoji="◀", row=1)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Вернуться в главное меню"""
+        templates = get_event_templates()
+        embed = discord.Embed(
+            title="🎯 **ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ**",
+            description="Создание и управление мероприятиями\n\n"
+                        f"📋 **Доступно шаблонов:** {len(templates)}\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"Нажмите кнопку «➕ СОЗДАТЬ МП» чтобы начать",
+            color=0x00bfff
+        )
+        await interaction.response.edit_message(embed=embed, view=ModerationMainView(templates))
+
+
+class UserStatsModal(discord.ui.Modal, title="👤 СТАТИСТИКА ПОЛЬЗОВАТЕЛЯ"):
+    user_id = discord.ui.TextInput(
+        label="ID пользователя",
+        placeholder="Введите ID пользователя",
+        max_length=20,
+        required=True
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            uid = self.user_id.value
+            
+            # Статистика организатора
+            org_stats = db.get_event_organizer_stats_by_user(uid, 30)
+            
+            # Статистика участника
+            part_stats = db.get_user_event_participations(uid, 30)
+            
+            embed = discord.Embed(
+                title=f"👤 СТАТИСТИКА ПОЛЬЗОВАТЕЛЯ",
+                description=f"<@{uid}>",
+                color=0x00bfff,
+                timestamp=datetime.now()
+            )
+            
+            if org_stats:
+                embed.add_field(
+                    name="📋 Организовал МП (30 дней)",
+                    value=f"**{org_stats}** МП",
+                    inline=True
+                )
+            else:
+                embed.add_field(name="📋 Организовал МП", value="0", inline=True)
+            
+            if part_stats:
+                embed.add_field(
+                    name="✅ Участвовал в МП (30 дней)",
+                    value=f"**{len(part_stats)}** МП",
+                    inline=True
+                )
+                
+                # Список МП, в которых участвовал
+                text = ""
+                for stat in part_stats[:5]:
+                    text += f"• {stat['event_time']} — ID: {stat['session_id']}\n"
+                if len(part_stats) > 5:
+                    text += f"*и ещё {len(part_stats) - 5}*"
+                embed.add_field(name="📝 Участия", value=text or "Нет данных", inline=False)
+            else:
+                embed.add_field(name="✅ Участвовал в МП", value="0", inline=True)
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+    
     @discord.ui.button(label="📊 СТАТИСТИКА", style=discord.ButtonStyle.secondary, emoji="📊", row=0)
     async def show_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Показать статистику"""
