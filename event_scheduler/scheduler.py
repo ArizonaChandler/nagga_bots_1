@@ -7,7 +7,7 @@ import pytz
 import discord
 from core.database import db
 from core.config import CONFIG
-from events.views import EventReminderView
+from event_scheduler.views import EventReminderView
 
 logger = logging.getLogger(__name__)
 

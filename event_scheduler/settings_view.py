@@ -6,7 +6,7 @@ from core.config import CONFIG, save_config
 from core.database import db
 from core.utils import format_mention, is_admin
 from datetime import datetime
-from events.base import PermanentView
+from event_scheduler.base import PermanentView
 
 logger = logging.getLogger(__name__)
 

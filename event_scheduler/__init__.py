@@ -1,9 +1,9 @@
 """Event System - Автоматические оповещения о мероприятиях"""
-from events.scheduler import setup as setup_scheduler, scheduler
-from events.views import EventReminderView, EventInfoView
-from events.modals import ScheduleEventModal
-from events.settings_view import EventsSettingsView
-from events.base import PermanentView
+from event_scheduler.scheduler import setup as setup_scheduler, scheduler
+from event_scheduler.views import EventReminderView, EventInfoView
+from event_scheduler.modals import ScheduleEventModal
+from event_scheduler.settings_view import EventSchedulerSettingsView
+from event_scheduler.base import PermanentView
 
 __all__ = [
     'setup_scheduler',
@@ -11,6 +11,6 @@ __all__ = [
     'EventReminderView',
     'EventInfoView',
     'ScheduleEventModal',
-    'EventsSettingsView',
+    'EventSchedulerSettingsView',
     'PermanentView'
 ]
