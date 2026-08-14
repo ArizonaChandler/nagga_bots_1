@@ -6,7 +6,8 @@ from core.database import db
 from core.config import CONFIG
 from events.manager import events_manager
 from events.settings_view import EventsSettingsView
-from events.templates import get_event_templates
+from events.templates import get_event_templates, format_templates_for_select
+from events.modals import CreateEventModal
 from events.stats import EventStats
 
 logger = logging.getLogger(__name__)
@@ -191,7 +192,6 @@ class ModerationMainView(discord.ui.View):
             )
             return
         
-        # Отправляем modal с выбором шаблона
         await interaction.response.send_modal(CreateEventWithTemplateModal(self.templates))
     
     @discord.ui.button(label="📊 СТАТИСТИКА", style=discord.ButtonStyle.secondary, emoji="📊", row=0)
@@ -203,7 +203,6 @@ class ModerationMainView(discord.ui.View):
             timestamp=datetime.now()
         )
         
-        # Статистика организаторов за неделю
         org_stats = db.get_event_organizer_stats(7)
         if org_stats:
             text = ""
@@ -213,7 +212,6 @@ class ModerationMainView(discord.ui.View):
         else:
             embed.add_field(name="🏆 Топ организаторов", value="Нет данных", inline=False)
         
-        # Статистика по участникам
         total_sessions = len(db.get_active_event_sessions()) + len(db.get_all_event_sessions())
         embed.add_field(name="📋 Всего сессий", value=f"**{total_sessions}**", inline=True)
         
@@ -227,7 +225,6 @@ class CreateEventWithTemplateModal(discord.ui.Modal, title="🎯 СОЗДАНИ�
         super().__init__()
         self.templates = templates
         
-        # Добавляем select для выбора шаблона
         self.template_select = discord.ui.Select(
             placeholder="Выберите шаблон мероприятия",
             options=format_templates_for_select(templates)
@@ -240,7 +237,17 @@ class CreateEventWithTemplateModal(discord.ui.Modal, title="🎯 СОЗДАНИ�
         self.selected_template_id = int(self.template_select.values[0])
         await interaction.response.defer()
         
-        # Открываем основную модалку
         modal = CreateEventModal(self.templates)
         modal.selected_template_id = self.selected_template_id
         await interaction.followup.send_modal(modal)
+
+
+# ========== ГЛОБАЛЬНЫЙ ЭКЗЕМПЛЯР И ФУНКЦИЯ SETUP ==========
+
+initializer = None
+
+async def setup(bot):
+    global initializer
+    initializer = EventsInitializer(bot)
+    await initializer.initialize_all()
+    return initializer
