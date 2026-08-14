@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from core.database import db
 from events.manager import events_manager
-from events.views import EventsParticipantView  # ← EventsModerationView не нужен в модалке
+from events.views import EventsParticipantView
 
 
 class CreateEventModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МЕРОПРИЯТИЯ"):
@@ -16,8 +16,8 @@ class CreateEventModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МЕРОП
         required=True
     )
     
-    meeting_time = discord.ui.TextInput(
-        label="⏰ Время сбора (МСК)",
+    event_time = discord.ui.TextInput(  # ← время начала МП
+        label="⏰ Время начала (МСК)",
         placeholder="19:30",
         max_length=5,
         required=True
@@ -30,7 +30,7 @@ class CreateEventModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МЕРОП
         required=True
     )
     
-    collect_time = discord.ui.TextInput(
+    collect_time = discord.ui.TextInput(  # ← сколько минут длится сбор
         label="⏱️ Время на сбор (минуты)",
         placeholder="20",
         max_length=3,
@@ -46,10 +46,12 @@ class CreateEventModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МЕРОП
     )
     
     async def on_submit(self, interaction: discord.Interaction):
-        if not re.match(r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$', self.meeting_time.value):
+        # Проверка времени начала
+        if not re.match(r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$', self.event_time.value):
             await interaction.response.send_message("❌ Неверный формат времени. Используйте ЧЧ:ММ", ephemeral=True)
             return
         
+        # Проверка времени на сбор
         collect_minutes = 20
         if self.collect_time.value:
             try:
@@ -71,7 +73,7 @@ class CreateEventModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МЕРОП
             collect_time=collect_minutes,
             channel_id=str(interaction.channel.id),
             message_id="",
-            event_time=self.meeting_time.value,
+            event_time=self.event_time.value,  # ← время начала
             event_name=self.event_name.value,
             meeting_place=self.meeting_place.value,
             additional_info=self.additional_info.value
@@ -81,9 +83,9 @@ class CreateEventModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МЕРОП
         
         await interaction.followup.send(
             f"✅ Мероприятие **{self.event_name.value}** создано!\n"
-            f"⏰ Сбор в: {self.meeting_time.value}\n"
+            f"⏰ Начало в: {self.event_time.value}\n"  # ← показываем время начала
             f"📍 Место: {self.meeting_place.value}\n"
-            f"⏱️ Время на сбор: {collect_minutes} минут",
+            f"⏱️ Сбор длится: {collect_minutes} минут",
             ephemeral=True
         )
     
@@ -102,7 +104,8 @@ class CreateEventModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МЕРОП
             f"**ВНИМАНИЕ, СБОР!**\n\n"
             f"Собирает: {interaction.user.mention} на **{self.event_name.value}**\n"
             f"📍 Место сбора: {self.meeting_place.value}\n"
-            f"⏱️ Осталось времени: **{collect_minutes} мин.**\n"
+            f"⏱️ Осталось времени: **{collect_minutes} мин.**\n"  # ← обратный отсчёт
+            f"⏰ Начало в: {self.event_time.value}\n"  # ← когда начнётся МП
         )
         if self.additional_info.value:
             content += f"📝 {self.additional_info.value}\n"
@@ -113,5 +116,4 @@ class CreateEventModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МЕРОП
         
         db.update_event_session_message(session_id, str(sent_message.id))
         
-        # Запускаем таймер обновления времени
         await view.start_timer()
