@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 from core.database import db
 from core.config import CONFIG
+from core.utils import is_admin
 from events.manager import events_manager
 from events.settings_view import EventsSettingsView
 from events.templates import get_event_templates, format_templates_for_select
@@ -39,10 +40,8 @@ class EventsInitializer:
         if self.settings_channel_id:
             await self._init_settings_channel()
         
-        # Восстанавливаем активные сессии
         await self._restore_sessions()
         
-        # Запускаем еженедельную статистику
         self.stats = EventStats(self.bot)
         await self.stats.start()
         print("📊 [EVENTS] Еженедельная статистика запущена")
@@ -51,7 +50,6 @@ class EventsInitializer:
         print("🎯 [EVENTS] Инициализация завершена")
     
     async def _init_moderation_channel(self):
-        """Канал модерации — кнопка создания МП и статистика"""
         try:
             channel = self.bot.get_channel(int(self.moderation_channel_id))
             if not channel:
@@ -81,7 +79,6 @@ class EventsInitializer:
         print(f"🎯 [EVENTS] Создана панель модерации в #{channel.name}")
     
     async def _init_participant_channel(self):
-        """Канал сбора участников — очистка"""
         try:
             channel = self.bot.get_channel(int(self.participant_channel_id))
             if not channel:
@@ -98,7 +95,6 @@ class EventsInitializer:
         print(f"🎯 [EVENTS] Канал сбора участников очищен: #{channel.name}")
     
     async def _init_settings_channel(self):
-        """Канал настроек"""
         try:
             channel = self.bot.get_channel(int(self.settings_channel_id))
             if not channel:
@@ -121,7 +117,6 @@ class EventsInitializer:
         print(f"🎯 [EVENTS] Создана панель настроек в #{channel.name}")
     
     async def _restore_sessions(self):
-        """Восстановить активные сессии после перезапуска"""
         sessions = db.get_active_event_sessions()
         
         if not sessions:
@@ -133,18 +128,15 @@ class EventsInitializer:
             session_id = session['id']
             participants = db.get_event_participants(session_id)
             
-            # Восстанавливаем в память
             events_manager.active_sessions[session_id] = session
             events_manager.participants[session_id] = [p['user_id'] for p in participants]
             
-            # Обновляем сообщение в канале сбора
             participant_channel_id = db.get_setting('events_participant_channel')
             if participant_channel_id:
                 channel = self.bot.get_channel(int(participant_channel_id))
                 if channel and session.get('message_id'):
                     try:
                         msg = await channel.fetch_message(int(session['message_id']))
-                        # Обновляем список участников
                         content = self._build_participants_content(session, participants)
                         await msg.edit(content=content)
                     except:
@@ -167,7 +159,6 @@ class EventsInitializer:
         return content
     
     async def stop(self):
-        """Остановка модуля"""
         if self.stats:
             await self.stats.stop()
         await events_manager.stop()
@@ -181,9 +172,14 @@ class ModerationMainView(discord.ui.View):
         super().__init__(timeout=None)
         self.templates = templates
     
-    @discord.ui.button(label="➕ СОЗДАТЬ МП", style=discord.ButtonStyle.success, emoji="➕", row=0)
+    @discord.ui.button(
+        label="СОЗДАТЬ МП",
+        style=discord.ButtonStyle.success,
+        emoji="➕",
+        row=0,
+        custom_id="events_create"
+    )
     async def create_event(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Создать новое мероприятие"""
         if not self.templates:
             await interaction.response.send_message(
                 "❌ Нет доступных шаблонов мероприятий.\n"
@@ -191,19 +187,20 @@ class ModerationMainView(discord.ui.View):
                 ephemeral=True
             )
             return
-        
         await interaction.response.send_modal(CreateEventWithTemplateModal(self.templates))
     
-    @discord.ui.button(label="📋 ШАБЛОНЫ МП", style=discord.ButtonStyle.primary, emoji="📋", row=0)
+    @discord.ui.button(
+        label="ШАБЛОНЫ МП",
+        style=discord.ButtonStyle.primary,
+        emoji="📋",
+        row=0,
+        custom_id="events_templates"
+    )
     async def manage_templates(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Управление шаблонами мероприятий (для администраторов)"""
-        # Проверяем, что пользователь администратор
-        from core.utils import is_admin
         if not await is_admin(str(interaction.user.id)):
             await interaction.response.send_message("❌ Только администраторы могут управлять шаблонами!", ephemeral=True)
             return
         
-        # Открываем меню управления шаблонами
         view = TemplateManagementView()
         embed = discord.Embed(
             title="📋 УПРАВЛЕНИЕ ШАБЛОНАМИ МЕРОПРИЯТИЙ",
@@ -212,9 +209,14 @@ class ModerationMainView(discord.ui.View):
         )
         await interaction.response.edit_message(embed=embed, view=view)
     
-    @discord.ui.button(label="📊 СТАТИСТИКА", style=discord.ButtonStyle.secondary, emoji="📊", row=1)
+    @discord.ui.button(
+        label="СТАТИСТИКА",
+        style=discord.ButtonStyle.secondary,
+        emoji="📊",
+        row=1,
+        custom_id="events_stats"
+    )
     async def show_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Показать общую статистику"""
         embed = discord.Embed(
             title="📊 СТАТИСТИКА МЕРОПРИЯТИЙ",
             color=0x00bfff,
@@ -233,13 +235,17 @@ class ModerationMainView(discord.ui.View):
         total_sessions = len(db.get_active_event_sessions()) + len(db.get_all_event_sessions())
         embed.add_field(name="📋 Всего сессий", value=f"**{total_sessions}**", inline=True)
         
-        # Кнопки для детальной статистики
         view = StatsMenuView()
         await interaction.response.edit_message(embed=embed, view=view)
     
-    @discord.ui.button(label="👤 СТАТИСТИКА ПОЛЬЗОВАТЕЛЯ", style=discord.ButtonStyle.primary, emoji="👤", row=1)
+    @discord.ui.button(
+        label="СТАТИСТИКА ПОЛЬЗОВАТЕЛЯ",
+        style=discord.ButtonStyle.primary,
+        emoji="👤",
+        row=1,
+        custom_id="events_user_stats"
+    )
     async def user_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Статистика по конкретному пользователю"""
         await interaction.response.send_modal(UserStatsModal())
 
 
@@ -249,9 +255,14 @@ class StatsMenuView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
     
-    @discord.ui.button(label="📊 Топ организаторов (все время)", style=discord.ButtonStyle.secondary, emoji="📊", row=0)
+    @discord.ui.button(
+        label="Топ организаторов (все время)",
+        style=discord.ButtonStyle.secondary,
+        emoji="📊",
+        row=0,
+        custom_id="stats_all_time"
+    )
     async def all_time_orgs(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Показать топ организаторов за всё время"""
         stats = db.get_event_organizer_stats(9999)
         
         embed = discord.Embed(
@@ -272,9 +283,14 @@ class StatsMenuView(discord.ui.View):
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
     
-    @discord.ui.button(label="📋 ВСЕ СЕССИИ", style=discord.ButtonStyle.secondary, emoji="📋", row=1)
+    @discord.ui.button(
+        label="Все сессии",
+        style=discord.ButtonStyle.secondary,
+        emoji="📋",
+        row=1,
+        custom_id="stats_all_sessions"
+    )
     async def all_sessions(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Показать все сессии"""
         sessions = db.get_all_event_sessions()
         
         if not sessions:
@@ -300,9 +316,14 @@ class StatsMenuView(discord.ui.View):
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
     
-    @discord.ui.button(label="◀ НАЗАД", style=discord.ButtonStyle.secondary, emoji="◀", row=2)
+    @discord.ui.button(
+        label="Назад",
+        style=discord.ButtonStyle.secondary,
+        emoji="◀",
+        row=2,
+        custom_id="stats_back"
+    )
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Вернуться в главное меню"""
         templates = get_event_templates()
         embed = discord.Embed(
             title="🎯 **ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ**",
@@ -321,22 +342,29 @@ class TemplateManagementView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
     
-    @discord.ui.button(label="➕ СОЗДАТЬ ШАБЛОН", style=discord.ButtonStyle.success, emoji="➕", row=0)
+    @discord.ui.button(
+        label="Создать шаблон",
+        style=discord.ButtonStyle.success,
+        emoji="➕",
+        row=0,
+        custom_id="template_create"
+    )
     async def create_template(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Создать новый шаблон"""
-        from core.utils import is_admin
         if not await is_admin(str(interaction.user.id)):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
             return
         
-        # Отправляем модалку из event_scheduler
         from event_scheduler.modals import AddEventSettingsModal
         await interaction.response.send_modal(AddEventSettingsModal())
     
-    @discord.ui.button(label="📋 СПИСОК ШАБЛОНОВ", style=discord.ButtonStyle.secondary, emoji="📋", row=0)
+    @discord.ui.button(
+        label="Список шаблонов",
+        style=discord.ButtonStyle.secondary,
+        emoji="📋",
+        row=0,
+        custom_id="template_list"
+    )
     async def list_templates(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Показать список шаблонов"""
-        from core.utils import is_admin
         if not await is_admin(str(interaction.user.id)):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
             return
@@ -363,9 +391,14 @@ class TemplateManagementView(discord.ui.View):
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
     
-    @discord.ui.button(label="◀ НАЗАД", style=discord.ButtonStyle.secondary, emoji="◀", row=1)
+    @discord.ui.button(
+        label="Назад",
+        style=discord.ButtonStyle.secondary,
+        emoji="◀",
+        row=1,
+        custom_id="template_back"
+    )
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Вернуться в главное меню"""
         templates = get_event_templates()
         embed = discord.Embed(
             title="🎯 **ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ**",
@@ -376,6 +409,29 @@ class TemplateManagementView(discord.ui.View):
             color=0x00bfff
         )
         await interaction.response.edit_message(embed=embed, view=ModerationMainView(templates))
+
+
+class CreateEventWithTemplateModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МП"):
+    """Модалка с выбором шаблона"""
+    
+    def __init__(self, templates: list):
+        super().__init__()
+        self.templates = templates
+        
+        self.template_select = discord.ui.Select(
+            placeholder="Выберите шаблон мероприятия",
+            options=format_templates_for_select(templates)
+        )
+        self.template_select.callback = self.select_template
+        self.add_item(self.template_select)
+    
+    async def select_template(self, interaction: discord.Interaction):
+        self.selected_template_id = int(self.template_select.values[0])
+        await interaction.response.defer()
+        
+        modal = CreateEventModal(self.templates)
+        modal.selected_template_id = self.selected_template_id
+        await interaction.followup.send_modal(modal)
 
 
 class UserStatsModal(discord.ui.Modal, title="👤 СТАТИСТИКА ПОЛЬЗОВАТЕЛЯ"):
@@ -419,7 +475,6 @@ class UserStatsModal(discord.ui.Modal, title="👤 СТАТИСТИКА ПОЛЬ
                     inline=True
                 )
                 
-                # Список МП, в которых участвовал
                 text = ""
                 for stat in part_stats[:5]:
                     text += f"• {stat['event_time']} — ID: {stat['session_id']}\n"
@@ -433,56 +488,7 @@ class UserStatsModal(discord.ui.Modal, title="👤 СТАТИСТИКА ПОЛЬ
             
         except Exception as e:
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
-    
-    @discord.ui.button(label="📊 СТАТИСТИКА", style=discord.ButtonStyle.secondary, emoji="📊", row=0)
-    async def show_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Показать статистику"""
-        embed = discord.Embed(
-            title="📊 СТАТИСТИКА МЕРОПРИЯТИЙ",
-            color=0x00bfff,
-            timestamp=datetime.now()
-        )
-        
-        org_stats = db.get_event_organizer_stats(7)
-        if org_stats:
-            text = ""
-            for i, stat in enumerate(org_stats[:5], 1):
-                text += f"{i}. <@{stat['user_id']}> — **{stat['count']}** МП\n"
-            embed.add_field(name="🏆 Топ организаторов (7 дней)", value=text, inline=False)
-        else:
-            embed.add_field(name="🏆 Топ организаторов", value="Нет данных", inline=False)
-        
-        total_sessions = len(db.get_active_event_sessions()) + len(db.get_all_event_sessions())
-        embed.add_field(name="📋 Всего сессий", value=f"**{total_sessions}**", inline=True)
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
 
-
-class CreateEventWithTemplateModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МП"):
-    """Модалка с выбором шаблона"""
-    
-    def __init__(self, templates: list):
-        super().__init__()
-        self.templates = templates
-        
-        self.template_select = discord.ui.Select(
-            placeholder="Выберите шаблон мероприятия",
-            options=format_templates_for_select(templates)
-        )
-        self.template_select.callback = self.select_template
-        self.add_item(self.template_select)
-    
-    async def select_template(self, interaction: discord.Interaction):
-        """Обработка выбора шаблона"""
-        self.selected_template_id = int(self.template_select.values[0])
-        await interaction.response.defer()
-        
-        modal = CreateEventModal(self.templates)
-        modal.selected_template_id = self.selected_template_id
-        await interaction.followup.send_modal(modal)
-
-
-# ========== ГЛОБАЛЬНЫЙ ЭКЗЕМПЛЯР И ФУНКЦИЯ SETUP ==========
 
 initializer = None
 
