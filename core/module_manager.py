@@ -1,643 +1,141 @@
-"""Менеджер модулей — централизованное управление всеми системами бота"""
+"""Панель управления модулями"""
 import discord
-from core.database import db
-from core.config import CONFIG, save_config
+from core.admin_views import AdminOnlyView
+from core.utils import is_super_admin
+from core.module_manager import MODULES
 
 
-MODULES = {
-    "capt": {
-        "name": "🎯 CAPT Регистрация",
-        "description": "Система регистрации на CAPT",
-        "enabled": False,
-        "channels": ["capt_reg_main_channel", "capt_reg_reserve_channel", "capt_alert_channel", "capt_log_channel"],
-        "settings_channels": ["capt_settings_channel"],
-        "initializer": "capt_registration.manager",
-        "initialize_method": "initialize_buttons",
-        "toggleable": True
-    },
-    "mcl": {
-        "name": "🎯 MCL/ВЗМ Регистрация",
-        "description": "Система регистрации на MCL/ВЗМ",
-        "enabled": False,
-        "channels": ["mcl_reg_main_channel", "mcl_reg_reserve_channel", "mcl_error_channel", "mcl_announcement_channel"],
-        "settings_channels": ["mcl_settings_channel"],
-        "initializer": "mcl_registration.manager",
-        "initialize_method": "initialize_buttons",
-        "toggleable": True
-    },
-    "applications": {
-        "name": "📝 Заявки в семью",
-        "description": "Система подачи и модерации заявок",
-        "enabled": False,
-        "channels": ["submit_channel", "applications_channel", "applications_log_channel"],
-        "settings_channels": ["applications_settings_channel"],
-        "initializer": "applications.initializer",
-        "initialize_method": "setup",
-        "toggleable": True
-    },
-    "event_scheduler": {  # ← ПЕРЕИМЕНОВАНО
-        "name": "📅 Планировщик мероприятий",
-        "description": "Автоматические напоминания о мероприятиях по расписанию",
-        "enabled": False,
-        "channels": ["alarm_channels", "announce_channels"],
-        "settings_channels": ["event_scheduler_settings_channel"],
-        "initializer": "event_scheduler.initializer",
-        "initialize_method": "setup",
-        "toggleable": True
-    },
-    "afk": {
-        "name": "🛌 AFK система",
-        "description": "Уход в AFK с автоматическим возвратом",
-        "enabled": False,
-        "channels": ["afk_channel", "afk_log_channel"],
-        "settings_channels": ["afk_settings_channel"],
-        "initializer": "afk.initializer",
-        "initialize_method": "setup",
-        "toggleable": True
-    },
-    "tier": {
-        "name": "🌟 Tier система",
-        "description": "Повышение уровня (Tier 1/2/3)",
-        "enabled": False,
-        "channels": ["tier_submit_channel", "tier_applications_channel", "tier_log_channel", "tier_info_channel"],
-        "settings_channels": ["tier_settings_channel"],
-        "initializer": "tier.initializer",
-        "initialize_method": "setup",
-        "toggleable": True
-    },
-    "vacation": {
-        "name": "🏖️ Отпуска",
-        "description": "Система отпусков с автоматическим возвратом",
-        "enabled": False,
-        "channels": ["vacation_public_channel", "vacation_applications_channel", "vacation_log_channel"],
-        "settings_channels": ["vacation_settings_channel"],
-        "initializer": "vacation.initializer",
-        "initialize_method": "setup",
-        "toggleable": True
-    },
-    "games": {
-        "name": "🎮 Игры",
-        "description": "Игры Discord (морской бой и другие)",
-        "enabled": False,
-        "channels": ["games_rules_channel", "games_lobby_channel", "games_log_channel", "games_category_id"],
-        "settings_channels": ["games_settings_channel"],
-        "initializer": "games.initializer",
-        "initialize_method": "setup",
-        "toggleable": True
-    },
-    "birthday": {
-        "name": "🎂 Дни рождения",
-        "description": "Система дней рождения с поздравлениями",
-        "enabled": False,
-        "channels": ["birthday_channel", "birthday_greeting_channel"],
-        "settings_channels": ["birthday_settings_channel"],
-        "initializer": "birthday.initializer",
-        "initialize_method": "setup",
-        "toggleable": True
-    },
-    "advertising": {
-        "name": "📢 Авто-реклама",
-        "description": "Автоматическая рассылка рекламы",
-        "enabled": False,
-        "channels": [],
-        "settings_channels": ["ad_settings_channel"],
-        "initializer": "advertising.core",
-        "initialize_method": "setup",
-        "toggleable": True
-    },
-    "files": {
-        "name": "📁 Полезные файлы",
-        "description": "Хранилище файлов для участников",
-        "enabled": True,
-        "channels": [],
-        "settings_channels": [],
-        "initializer": None,
-        "toggleable": False
-    },
-    "economy": {
-        "name": "💰 Экономика и магазин",
-        "description": "Балловая система, начисления за активности, магазин товаров",
-        "enabled": False,
-        "channels": ["economy_channel", "economy_admin_channel"],
-        "settings_channels": ["economy_settings_channel"],
-        "initializer": "economy.manager",
-        "initialize_method": "set_bot",
-        "toggleable": True
-    },
-    "stats": {
-        "name": "📊 Расширенная статистика",
-        "description": "Сбор статистики и бекап сервера",
-        "enabled": False,
-        "channels": ["stats_channel"],
-        "settings_channels": ["stats_settings_channel"],
-        "initializer": "stats.initializer",
-        "initialize_method": "setup",
-        "toggleable": True
-    },
-    "temp_voice": {
-        "name": "🎤 Временные комнаты",
-        "description": "Создание временных голосовых комнат",
-        "enabled": False,
-        "channels": ["temp_voice_public_channel", "temp_voice_log_channel", "temp_voice_category"],
-        "settings_channels": ["temp_voice_settings_channel"],
-        "initializer": "temp_voice.initializer",
-        "initialize_method": "setup",
-        "toggleable": True
-    },
-    "action_logs": {
-        "name": "📋 Логи действий",
-        "description": "Логирование действий на сервере (войс, сообщения, роли, каналы)",
-        "enabled": False,
-        "channels": ["action_logs_channel"],
-        "settings_channels": ["action_logs_settings_channel"],
-        "initializer": "action_logs.initializer",
-        "initialize_method": "setup",
-        "toggleable": True
-    },
-    "embed_builder": {
-        "name": "📦 Создание embed",
-        "description": "Создание красивых embed сообщений через бота",
-        "enabled": False,
-        "channels": ["embed_builder_channel"],
-        "settings_channels": ["embed_builder_settings_channel"],
-        "initializer": "embed_builder.initializer",
-        "initialize_method": "setup",
-        "toggleable": True
-    },
-    "events": {
-        "name": "🎯 Мероприятия",
-        "description": "Ручное создание МП, сбор участников, статистика",
-        "enabled": False,
-        "channels": ["events_moderation_channel", "events_participant_channel", "events_log_channel"],
-        "settings_channels": ["events_settings_channel"],
-        "initializer": "events.initializer",
-        "initialize_method": "setup",
-        "toggleable": True
-    },
-}
+class ModulesControlPanel(AdminOnlyView):
+    """Панель управления модулями — только для супер-админа"""
 
-
-class ModuleManager:
-    def __init__(self, bot):
+    def __init__(self, bot, module_manager):
+        super().__init__()
         self.bot = bot
-        self.settings_channel_id = None
-        self.load_modules_state()
+        self.module_manager = module_manager
+        self.page = 0
+        self.items_per_page = 10
+        self._add_buttons()
 
-    def load_modules_state(self):
-        for module_key in MODULES:
-            value = db.get_module_setting(module_key)
-            if value is not None:
-                MODULES[module_key]["enabled"] = value == "1"
-            else:
-                db.set_module_setting(module_key, "0")
-                MODULES[module_key]["enabled"] = False
-
-    def save_module_state(self, module_key: str):
-        db.set_module_setting(module_key, "1" if MODULES[module_key]["enabled"] else "0")
-
-    def is_enabled(self, module_key: str) -> bool:
-        return MODULES.get(module_key, {}).get("enabled", False)
-
-    async def set_enabled(self, module_key: str, enabled: bool, user_id: str) -> tuple:
-        if module_key not in MODULES:
-            return False, "Модуль не найден"
-        if not MODULES[module_key].get("toggleable", True):
-            return False, f"Модуль {MODULES[module_key]['name']} нельзя отключить"
-        if MODULES[module_key]["enabled"] == enabled:
-            return False, f"Модуль уже {'включён' if enabled else 'выключен'}"
-
-        MODULES[module_key]["enabled"] = enabled
-        self.save_module_state(module_key)
-
-        action = "ВКЛЮЧЁН" if enabled else "ВЫКЛЮЧЁН"
-        db.log_action(user_id, f"MODULE_{action}", f"{module_key}")
-
-        if enabled:
-            await self._enable_module(module_key)
-        else:
-            await self._disable_module(module_key)
-
-        await self.update_settings_panel()
-
-        return True, f"Модуль **{MODULES[module_key]['name']}** {'включён' if enabled else 'выключен'}"
-
-    async def _enable_module(self, module_key: str):
-        module = MODULES[module_key]
+    def _add_buttons(self):
+        self.clear_items()
         
-        try:
-            if module_key == 'capt':
-                from capt_registration.manager import capt_reg_manager
-                await capt_reg_manager.initialize_buttons(self.bot)
-                print(f"✅ [MODULE] {module['name']} инициализирован")
-            
-            elif module_key == 'mcl':
-                from mcl_registration.manager import mcl_manager
-                await mcl_manager.initialize_buttons(self.bot)
-                print(f"✅ [MODULE] {module['name']} инициализирован")
-            
-            elif module_key == 'applications':
-                from applications.initializer import initializer as apps_initializer
-                if apps_initializer:
-                    await apps_initializer.initialize_all()
-                else:
-                    from applications.initializer import setup as setup_apps
-                    await setup_apps(self.bot)
-                print(f"✅ [MODULE] {module['name']} инициализирован")
-            
-            elif module_key == 'event_scheduler':  # ← ПЕРЕИМЕНОВАНО
-                from event_scheduler.initializer import setup as setup_event_scheduler
-                await setup_event_scheduler(self.bot)
-                print(f"✅ [MODULE] {module['name']} инициализирован")
-            
-            elif module_key == 'afk':
-                from afk.initializer import setup as setup_afk
-                await setup_afk(self.bot)
-                print(f"✅ [MODULE] {module['name']} инициализирован")
-            
-            elif module_key == 'tier':
-                from tier.initializer import setup as setup_tier
-                await setup_tier(self.bot)
-                print(f"✅ [MODULE] {module['name']} инициализирован")
-            
-            elif module_key == 'vacation':
-                from vacation.initializer import setup as setup_vacation
-                await setup_vacation(self.bot)
-                print(f"✅ [MODULE] {module['name']} инициализирован")
-            
-            elif module_key == 'games':
-                from games.initializer import setup as setup_games
-                await setup_games(self.bot)
-                print(f"✅ [MODULE] {module['name']} инициализирован")
-            
-            elif module_key == 'birthday':
-                from birthday.initializer import setup as setup_birthday
-                await setup_birthday(self.bot)
-                print(f"✅ [MODULE] {module['name']} инициализирован")
-            
-            elif module_key == 'advertising':
-                from advertising.core import setup as setup_ad
-                await setup_ad(self.bot)
-                print(f"✅ [MODULE] {module['name']} инициализирован")
-            
-            elif module_key == 'stats':
-                from stats.initializer import setup as setup_stats
-                await setup_stats(self.bot)
-                print(f"✅ [MODULE] {module['name']} инициализирован")
-
-            elif module_key == 'events':
-                from events.initializer import setup as setup_events
-                await setup_events(self.bot)
-                print(f"✅ [MODULE] {module['name']} инициализирован")
-            
-            elif module_key == 'economy':
-                from economy import economy_manager
-                from economy.views import EconomyPanelView, AdminEconomyView
-                from economy.integration import setup_integration
-                from economy import set_bot_for_views
-                
-                economy_manager.set_bot(self.bot)
-                setup_integration(self.bot)
-                set_bot_for_views(self.bot)
-                
-                channel_id = CONFIG.get("economy_channel")
-                if channel_id and channel_id != "null":
-                    channel = self.bot.get_channel(int(channel_id))
-                    if channel:
-                        async for msg in channel.history(limit=50):
-                            if msg.author == self.bot.user:
-                                await msg.delete()
-                        view = EconomyPanelView()
-                        embed = await view.get_shop_embed()
-                        await channel.send(embed=embed, view=view)
-                        print(f"✅ [MODULE] {module['name']} панель магазина отправлена в #{channel.name}")
-                
-                admin_channel_id = CONFIG.get("economy_admin_channel")
-                if admin_channel_id and admin_channel_id != "null":
-                    channel = self.bot.get_channel(int(admin_channel_id))
-                    if channel:
-                        async for msg in channel.history(limit=50):
-                            if msg.author == self.bot.user:
-                                await msg.delete()
-                        embed = discord.Embed(
-                            title="⚙️ АДМИН-ПАНЕЛЬ ЭКОНОМИКИ",
-                            description="Управление баллами и магазином",
-                            color=0x7289da
-                        )
-                        await channel.send(embed=embed, view=AdminEconomyView())
-                        print(f"✅ [MODULE] {module['name']} админ-панель отправлена в #{channel.name}")
-                
-                print(f"✅ [MODULE] {module['name']} инициализирован")
-            
-            elif module_key == 'temp_voice':
-                from temp_voice.initializer import setup as setup_temp_voice
-                await setup_temp_voice(self.bot)
-                print(f"✅ [MODULE] {module['name']} инициализирован")
-            
-            elif module_key == 'action_logs':
-                from action_logs.initializer import setup as setup_action_logs
-                await setup_action_logs(self.bot)
-                print(f"✅ [MODULE] {module['name']} инициализирован")
-            
-            elif module_key == 'embed_builder':
-                from embed_builder.initializer import setup as setup_embed_builder
-                await setup_embed_builder(self.bot)
-                print(f"✅ [MODULE] {module['name']} инициализирован")
-            
-            else:
-                initializer_path = module.get("initializer")
-                if not initializer_path:
-                    print(f"⚠️ [MODULE] {module['name']} не имеет инициализатора")
-                    return
-                
-                parts = initializer_path.split('.')
-                module_name = '.'.join(parts[:-1]) if len(parts) > 1 else initializer_path
-                attr_name = parts[-1] if len(parts) > 1 else None
-                
-                imported = __import__(module_name, fromlist=[attr_name] if attr_name else [])
-                
-                if attr_name:
-                    obj = getattr(imported, attr_name, None)
-                else:
-                    obj = imported
-                
-                if obj is None:
-                    print(f"❌ [MODULE] Не найден объект для {module['name']}")
-                    return
-                
-                if hasattr(obj, 'initialize_all'):
-                    await obj.initialize_all()
-                    print(f"✅ [MODULE] {module['name']} инициализирован")
-                elif hasattr(obj, 'setup'):
-                    await obj.setup(self.bot)
-                    print(f"✅ [MODULE] {module['name']} инициализирован")
-                else:
-                    print(f"❌ [MODULE] У {module['name']} нет метода инициализации")
-                    
-        except Exception as e:
-            print(f"❌ [MODULE] Ошибка инициализации {module['name']}: {e}")
-            import traceback
-            traceback.print_exc()
-
-    async def _disable_module(self, module_key: str):
-        module = MODULES[module_key]
+        # Собираем все toggleable модули
+        toggleable_modules = []
+        for module_key, module in MODULES.items():
+            if module.get("toggleable", True):
+                toggleable_modules.append((module_key, module))
         
-        try:
-            if module_key == 'capt':
-                from capt_registration.manager import capt_reg_manager
-                await capt_reg_manager.stop()
-                print(f"✅ [MODULE] {module['name']} остановлен")
+        total_pages = (len(toggleable_modules) + self.items_per_page - 1) // self.items_per_page
+        
+        # Текущая страница
+        start = self.page * self.items_per_page
+        end = min(start + self.items_per_page, len(toggleable_modules))
+        current_modules = toggleable_modules[start:end]
+        
+        row = 0
+        col = 0
+        buttons_per_row = 2
+        
+        for module_key, module in current_modules:
+            status = "🟢 ВКЛ" if module["enabled"] else "🔴 ВЫКЛ"
+            label = f"{module['name']} ({status})"
             
-            elif module_key == 'mcl':
-                from mcl_registration.manager import mcl_manager
-                await mcl_manager.stop()
-                print(f"✅ [MODULE] {module['name']} остановлен")
+            btn = discord.ui.Button(
+                label=label[:80],
+                style=discord.ButtonStyle.success if module["enabled"] else discord.ButtonStyle.secondary,
+                row=row,
+                custom_id=f"module_toggle_{module_key}"
+            )
+            btn.callback = self._create_callback(module_key)
+            self.add_item(btn)
             
-            elif module_key == 'applications':
-                from applications.initializer import initializer as apps_initializer
-                if apps_initializer and hasattr(apps_initializer, 'stop'):
-                    await apps_initializer.stop()
-                print(f"✅ [MODULE] {module['name']} остановлен")
+            col += 1
+            if col >= buttons_per_row:
+                col = 0
+                row += 1
+        
+        # Кнопки пагинации (если больше одной страницы)
+        if total_pages > 1:
+            nav_row = 4  # последний ряд
             
-            elif module_key == 'event_scheduler':  # ← ПЕРЕИМЕНОВАНО
-                from event_scheduler.scheduler import stop_scheduler
-                await stop_scheduler()
-                print(f"✅ [MODULE] {module['name']} остановлен")
+            if self.page > 0:
+                prev_btn = discord.ui.Button(
+                    label="◀ Назад",
+                    style=discord.ButtonStyle.secondary,
+                    row=nav_row,
+                    custom_id="modules_prev"
+                )
+                prev_btn.callback = self.prev_page
+                self.add_item(prev_btn)
             
-            elif module_key == 'afk':
-                from afk.initializer import initializer as afk_initializer
-                if afk_initializer and hasattr(afk_initializer, 'stop'):
-                    await afk_initializer.stop()
-                print(f"✅ [MODULE] {module['name']} остановлен")
+            # Индикатор страницы
+            page_btn = discord.ui.Button(
+                label=f"📄 {self.page + 1}/{total_pages}",
+                style=discord.ButtonStyle.secondary,
+                row=nav_row,
+                disabled=True,
+                custom_id="modules_page"
+            )
+            self.add_item(page_btn)
             
-            elif module_key == 'tier':
-                from tier.initializer import initializer as tier_initializer
-                if tier_initializer and hasattr(tier_initializer, 'stop'):
-                    await tier_initializer.stop()
-                print(f"✅ [MODULE] {module['name']} остановлен")
-            
-            elif module_key == 'vacation':
-                from vacation.initializer import initializer as vacation_initializer
-                if vacation_initializer and hasattr(vacation_initializer, 'stop'):
-                    await vacation_initializer.stop()
-                print(f"✅ [MODULE] {module['name']} остановлен")
-            
-            elif module_key == 'games':
-                from games.initializer import initializer as games_initializer
-                if games_initializer and hasattr(games_initializer, 'stop'):
-                    await games_initializer.stop()
-                print(f"✅ [MODULE] {module['name']} остановлен")
-            
-            elif module_key == 'birthday':
-                from birthday.initializer import initializer as birthday_initializer
-                if birthday_initializer and hasattr(birthday_initializer, 'stop'):
-                    await birthday_initializer.stop()
-                print(f"✅ [MODULE] {module['name']} остановлен")
-            
-            elif module_key == 'advertising':
-                from advertising.core import advertiser
-                if advertiser and hasattr(advertiser, 'stop'):
-                    await advertiser.stop()
-                print(f"✅ [MODULE] {module['name']} остановлен")
-            
-            elif module_key == 'stats':
-                from stats.initializer import initializer as stats_initializer
-                if stats_initializer and hasattr(stats_initializer, 'stop'):
-                    await stats_initializer.stop()
-                print(f"✅ [MODULE] {module['name']} остановлен")
-            
-            elif module_key == 'economy':
-                from economy.manager import economy_manager
-                if hasattr(economy_manager, 'stop'):
-                    await economy_manager.stop()
-                print(f"✅ [MODULE] {module['name']} остановлен")
-            
-            elif module_key == 'temp_voice':
-                from temp_voice.initializer import initializer as temp_voice_initializer
-                if temp_voice_initializer and hasattr(temp_voice_initializer, 'stop'):
-                    await temp_voice_initializer.stop()
-                print(f"✅ [MODULE] {module['name']} остановлен")
-            
-            elif module_key == 'action_logs':
-                from action_logs.initializer import initializer as action_logs_initializer
-                if action_logs_initializer and hasattr(action_logs_initializer, 'stop'):
-                    await action_logs_initializer.stop()
-                print(f"✅ [MODULE] {module['name']} остановлен")
-            
-            elif module_key == 'embed_builder':
-                from embed_builder.initializer import initializer as embed_builder_initializer
-                if embed_builder_initializer and hasattr(embed_builder_initializer, 'stop'):
-                    await embed_builder_initializer.stop()
-                print(f"✅ [MODULE] {module['name']} остановлен")
+            if self.page < total_pages - 1:
+                next_btn = discord.ui.Button(
+                    label="Вперёд ▶",
+                    style=discord.ButtonStyle.secondary,
+                    row=nav_row,
+                    custom_id="modules_next"
+                )
+                next_btn.callback = self.next_page
+                self.add_item(next_btn)
 
-            elif module_key == 'events':
-                from events.initializer import initializer as events_initializer
-                if events_initializer and hasattr(events_initializer, 'stop'):
-                    await events_initializer.stop()
-                print(f"✅ [MODULE] {module['name']} остановлен")
-            
-            else:
-                initializer_path = module.get("initializer")
-                if initializer_path:
-                    parts = initializer_path.split('.')
-                    module_name = '.'.join(parts[:-1]) if len(parts) > 1 else initializer_path
-                    attr_name = parts[-1] if len(parts) > 1 else None
-                    
-                    imported = __import__(module_name, fromlist=[attr_name] if attr_name else [])
-                    
-                    if attr_name:
-                        obj = getattr(imported, attr_name, None)
-                    else:
-                        obj = imported
-                    
-                    if obj and hasattr(obj, 'stop'):
-                        await obj.stop()
-                        print(f"✅ [MODULE] {module['name']} остановлен")
-        
-        except Exception as e:
-            print(f"⚠️ [MODULE] Ошибка остановки {module['name']}: {e}")
-        
-        await self._disable_all_embeds(module_key)
+    async def prev_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.page -= 1
+        self._add_buttons()
+        await interaction.response.edit_message(view=self)
 
-    async def _disable_all_embeds(self, module_key: str):
-        module = MODULES[module_key]
-        all_keys = module.get("channels", []) + module.get("settings_channels", [])
-        
-        for channel_key in all_keys:
-            channel_id = db.get_setting(channel_key)
+    async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.page += 1
+        self._add_buttons()
+        await interaction.response.edit_message(view=self)
+
+    def _create_callback(self, module_key: str):
+        async def callback(interaction: discord.Interaction):
+            if not await is_super_admin(str(interaction.user.id)):
+                await interaction.response.send_message("❌ Только супер-администратор!", ephemeral=True)
+                return
             
-            if channel_id and channel_id.startswith('['):
+            if self.module_manager is None:
+                await interaction.response.send_message("❌ Система управления модулями не инициализирована!", ephemeral=True)
+                return
+            
+            module = MODULES[module_key]
+            new_state = not module["enabled"]
+            
+            await interaction.response.send_message(f"🔄 {module['name']} {'включается' if new_state else 'выключается'}...", ephemeral=True)
+            
+            success, msg = await self.module_manager.set_enabled(
+                module_key, 
+                new_state, 
+                str(interaction.user.id)
+            )
+            
+            if success:
                 try:
-                    import json
-                    channel_list = json.loads(channel_id)
-                    if channel_list:
-                        channel_id = channel_list[0]
+                    self._add_buttons()
+                    await interaction.message.edit(view=self)
                 except:
                     pass
-            
-            if not channel_id or channel_id == 'null' or channel_id == '[]':
-                continue
-            
-            try:
-                channel = self.bot.get_channel(int(channel_id))
-                if not channel:
-                    continue
-            except (ValueError, TypeError):
-                print(f"⚠️ [MODULE] Неверный ID канала для {channel_key}: {channel_id}")
-                continue
-            
-            try:
-                async for msg in channel.history(limit=50):
-                    if msg.author == self.bot.user and msg.embeds:
-                        embed = discord.Embed(
-                            title=f"⛔ {module['name']}",
-                            description="**Система отключена администратором**\nОбратитесь к администрации для включения.",
-                            color=0x808080
-                        )
-                        await msg.edit(embed=embed, view=None)
-                        print(f"✅ [MODULE] Отключён embed в #{channel.name} ({channel_key})")
-                        break
-            except Exception as e:
-                print(f"❌ [MODULE] Ошибка отключения {channel_key}: {e}")
-
-    def _is_module_embed(self, msg, module_key: str) -> bool:
-        if not msg.embeds:
-            return False
-        
-        title = msg.embeds[0].title or ""
-        
-        module_titles = {
-            "capt": ["РЕГИСТРАЦИЯ НА CAPT", "CAPT"],
-            "mcl": ["РЕГИСТРАЦИЯ НА MCL", "MCL", "ВЗМ"],
-            "applications": ["ПОДАЧА ЗАЯВОК", "ЗАЯВКИ В СЕМЬЮ", "ЗАЯВКА"],
-            "event_scheduler": ["МЕРОПРИЯТИЯ", "МП", "НАПОМИНАНИЕ", "ПЛАНИРОВЩИК"],
-            "afk": ["AFK", "СИСТЕМА AFK"],
-            "tier": ["TIER", "СИСТЕМА TIER", "ЗАЯВКИ НА TIER"],
-            "vacation": ["ОТПУСК", "СИСТЕМА ОТПУСКОВ"],
-            "games": ["МОРСКОЙ БОЙ", "ИГРЫ"],
-            "birthday": ["ДНИ РОЖДЕНИЯ", "BIRTHDAY"],
-            "advertising": ["АВТО-РЕКЛАМА", "РЕКЛАМА"],
-            "economy": ["МАГАЗИН БАЛЛОВ", "ЭКОНОМИКА", "АДМИН-ПАНЕЛЬ ЭКОНОМИКИ"],
-            "stats": ["СТАТИСТИКА", "БЕКАП"],
-            "temp_voice": ["ВРЕМЕННЫЕ КОМНАТЫ", "ГОЛОСОВЫЕ КОМНАТЫ"],
-            "action_logs": ["ЛОГИ ДЕЙСТВИЙ", "ACTION LOGS"],
-            "embed_builder": ["СОЗДАНИЕ EMBED", "EMBED"],
-            "events": ["МЕРОПРИЯТИЕ", "МП", "СБОР УЧАСТНИКОВ", "НОВОЕ МЕРОПРИЯТИЕ"],
-        }
-        
-        titles = module_titles.get(module_key, [])
-        for t in titles:
-            if t in title:
-                return True
-        return False
-
-    async def initialize_all_enabled_modules(self):
-        print("📋 [MODULE] Инициализация включённых модулей...")
-        for module_key, module in MODULES.items():
-            if module["enabled"]:
-                print(f"🔍 [MODULE] Пытаюсь инициализировать {module['name']}...")
-                await self._enable_module(module_key)
+                await interaction.followup.send(msg, ephemeral=True)
             else:
-                print(f"⏭️ [MODULE] {module['name']} выключен, пропускаем")
-        print("📋 [MODULE] Инициализация завершена")
+                await interaction.followup.send(f"❌ {msg}", ephemeral=True)
+        
+        return callback
 
-    async def update_settings_panel(self):
-        channel_id = db.get_setting('global_settings_channel')
-        if not channel_id:
-            return
-        
-        channel = self.bot.get_channel(int(channel_id))
-        if not channel:
-            return
-        
-        from core.settings_panel import GlobalSettingsPanel
-        
-        async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user and msg.components:
-                await msg.edit(view=GlobalSettingsPanel(self.bot))
-                return
-        
-        embed = discord.Embed(
-            title="⚙️ **ЦЕНТР УПРАВЛЕНИЯ СИСТЕМАМИ**",
-            description="Настройка всех модулей бота.\n\n"
-                        "Здесь отображаются кнопки только для **включённых** систем.\n"
-                        "Чтобы включить/выключить модуль, используйте 🎛️ Управление модулями в !settings.",
-            color=0x7289da
-        )
-        await channel.send(embed=embed, view=GlobalSettingsPanel(self.bot))
-
-    async def restore_global_settings_panel(self):
-        channel_id = db.get_setting('global_settings_channel_id')
-        message_id = db.get_setting('global_settings_message_id')
-        
-        if not channel_id or not message_id or channel_id == 'null' or message_id == 'null':
-            return
-        
-        channel = self.bot.get_channel(int(channel_id))
-        if not channel:
-            return
-        
-        try:
-            message = await channel.fetch_message(int(message_id))
-            
-            from core.settings_panel import GlobalSettingsPanel
-            embed = discord.Embed(
-                title="⚙️ **ЦЕНТР УПРАВЛЕНИЯ СИСТЕМАМИ**",
-                description="Настройка всех модулей бота.\n\n"
-                            "Здесь отображаются кнопки только для **включённых** систем.\n"
-                            "Чтобы включить/выключить модуль, используйте 🎛️ Управление модулями в !settings.",
-                color=0x7289da
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if not await is_super_admin(str(interaction.user.id)):
+            await interaction.response.send_message(
+                "❌ **Доступ запрещён**\nТолько супер-администратор может управлять модулями.",
+                ephemeral=True
             )
-            await message.edit(embed=embed, view=GlobalSettingsPanel(self.bot))
-            print("✅ Восстановлена глобальная панель настроек")
-        except Exception as e:
-            print(f"⚠️ Не удалось восстановить панель настроек: {e}")
-
-
-module_manager = None
-
-async def setup(bot):
-    global module_manager
-    module_manager = ModuleManager(bot)
-    await module_manager.initialize_all_enabled_modules()
-    await module_manager.restore_global_settings_panel()
-    return module_manager
+            return False
+        return True
