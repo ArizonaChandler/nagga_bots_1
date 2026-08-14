@@ -2986,10 +2986,10 @@ class Database:
 
     def finalize_event_participants(self, session_id: int, participants: list):
         """Сохранить финальный список участников после завершения сбора"""
-        # Удаляем старых и добавляем новых (уже сделано)
-        pass
+        pass  # Уже сохранено в БД
 
     def get_user_event_participations(self, user_id: str, days: int = 30) -> list:
+        """Получить список участий пользователя в МП за N дней"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -3015,7 +3015,7 @@ class Database:
             ''', (f'-{days} days',))
             rows = cursor.fetchall()
             return [{'user_id': row[0], 'count': row[1]} for row in rows]
-    
+
     def get_event_organizer_stats_by_user(self, user_id: str, days: int = 30) -> int:
         """Получить количество МП, организованных пользователем за N дней"""
         with self.get_connection() as conn:

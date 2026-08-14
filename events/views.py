@@ -65,13 +65,27 @@ class EventsParticipantView(PermanentView):
         if self.update_task and not self.update_task.done():
             return
         
-        async def timer_loop():
-            while self.remaining_minutes > 0:
-                await asyncio.sleep(60)
-                self.remaining_minutes -= 1
-                await self.update_message()
-            
+        if self.remaining_minutes <= 0:
+            print(f"⏱️ [EVENTS] Сессия {self.session_id}: время вышло, таймер не запущен")
             await self.disable_buttons()
+            return
+        
+        print(f"⏱️ [EVENTS] Запуск таймера для сессии {self.session_id}, осталось {self.remaining_minutes} мин.")
+        
+        async def timer_loop():
+            try:
+                while self.remaining_minutes > 0:
+                    await asyncio.sleep(60)
+                    self.remaining_minutes -= 1
+                    await self.update_message()
+                
+                await self.disable_buttons()
+            except asyncio.CancelledError:
+                print(f"⏱️ [EVENTS] Таймер сессии {self.session_id} отменён")
+            except Exception as e:
+                print(f"❌ [EVENTS] Ошибка в таймере сессии {self.session_id}: {e}")
+                import traceback
+                traceback.print_exc()
         
         self.update_task = asyncio.create_task(timer_loop())
     
@@ -88,6 +102,7 @@ class EventsParticipantView(PermanentView):
         event_name = session.get('event_name', 'Мероприятие')
         meeting_place = session.get('meeting_place', 'Не указано')
         creator_id = session.get('creator_id')
+        event_time = session.get('event_time', '')
         
         content = (
             f"@everyone\n"
@@ -95,6 +110,7 @@ class EventsParticipantView(PermanentView):
             f"Собирает: <@{creator_id}> на **{event_name}**\n"
             f"📍 Место сбора: {meeting_place}\n"
             f"⏱️ Осталось времени: **{self.remaining_minutes} мин.**\n"
+            f"⏰ Начало в: {event_time}\n"
         )
         if session.get('additional_info'):
             content += f"📝 {session['additional_info']}\n"
@@ -115,9 +131,12 @@ class EventsParticipantView(PermanentView):
         if not self.message:
             return
         
-        for child in self.message.components[0].children:
-            child.disabled = True
-        await self.message.edit(view=self.message.components[0])
+        try:
+            for child in self.message.components[0].children:
+                child.disabled = True
+            await self.message.edit(view=self.message.components[0])
+        except Exception as e:
+            print(f"⚠️ [EVENTS] Ошибка отключения кнопок: {e}")
         
         session = events_manager.get_session(self.session_id)
         if session and session['status'] == 'active':
@@ -142,9 +161,12 @@ class EventsParticipantView(PermanentView):
         events_manager.end_session(self.session_id)
         
         # Отключаем кнопки
-        for child in self.message.components[0].children:
-            child.disabled = True
-        await self.message.edit(view=self.message.components[0])
+        try:
+            for child in self.message.components[0].children:
+                child.disabled = True
+            await self.message.edit(view=self.message.components[0])
+        except Exception as e:
+            print(f"⚠️ [EVENTS] Ошибка отключения кнопок: {e}")
         
         await events_manager.log_action(
             self.session_id,
@@ -190,9 +212,12 @@ class EventsParticipantView(PermanentView):
     @discord.ui.button(label="⏹️ ЗАВЕРШИТЬ СБОР", style=discord.ButtonStyle.danger, emoji="⏹️", row=1)
     async def end_early(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Кнопка завершения сбора (только для создателя и админов)"""
+        # Сразу отвечаем, чтобы избежать timeout
+        await interaction.response.defer(ephemeral=True)
+        
         session = events_manager.get_session(self.session_id)
         if not session:
-            await interaction.response.send_message("❌ Сессия не найдена", ephemeral=True)
+            await interaction.followup.send("❌ Сессия не найдена", ephemeral=True)
             return
         
         # Проверяем права: создатель или админ
@@ -200,10 +225,11 @@ class EventsParticipantView(PermanentView):
         is_admin_user = await is_admin(str(interaction.user.id))
         
         if not is_creator and not is_admin_user:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "❌ Только организатор сбора или администратор могут завершить сбор досрочно!",
                 ephemeral=True
             )
             return
         
         await self.end_session_early(interaction)
+        await interaction.followup.send("✅ Сбор досрочно завершён", ephemeral=True)

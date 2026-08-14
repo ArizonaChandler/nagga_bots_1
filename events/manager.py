@@ -57,7 +57,8 @@ class EventsManager:
         if session_id in self.active_sessions:
             del self.active_sessions[session_id]
         if session_id in self.session_tasks:
-            self.session_tasks[session_id].cancel()
+            if self.session_tasks[session_id] and not self.session_tasks[session_id].done():
+                self.session_tasks[session_id].cancel()
             del self.session_tasks[session_id]
         if session_id in self.participants:
             del self.participants[session_id]
@@ -89,17 +90,6 @@ class EventsManager:
     def get_organizer_stats(self, days: int = 7) -> list:
         return db.get_event_organizer_stats(days)
     
-    async def start_collect_timer(self, session_id: int, collect_time: int,
-                                   participant_channel_id: str, message_id: str):
-        """Запускает таймер сбора (таймер уже в view)"""
-        # Сохраняем сессию в активные
-        session = self.get_session(session_id)
-        if session:
-            self.active_sessions[session_id] = session
-        
-        # Таймер управляется из EventsParticipantView
-        pass
-    
     async def log_action(self, session_id: int, message: str):
         settings = self.get_settings()
         log_channel_id = settings.get('events_log_channel')
@@ -120,7 +110,8 @@ class EventsManager:
     
     async def stop(self):
         for task in self.session_tasks.values():
-            task.cancel()
+            if task and not task.done():
+                task.cancel()
         self.session_tasks.clear()
         self.active_sessions.clear()
         self.participants.clear()
