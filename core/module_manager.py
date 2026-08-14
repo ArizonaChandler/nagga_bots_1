@@ -561,6 +561,7 @@ class ModuleManager:
             "temp_voice": ["ВРЕМЕННЫЕ КОМНАТЫ", "ГОЛОСОВЫЕ КОМНАТЫ"],
             "action_logs": ["ЛОГИ ДЕЙСТВИЙ", "ACTION LOGS"],
             "embed_builder": ["СОЗДАНИЕ EMBED", "EMBED"],
+            "events": ["МЕРОПРИЯТИЕ", "МП", "СБОР УЧАСТНИКОВ", "НОВОЕ МЕРОПРИЯТИЕ"],
         }
         
         titles = module_titles.get(module_key, [])
