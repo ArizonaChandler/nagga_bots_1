@@ -11,7 +11,7 @@ from event_scheduler.base import PermanentView
 logger = logging.getLogger(__name__)
 
 
-class EventsSettingsView(AdminOnlyView):
+class EventSchedulerSettingsView(AdminOnlyView):
     """Постоянные кнопки для настройки системы мероприятий"""
 
     def __init__(self):

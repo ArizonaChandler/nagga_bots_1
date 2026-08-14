@@ -1137,7 +1137,7 @@ class SetEventsSettingsChannelModal(discord.ui.Modal, title="🔔 КАНАЛ Н�
     async def on_submit(self, interaction: discord.Interaction):
         from core.config import CONFIG, save_config
         from core.database import db
-        from events.settings_view import EventsSettingsView
+        from event_scheduler.settings_view import EventSchedulerSettingsView
         
         try:
             # Проверяем, что канал существует

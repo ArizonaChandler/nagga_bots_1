@@ -65,7 +65,7 @@ class GlobalSettingsPanel(AdminOnlyView):
             elif module_key == "applications":
                 from applications.settings_view import ApplicationsCombinedPanel
                 settings_view = ApplicationsCombinedPanel()
-            elif module_key == "event_scheduler":  # ← ПЕРЕИМЕНОВАНО
+            elif module_key == "event_scheduler":
                 from event_scheduler.settings_view import EventSchedulerSettingsView
                 settings_view = EventSchedulerSettingsView()
             elif module_key == "afk":
