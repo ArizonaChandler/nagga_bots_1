@@ -59,12 +59,7 @@ class EventsInitializer:
             logger.error(f"❌ Неверный ID канала модерации: {self.moderation_channel_id}")
             return
         
-        async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user:
-                await msg.delete()
-        
         templates = get_event_templates()
-        
         embed = discord.Embed(
             title="🎯 **ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ**",
             description="Создание и управление мероприятиями\n\n"
@@ -75,8 +70,20 @@ class EventsInitializer:
         )
         
         view = ModerationMainView(templates)
-        await channel.send(embed=embed, view=view)
-        print(f"🎯 [EVENTS] Создана панель модерации в #{channel.name}")
+        
+        # 🔥 ИЩЕМ СУЩЕСТВУЮЩЕЕ СООБЩЕНИЕ
+        found = False
+        async for msg in channel.history(limit=50):
+            if msg.author == self.bot.user and msg.embeds:
+                if msg.embeds and "ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ" in msg.embeds[0].title:
+                    await msg.edit(embed=embed, view=view)
+                    found = True
+                    print(f"🎯 [EVENTS] Обновлена панель модерации в #{channel.name}")
+                    break
+        
+        if not found:
+            await channel.send(embed=embed, view=view)
+            print(f"🎯 [EVENTS] Создана панель модерации в #{channel.name}")
     
     async def _init_participant_channel(self):
         try:
@@ -88,11 +95,10 @@ class EventsInitializer:
             logger.error(f"❌ Неверный ID канала сбора: {self.participant_channel_id}")
             return
         
-        async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user:
-                await msg.delete()
-        
-        print(f"🎯 [EVENTS] Канал сбора участников очищен: #{channel.name}")
+        # 🔥 НЕ УДАЛЯЕМ, а ищем и обновляем существующее сообщение
+        # Если сообщение есть — оставляем, если нет — ничего не делаем
+        # (сообщения создаются при создании МП)
+        print(f"🎯 [EVENTS] Канал сбора участников готов: #{channel.name}")
     
     async def _init_settings_channel(self):
         try:
@@ -104,17 +110,27 @@ class EventsInitializer:
             logger.error(f"❌ Неверный ID канала настроек: {self.settings_channel_id}")
             return
         
-        async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user:
-                await msg.delete()
-        
         embed = discord.Embed(
             title="⚙️ **НАСТРОЙКА МЕРОПРИЯТИЙ**",
             description="Настройка системы мероприятий",
             color=0x00ff00
         )
-        await channel.send(embed=embed, view=EventsSettingsView())
-        print(f"🎯 [EVENTS] Создана панель настроек в #{channel.name}")
+        
+        view = EventsSettingsView()
+        
+        # 🔥 ИЩЕМ СУЩЕСТВУЮЩЕЕ СООБЩЕНИЕ
+        found = False
+        async for msg in channel.history(limit=50):
+            if msg.author == self.bot.user and msg.embeds:
+                if msg.embeds and "НАСТРОЙКА МЕРОПРИЯТИЙ" in msg.embeds[0].title:
+                    await msg.edit(embed=embed, view=view)
+                    found = True
+                    print(f"🎯 [EVENTS] Обновлена панель настроек в #{channel.name}")
+                    break
+        
+        if not found:
+            await channel.send(embed=embed, view=view)
+            print(f"🎯 [EVENTS] Создана панель настроек в #{channel.name}")
     
     async def _restore_sessions(self):
         sessions = db.get_active_event_sessions()
