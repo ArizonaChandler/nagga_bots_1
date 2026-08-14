@@ -31,7 +31,7 @@ class EventsInitializer:
         self.log_channel_id = db.get_setting('events_log_channel')
         self.settings_channel_id = db.get_setting('events_settings_channel')
         
-        # 🔥 Очищаем от 'null'
+        # Очищаем от 'null'
         if self.settings_channel_id == 'null' or self.settings_channel_id is None:
             self.settings_channel_id = None
         
@@ -225,7 +225,8 @@ class ModerationMainView(discord.ui.View):
             description="Создание и удаление шаблонов для мероприятий",
             color=0x00bfff
         )
-        await interaction.response.edit_message(embed=embed, view=view)
+        # Отправляем НОВОЕ сообщение (не редактируем)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
     
     @discord.ui.button(
         label="СТАТИСТИКА",
@@ -372,6 +373,7 @@ class TemplateManagementView(discord.ui.View):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
             return
         
+        # 🔥 ПРЯМО ОТПРАВЛЯЕМ МОДАЛКУ
         from event_scheduler.modals import AddEventSettingsModal
         await interaction.response.send_modal(AddEventSettingsModal())
     
