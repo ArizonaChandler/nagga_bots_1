@@ -27,16 +27,18 @@ class ModulesControlPanel(AdminOnlyView):
             btn = discord.ui.Button(
                 label=f"{module['name']} ({status})",
                 style=discord.ButtonStyle.success if module["enabled"] else discord.ButtonStyle.secondary,
-                row=row,
+                row=row,  # ← row может быть 0,1,2,3
                 custom_id=f"module_toggle_{module_key}"
             )
             btn.callback = self._create_callback(module_key)
             self.add_item(btn)
             
             col += 1
-            if col >= 3:
+            if col >= 2:  # ← 2 кнопки в ряду (было 3, уменьшаем)
                 col = 0
                 row += 1
+                if row >= 4:  # ← максимум 4 ряда (0,1,2,3)
+                    break  # ← если больше 4 рядов — обрезаем
 
     def _create_callback(self, module_key: str):
         async def callback(interaction: discord.Interaction):
@@ -51,10 +53,8 @@ class ModulesControlPanel(AdminOnlyView):
             module = MODULES[module_key]
             new_state = not module["enabled"]
             
-            # Сначала отвечаем пользователю
             await interaction.response.send_message(f"🔄 {module['name']} {'включается' if new_state else 'выключается'}...", ephemeral=True)
             
-            # Выполняем действие
             success, msg = await self.module_manager.set_enabled(
                 module_key, 
                 new_state, 
@@ -62,12 +62,11 @@ class ModulesControlPanel(AdminOnlyView):
             )
             
             if success:
-                # Обновляем кнопки (если сообщение ещё существует)
                 try:
                     self._add_buttons()
                     await interaction.message.edit(view=self)
                 except:
-                    pass  # Сообщение могло быть удалено
+                    pass
                 await interaction.followup.send(msg, ephemeral=True)
             else:
                 await interaction.followup.send(f"❌ {msg}", ephemeral=True)
