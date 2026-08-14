@@ -13,7 +13,6 @@ class EventStats:
         self.task = None
     
     async def start(self):
-        """Запустить еженедельный отчёт"""
         self.task = asyncio.create_task(self._weekly_report_loop())
         print("📊 [EVENTS] Еженедельная статистика запущена")
     
@@ -22,12 +21,10 @@ class EventStats:
             self.task.cancel()
     
     async def _weekly_report_loop(self):
-        """Цикл еженедельных отчётов"""
         await self.bot.wait_until_ready()
         
         while not self.bot.is_closed():
             now = datetime.now()
-            # В воскресенье в 23:59
             days_until_sunday = (6 - now.weekday()) % 7
             next_sunday = now + timedelta(days=days_until_sunday)
             next_sunday = next_sunday.replace(hour=23, minute=59, second=0)
@@ -37,11 +34,9 @@ class EventStats:
                 wait_seconds += 7 * 24 * 60 * 60
             
             await asyncio.sleep(wait_seconds)
-            
             await self._send_weekly_report()
     
     async def _send_weekly_report(self):
-        """Отправить еженедельный отчёт"""
         settings = self.get_settings()
         channel_id = settings.get('events_moderation_channel')
         if not channel_id:
@@ -51,7 +46,6 @@ class EventStats:
         if not channel:
             return
         
-        # Статистика за неделю
         stats = db.get_event_organizer_stats(7)
         
         embed = discord.Embed(

@@ -646,6 +646,22 @@ class Database:
                 )
             ''')
 
+            # ===== МИГРАЦИЯ ДЛЯ EVENT_SESSIONS =====
+            try:
+                cursor.execute('ALTER TABLE event_sessions ADD COLUMN event_name TEXT')
+            except sqlite3.OperationalError:
+                pass
+
+            try:
+                cursor.execute('ALTER TABLE event_sessions ADD COLUMN meeting_place TEXT')
+            except sqlite3.OperationalError:
+                pass
+
+            try:
+                cursor.execute('ALTER TABLE event_sessions ADD COLUMN template_id INTEGER')
+            except sqlite3.OperationalError:
+                pass
+
             # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ ИГР =====
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS active_games (
@@ -2892,14 +2908,19 @@ class Database:
 
     # ===== МЕТОДЫ ДЛЯ МЕРОПРИЯТИЙ (EVENTS) =====
 
-    def create_event_session(self, creator_id: str, template_id: int, collect_time: int,
-                            channel_id: str, message_id: str, event_time: str) -> int:
+    def create_event_session(self, creator_id: str, collect_time: int,
+                            channel_id: str, message_id: str, event_time: str,
+                            event_name: str = None, meeting_place: str = None,
+                            additional_info: str = None) -> int:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO event_sessions (creator_id, template_id, collect_time, channel_id, message_id, event_time, status)
-                VALUES (?, ?, ?, ?, ?, ?, 'active')
-            ''', (creator_id, template_id, collect_time, channel_id, message_id, event_time))
+                INSERT INTO event_sessions 
+                (creator_id, collect_time, channel_id, message_id, event_time, 
+                event_name, meeting_place, additional_info, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
+            ''', (creator_id, collect_time, channel_id, message_id, event_time,
+                event_name, meeting_place, additional_info))
             conn.commit()
             return cursor.lastrowid
 

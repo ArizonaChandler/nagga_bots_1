@@ -5,7 +5,6 @@ from core.database import db
 from core.config import CONFIG, save_config
 from core.utils import is_admin
 from events.manager import events_manager
-from events.views import EventsModerationView
 
 
 class EventsSettingsView(AdminOnlyView):

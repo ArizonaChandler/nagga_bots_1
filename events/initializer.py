@@ -4,12 +4,11 @@ import logging
 from datetime import datetime
 from core.database import db
 from core.config import CONFIG
-from core.utils import is_admin
 from events.manager import events_manager
 from events.settings_view import EventsSettingsView
-from events.templates import get_event_templates, format_templates_for_select
 from events.modals import CreateEventModal
 from events.stats import EventStats
+from events.views import EventsParticipantView
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +30,6 @@ class EventsInitializer:
         self.log_channel_id = db.get_setting('events_log_channel')
         self.settings_channel_id = db.get_setting('events_settings_channel')
         
-        # Очищаем от 'null'
         if self.settings_channel_id == 'null' or self.settings_channel_id is None:
             self.settings_channel_id = None
         
@@ -63,17 +61,15 @@ class EventsInitializer:
             logger.error(f"❌ Неверный ID канала модерации: {self.moderation_channel_id}")
             return
         
-        templates = get_event_templates()
         embed = discord.Embed(
             title="🎯 **ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ**",
             description="Создание и управление мероприятиями\n\n"
-                        f"📋 **Доступно шаблонов:** {len(templates)}\n"
                         f"━━━━━━━━━━━━━━━━━━━━━\n"
                         f"Нажмите кнопку «➕ СОЗДАТЬ МП» чтобы начать",
             color=0x00bfff
         )
         
-        view = ModerationMainView(templates)
+        view = ModerationMainView()
         
         found = False
         async for msg in channel.history(limit=50):
@@ -141,6 +137,20 @@ class EventsInitializer:
         
         print(f"🎯 [EVENTS] Восстановление {len(sessions)} активных сессий...")
         
+        participant_channel_id = db.get_setting('events_participant_channel')
+        if not participant_channel_id or participant_channel_id == 'null':
+            print("⚠️ [EVENTS] Канал участников не настроен, пропускаем восстановление")
+            return
+        
+        try:
+            channel = self.bot.get_channel(int(participant_channel_id))
+            if not channel:
+                print(f"⚠️ [EVENTS] Канал {participant_channel_id} не найден")
+                return
+        except (ValueError, TypeError):
+            print(f"⚠️ [EVENTS] Неверный ID канала: {participant_channel_id}")
+            return
+        
         for session in sessions:
             session_id = session['id']
             participants = db.get_event_participants(session_id)
@@ -148,23 +158,31 @@ class EventsInitializer:
             events_manager.active_sessions[session_id] = session
             events_manager.participants[session_id] = [p['user_id'] for p in participants]
             
-            participant_channel_id = db.get_setting('events_participant_channel')
-            if participant_channel_id:
-                channel = self.bot.get_channel(int(participant_channel_id))
-                if channel and session.get('message_id'):
-                    try:
-                        msg = await channel.fetch_message(int(session['message_id']))
-                        content = self._build_participants_content(session, participants)
-                        await msg.edit(content=content)
-                    except:
-                        pass
-            
-            print(f"🎯 [EVENTS] Восстановлена сессия #{session_id}, участников: {len(participants)}")
+            if session.get('message_id'):
+                try:
+                    msg = await channel.fetch_message(int(session['message_id']))
+                    
+                    view = EventsParticipantView(session_id)
+                    view.set_message(msg)
+                    
+                    content = self._build_participants_content(session, participants)
+                    await msg.edit(content=content, view=view)
+                    
+                    print(f"🎯 [EVENTS] Восстановлена сессия #{session_id}, участников: {len(participants)}")
+                except discord.NotFound:
+                    print(f"⚠️ [EVENTS] Сообщение сессии #{session_id} не найдено")
+                except Exception as e:
+                    print(f"⚠️ [EVENTS] Ошибка восстановления #{session_id}: {e}")
     
     def _build_participants_content(self, session: dict, participants: list) -> str:
+        event_name = session.get('event_name', 'Мероприятие')
+        meeting_place = session.get('meeting_place', 'Не указано')
+        
         content = f"@everyone **🎯 МЕРОПРИЯТИЕ!**\n\n"
+        content += f"📌 **{event_name}**\n"
         content += f"👤 Организатор: <@{session['creator_id']}>\n"
-        content += f"⏰ Начало: {session['event_time']} МСК\n"
+        content += f"⏰ Сбор в: {session['event_time']} МСК\n"
+        content += f"📍 Место: {meeting_place}\n"
         if session.get('additional_info'):
             content += f"📝 {session['additional_info']}\n"
         content += f"\n**Участники ({len(participants)}):**\n"
@@ -183,11 +201,10 @@ class EventsInitializer:
 
 
 class ModerationMainView(discord.ui.View):
-    """Главное меню модерации"""
+    """Главное меню модерации (без шаблонов)"""
     
-    def __init__(self, templates: list):
+    def __init__(self):
         super().__init__(timeout=None)
-        self.templates = templates
     
     @discord.ui.button(
         label="СОЗДАТЬ МП",
@@ -197,35 +214,7 @@ class ModerationMainView(discord.ui.View):
         custom_id="events_create"
     )
     async def create_event(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not self.templates:
-            await interaction.response.send_message(
-                "❌ Нет доступных шаблонов мероприятий.\n"
-                "Создайте шаблоны в планировщике мероприятий.",
-                ephemeral=True
-            )
-            return
-        
-        await interaction.response.send_modal(CreateEventWithTemplateModal(self.templates))
-    
-    @discord.ui.button(
-        label="ШАБЛОНЫ МП",
-        style=discord.ButtonStyle.primary,
-        emoji="📋",
-        row=0,
-        custom_id="events_templates"
-    )
-    async def manage_templates(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только администраторы могут управлять шаблонами!", ephemeral=True)
-            return
-        
-        view = TemplateManagementView()
-        embed = discord.Embed(
-            title="📋 УПРАВЛЕНИЕ ШАБЛОНАМИ МЕРОПРИЯТИЙ",
-            description="Создание и удаление шаблонов для мероприятий",
-            color=0x00bfff
-        )
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        await interaction.response.send_modal(CreateEventModal())
     
     @discord.ui.button(
         label="СТАТИСТИКА",
@@ -268,7 +257,6 @@ class ModerationMainView(discord.ui.View):
 
 
 class StatsMenuView(discord.ui.View):
-    """Дополнительные кнопки для статистики"""
     
     def __init__(self):
         super().__init__(timeout=None)
@@ -323,8 +311,9 @@ class StatsMenuView(discord.ui.View):
         
         for session in sessions[:10]:
             participants = db.get_event_participants(session['id'])
+            event_name = session.get('event_name', 'Мероприятие')
             embed.add_field(
-                name=f"ID: {session['id']} | {session['event_time']}",
+                name=f"📌 {event_name} | {session['event_time']}",
                 value=f"👤 Организатор: <@{session['creator_id']}>\n👥 Участников: {len(participants)}",
                 inline=False
             )
@@ -342,229 +331,14 @@ class StatsMenuView(discord.ui.View):
         custom_id="stats_back"
     )
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
-        templates = get_event_templates()
         embed = discord.Embed(
             title="🎯 **ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ**",
             description="Создание и управление мероприятиями\n\n"
-                        f"📋 **Доступно шаблонов:** {len(templates)}\n"
                         f"━━━━━━━━━━━━━━━━━━━━━\n"
                         f"Нажмите кнопку «➕ СОЗДАТЬ МП» чтобы начать",
             color=0x00bfff
         )
-        await interaction.response.edit_message(embed=embed, view=ModerationMainView(templates))
-
-
-class TemplateManagementView(discord.ui.View):
-    """Управление шаблонами мероприятий"""
-    
-    def __init__(self):
-        super().__init__(timeout=None)
-    
-    @discord.ui.button(
-        label="Создать шаблон",
-        style=discord.ButtonStyle.success,
-        emoji="➕",
-        row=0,
-        custom_id="template_create"
-    )
-    async def create_template(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
-            return
-        
-        await interaction.response.send_modal(CreateTemplateModal())
-    
-    @discord.ui.button(
-        label="Список шаблонов",
-        style=discord.ButtonStyle.secondary,
-        emoji="📋",
-        row=0,
-        custom_id="template_list"
-    )
-    async def list_templates(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
-            return
-        
-        templates = get_event_templates(enabled_only=False)
-        
-        if not templates:
-            await interaction.response.send_message("📭 Нет созданных шаблонов", ephemeral=True)
-            return
-        
-        days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-        embed = discord.Embed(
-            title="📋 ШАБЛОНЫ МЕРОПРИЯТИЙ",
-            color=0x00bfff,
-            timestamp=datetime.now()
-        )
-        
-        text = ""
-        for t in templates:
-            status = "✅" if t['enabled'] else "❌"
-            text += f"{status} **{t['name']}** — {days[t['weekday']]} {t['event_time']}\n"
-        
-        embed.description = text
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-    
-    @discord.ui.button(
-        label="Назад",
-        style=discord.ButtonStyle.secondary,
-        emoji="◀",
-        row=1,
-        custom_id="template_back"
-    )
-    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
-        templates = get_event_templates()
-        embed = discord.Embed(
-            title="🎯 **ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ**",
-            description="Создание и управление мероприятиями\n\n"
-                        f"📋 **Доступно шаблонов:** {len(templates)}\n"
-                        f"━━━━━━━━━━━━━━━━━━━━━\n"
-                        f"Нажмите кнопку «➕ СОЗДАТЬ МП» чтобы начать",
-            color=0x00bfff
-        )
-        await interaction.response.edit_message(embed=embed, view=ModerationMainView(templates))
-
-
-class CreateEventWithTemplateModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МП"):
-    """Модалка с выбором шаблона"""
-    
-    def __init__(self, templates: list):
-        super().__init__()
-        self.templates = templates
-        
-        self.template_select = discord.ui.Select(
-            placeholder="Выберите шаблон мероприятия",
-            options=format_templates_for_select(templates)
-        )
-        self.template_select.callback = self.select_template
-        self.add_item(self.template_select)
-    
-    async def select_template(self, interaction: discord.Interaction):
-        self.selected_template_id = int(self.template_select.values[0])
-        await interaction.response.defer()
-        
-        modal = CreateEventModal(self.templates)
-        modal.selected_template_id = self.selected_template_id
-        await interaction.followup.send_modal(modal)
-
-
-class CreateTemplateModal(discord.ui.Modal, title="➕ СОЗДАТЬ ШАБЛОН"):
-    """Модалка для создания шаблона мероприятия (для администраторов)"""
-    
-    event_name = discord.ui.TextInput(
-        label="Название мероприятия",
-        placeholder="Например: Arena перед каптами",
-        max_length=100,
-        required=True
-    )
-    
-    weekdays = discord.ui.TextInput(
-        label="Дни недели (0-6 через запятую)",
-        placeholder="0,2,4,6",
-        max_length=20,
-        required=True
-    )
-    
-    event_times = discord.ui.TextInput(
-        label="Время (ЧЧ:ММ через запятую)",
-        placeholder="14:20, 19:30",
-        max_length=50,
-        required=True
-    )
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        if not await is_admin(str(interaction.user.id)):
-            await interaction.response.send_message("❌ Только администраторы", ephemeral=True)
-            return
-        
-        try:
-            # Парсим дни
-            days_input = self.weekdays.value.replace(' ', '')
-            weekdays = []
-            
-            if '-' in days_input and ',' not in days_input:
-                parts = days_input.split('-')
-                if len(parts) == 2:
-                    start = int(parts[0])
-                    end = int(parts[1])
-                    weekdays = list(range(start, end + 1))
-                else:
-                    await interaction.response.send_message("❌ Неверный формат диапазона", ephemeral=True)
-                    return
-            else:
-                for d in days_input.split(','):
-                    try:
-                        day = int(d)
-                        if 0 <= day <= 6:
-                            weekdays.append(day)
-                        else:
-                            await interaction.response.send_message(f"❌ День {day} должен быть от 0 до 6", ephemeral=True)
-                            return
-                    except ValueError:
-                        await interaction.response.send_message(f"❌ Неверный день: {d}", ephemeral=True)
-                        return
-            
-            weekdays = sorted(set(weekdays))
-            
-            if not weekdays:
-                await interaction.response.send_message("❌ Не указаны дни недели", ephemeral=True)
-                return
-            
-            # Парсим время
-            times = []
-            for t in self.event_times.value.replace(' ', '').split(','):
-                try:
-                    datetime.strptime(t, "%H:%M")
-                    times.append(t)
-                except ValueError:
-                    await interaction.response.send_message(f"❌ Неверный формат времени: {t}", ephemeral=True)
-                    return
-            
-            times = sorted(set(times))
-            
-            if not times:
-                await interaction.response.send_message("❌ Не указано время", ephemeral=True)
-                return
-            
-            # Создаём шаблоны
-            created = 0
-            days_names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-            
-            for day in weekdays:
-                for time in times:
-                    db.add_event(
-                        name=self.event_name.value,
-                        weekday=day,
-                        event_time=time,
-                        created_by=str(interaction.user.id)
-                    )
-                    created += 1
-            
-            db.generate_schedule(days_ahead=14)
-            
-            days_str = ', '.join([days_names[d] for d in weekdays])
-            times_str = ', '.join(times)
-            
-            embed = discord.Embed(
-                title="✅ Шаблоны созданы",
-                description=f"Создано **{created}** шаблонов",
-                color=0x00ff00,
-                timestamp=datetime.now()
-            )
-            embed.add_field(name="📌 Название", value=self.event_name.value, inline=True)
-            embed.add_field(name="📅 Дни", value=days_str, inline=True)
-            embed.add_field(name="⏰ Времена", value=times_str, inline=False)
-            
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            
-        except Exception as e:
-            print(f"❌ Ошибка создания шаблона: {e}")
-            import traceback
-            traceback.print_exc()
-            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+        await interaction.response.edit_message(embed=embed, view=ModerationMainView())
 
 
 class UserStatsModal(discord.ui.Modal, title="👤 СТАТИСТИКА ПОЛЬЗОВАТЕЛЯ"):
