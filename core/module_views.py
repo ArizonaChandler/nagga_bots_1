@@ -74,7 +74,7 @@ class ModulesControlPanel(AdminOnlyView):
                     row=nav_row,
                     custom_id="modules_prev"
                 )
-                prev_btn.callback = self.prev_page
+                prev_btn.callback = self.prev_page  # ← БЕЗ button
                 self.add_item(prev_btn)
             
             page_btn = discord.ui.Button(
@@ -93,16 +93,16 @@ class ModulesControlPanel(AdminOnlyView):
                     row=nav_row,
                     custom_id="modules_next"
                 )
-                next_btn.callback = self.next_page
+                next_btn.callback = self.next_page  # ← БЕЗ button
                 self.add_item(next_btn)
 
-    async def prev_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def prev_page(self, interaction: discord.Interaction):
         """Переключить на предыдущую страницу"""
         self.page -= 1
         self._add_buttons()
         await interaction.response.edit_message(view=self)
 
-    async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def next_page(self, interaction: discord.Interaction):
         """Переключить на следующую страницу"""
         self.page += 1
         self._add_buttons()
