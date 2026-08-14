@@ -54,12 +54,12 @@ CONFIG = {
     'welcome_channel': None,
     'welcome_image': None,
     
-    # ===== СИСТЕМА МЕРОПРИЯТИЙ =====
+    # ===== ПЛАНИРОВЩИК МЕРОПРИЯТИЙ (event_scheduler) =====
     'alarm_channels': [],
     'announce_channels': [],
     'reminder_roles': [],
     'announce_roles': [],
-    'events_settings_channel': None,
+    'event_scheduler_settings_channel': None,  # ← ПЕРЕИМЕНОВАНО
     
     # ===== AFK СИСТЕМА =====
     'afk_channel': None,
@@ -112,7 +112,6 @@ CONFIG = {
     'economy_settings_channel': None,
     'economy_logs_channel': None,
     
-    # Настройки начисления баллов
     'eco_voice_points': '1',
     'eco_voice_max_per_day': '100',
     'eco_capt_main_points': '50',
@@ -125,7 +124,6 @@ CONFIG = {
     'eco_tier2_points': '100',
     'eco_tier1_points': '200',
     
-    # Ежедневный бонус
     'eco_daily_bonus': '25',
     'eco_daily_increment': '5',
     'eco_daily_limit': '30',
@@ -149,10 +147,17 @@ CONFIG = {
     'action_logs_channel': None,
     'action_logs_settings_channel': None,
     'action_logs_enabled_events': [],
-
+    
     # ===== СОЗДАНИЕ EMBED =====
     'embed_builder_channel': None,
     'embed_builder_settings_channel': None,
+
+    # ===== МЕРОПРИЯТИЯ (events) =====
+    'events_moderation_channel': None,
+    'events_participant_channel': None,
+    'events_log_channel': None,
+    'events_settings_channel': None,
+    'events_default_collect_time': 20,
 }
 
 
@@ -163,7 +168,6 @@ def load_config():
     for key, value in settings.items():
         if key in CONFIG:
             if value and value.lower() != 'null':
-                # Обработка JSON-массивов
                 if key in ['alarm_channels', 'announce_channels', 'reminder_roles', 
                            'announce_roles', 'vacation_approve_roles', 'application_custom_fields']:
                     try:
@@ -190,10 +194,10 @@ def load_config():
                        'stats_channel', 'stats_settings_channel', 'stats_backup_enabled', 'stats_backup_time',
                        'temp_voice_category', 'temp_voice_public_channel', 'temp_voice_log_channel',
                        'temp_voice_settings_channel', 'temp_voice_default_slots', 
-                       'temp_voice_max_slots', 'temp_voice_delete_delay']:
+                       'temp_voice_max_slots', 'temp_voice_delete_delay',
+                       'event_scheduler_settings_channel']:  # ← ДОБАВЛЕНО
                 CONFIG[key] = value if value and value.lower() != 'null' else None
     
-    # Загружаем настройки модулей
     db.load_application_settings()
     db.load_tier_settings()
     db.load_vacation_settings()
@@ -202,11 +206,9 @@ def load_config():
 def save_config(updated_by: str = None):
     from core.database import db
     for key, value in CONFIG.items():
-        # Пропускаем токены, они не сохраняются в БД
         if key in ['user_token_1', 'user_token_2', 'super_admin_id']:
             continue
         
-        # Обработка JSON-массивов
         if key in ['alarm_channels', 'announce_channels', 'reminder_roles', 
                    'announce_roles', 'vacation_approve_roles', 'application_custom_fields']:
             db.set_setting(key, json.dumps(value) if value else '[]', updated_by)

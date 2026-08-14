@@ -1,12 +1,12 @@
-"""Базовый класс для постоянных кнопок (без проверки пользователя)"""
+"""Базовые классы для системы мероприятий"""
 import discord
 
+
 class PermanentView(discord.ui.View):
-    """View для постоянных кнопок (без таймаута и без проверки пользователя)"""
+    """View для постоянных кнопок (без таймаута)"""
     
     def __init__(self):
         super().__init__(timeout=None)
     
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Разрешаем всем пользователям нажимать кнопки"""
         return True

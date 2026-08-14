@@ -50,7 +50,6 @@ class GlobalSettingsPanel(AdminOnlyView):
                 )
                 return
             
-            # Сохраняем ID сообщения для восстановления
             db.set_setting('global_settings_message_id', str(interaction.message.id), str(interaction.user.id))
             db.set_setting('global_settings_channel_id', str(interaction.channel.id), str(interaction.user.id))
             
@@ -66,9 +65,9 @@ class GlobalSettingsPanel(AdminOnlyView):
             elif module_key == "applications":
                 from applications.settings_view import ApplicationsCombinedPanel
                 settings_view = ApplicationsCombinedPanel()
-            elif module_key == "events":
-                from events.settings_view import EventsSettingsView
-                settings_view = EventsSettingsView()
+            elif module_key == "event_scheduler":  # ← ПЕРЕИМЕНОВАНО
+                from event_scheduler.settings_view import EventSchedulerSettingsView
+                settings_view = EventSchedulerSettingsView()
             elif module_key == "afk":
                 from afk.settings_view import AFKSettingsView
                 settings_view = AFKSettingsView()
@@ -102,6 +101,9 @@ class GlobalSettingsPanel(AdminOnlyView):
             elif module_key == "embed_builder":
                 from embed_builder.settings_view import EmbedBuilderSettingsView
                 settings_view = EmbedBuilderSettingsView()
+            elif module_key == "events":
+                from events.settings_view import EventsSettingsView
+                settings_view = EventsSettingsView()
             
             if settings_view:
                 embed = discord.Embed(

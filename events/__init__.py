@@ -1,16 +1,17 @@
-"""Event System - Автоматические оповещения о мероприятиях"""
-from events.scheduler import setup as setup_scheduler, scheduler
-from events.views import EventReminderView, EventInfoView
-from events.modals import ScheduleEventModal
+"""Система мероприятий (ручное создание, сбор участников, статистика)"""
+import logging
+from events.manager import events_manager
+from events.views import EventsModerationView, EventsParticipantView
 from events.settings_view import EventsSettingsView
-from events.base import PermanentView
+from events.initializer import setup as setup_events
+
+logger = logging.getLogger(__name__)
+logger.info("🎯 Модуль мероприятий загружен")
 
 __all__ = [
-    'setup_scheduler',
-    'scheduler',
-    'EventReminderView',
-    'EventInfoView',
-    'ScheduleEventModal',
+    'events_manager',
+    'EventsModerationView',
+    'EventsParticipantView',
     'EventsSettingsView',
-    'PermanentView'
+    'setup_events'
 ]

@@ -618,6 +618,34 @@ class Database:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_server_action_logs_time ON server_action_logs(timestamp)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_server_action_logs_guild ON server_action_logs(guild_id)')
 
+            # Таблицы для мероприятий
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS event_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    creator_id TEXT NOT NULL,
+                    template_id INTEGER,
+                    collect_time INTEGER DEFAULT 20,
+                    event_time TEXT,
+                    additional_info TEXT,
+                    channel_id TEXT,
+                    message_id TEXT,
+                    status TEXT DEFAULT 'active',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS event_participants (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER NOT NULL,
+                    user_id TEXT NOT NULL,
+                    user_name TEXT NOT NULL,
+                    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (session_id) REFERENCES event_sessions(id) ON DELETE CASCADE,
+                    UNIQUE(session_id, user_id)
+                )
+            ''')
+
             # ===== ТАБЛИЦЫ ДЛЯ СИСТЕМЫ ИГР =====
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS active_games (
@@ -1046,6 +1074,7 @@ class Database:
         today = now.date()
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            # events → event_scheduler не меняется, так как таблица events остаётся
             events = self.get_events(enabled_only=True)
             for event in events:
                 for day_offset in range(days_ahead):
@@ -2860,5 +2889,110 @@ class Database:
                 'unique_users': unique_users,
                 'top_events': [{'event_type': row[0], 'count': row[1]} for row in top_events]
             }
+
+    # ===== МЕТОДЫ ДЛЯ МЕРОПРИЯТИЙ (EVENTS) =====
+
+    def create_event_session(self, creator_id: str, template_id: int, collect_time: int,
+                            channel_id: str, message_id: str, event_time: str) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO event_sessions (creator_id, template_id, collect_time, channel_id, message_id, event_time, status)
+                VALUES (?, ?, ?, ?, ?, ?, 'active')
+            ''', (creator_id, template_id, collect_time, channel_id, message_id, event_time))
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_event_session(self, session_id: int) -> dict:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM event_sessions WHERE id = ?', (session_id,))
+            row = cursor.fetchone()
+            if row:
+                columns = [description[0] for description in cursor.description]
+                return dict(zip(columns, row))
+            return None
+
+    def get_active_event_sessions(self) -> list:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM event_sessions WHERE status = "active"')
+            rows = cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
+            return [dict(zip(columns, row)) for row in rows]
+
+    def get_all_event_sessions(self) -> list:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM event_sessions ORDER BY created_at DESC')
+            rows = cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
+            return [dict(zip(columns, row)) for row in rows]
+
+    def end_event_session(self, session_id: int):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE event_sessions SET status = "ended" WHERE id = ?', (session_id,))
+            conn.commit()
+
+    def update_event_session_message(self, session_id: int, message_id: str):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE event_sessions SET message_id = ? WHERE id = ?', (message_id, session_id))
+            conn.commit()
+
+    def add_event_participant(self, session_id: int, user_id: str, user_name: str):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO event_participants (session_id, user_id, user_name)
+                VALUES (?, ?, ?)
+            ''', (session_id, user_id, user_name))
+            conn.commit()
+
+    def remove_event_participant(self, session_id: int, user_id: str):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM event_participants WHERE session_id = ? AND user_id = ?', (session_id, user_id))
+            conn.commit()
+
+    def get_event_participants(self, session_id: int) -> list:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT user_id, user_name FROM event_participants WHERE session_id = ?', (session_id,))
+            rows = cursor.fetchall()
+            return [{'user_id': row[0], 'user_name': row[1]} for row in rows]
+
+    def finalize_event_participants(self, session_id: int, participants: list):
+        """Сохранить финальный список участников после завершения сбора"""
+        # Удаляем старых и добавляем новых (уже сделано)
+        pass
+
+    def get_user_event_participations(self, user_id: str, days: int = 30) -> list:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT es.*, ep.joined_at
+                FROM event_participants ep
+                JOIN event_sessions es ON ep.session_id = es.id
+                WHERE ep.user_id = ? AND ep.joined_at >= datetime('now', ?)
+                ORDER BY ep.joined_at DESC
+            ''', (user_id, f'-{days} days'))
+            rows = cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
+            return [dict(zip(columns, row)) for row in rows]
+
+    def get_event_organizer_stats(self, days: int = 7) -> list:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT creator_id as user_id, COUNT(*) as count
+                FROM event_sessions
+                WHERE created_at >= datetime('now', ?) AND status = 'ended'
+                GROUP BY creator_id
+                ORDER BY count DESC
+            ''', (f'-{days} days',))
+            rows = cursor.fetchall()
+            return [{'user_id': row[0], 'count': row[1]} for row in rows]
 
 db = Database()

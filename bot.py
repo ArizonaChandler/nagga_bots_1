@@ -29,7 +29,7 @@ from commands.log import setup as setup_log
 
 # ========== МОДУЛИ ==========
 from files.core import file_manager
-from events.scheduler import setup as setup_scheduler
+from event_scheduler.scheduler import setup as setup_event_scheduler
 from core.module_manager import setup as setup_modules
 
 # ========== НАСТРОЙКА ==========
@@ -377,12 +377,12 @@ async def on_member_unban(guild: discord.Guild, user: discord.User):
 # ========== ЗАПУСК ==========
 async def main():
     async with bot:
-        # Запускаем планировщик мероприятий только если модуль включён
+        # Запускаем планировщик только если модуль включён
         from core.module_manager import MODULES
-        if MODULES.get("events", {}).get("enabled", False):
-            await setup_scheduler(bot)
+        if MODULES.get("event_scheduler", {}).get("enabled", False):
+            await setup_event_scheduler(bot)
         else:
-            print("⏭️ [EVENTS] Модуль мероприятий выключен, планировщик не запущен")
+            print("⏭️ [EVENT_SCHEDULER] Модуль выключен, планировщик не запущен")
         
         await bot.start(BOT_TOKEN)
 

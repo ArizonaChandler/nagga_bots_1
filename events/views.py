@@ -1,350 +1,142 @@
-"""Event Views - Кнопки для мероприятий"""
+"""Кнопки для системы мероприятий"""
 import discord
-import logging
-import traceback
-from datetime import datetime, timedelta
-import pytz
-from core.database import db
-from core.config import CONFIG
-from core.menus import BaseMenuView
+from datetime import datetime
+from events.base import PermanentView
+from events.manager import events_manager
+from events.modals import CreateEventModal
+from events.templates import get_event_templates, format_templates_for_select
 
-# Настройка логирования
-file_logger = logging.getLogger('events_views')
-file_logger.setLevel(logging.DEBUG)
-fh = logging.FileHandler('events_views.log')
-fh.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-fh.setFormatter(formatter)
-file_logger.addHandler(fh)
 
-MSK_TZ = pytz.timezone('Europe/Moscow')
-
-class EventReminderView(discord.ui.View):
-    """Кнопка 'Взять МП' с поддержкой нескольких каналов"""
-    _instances = {}  # Словарь для хранения всех экземпляров по event_id
+class EventsModerationView(discord.ui.View):
+    """Кнопки для модерации мероприятия"""
     
-    def __init__(self, event_id: int, event_name: str, event_time: str, meeting_time: str, guild, reminder_channels=None):
-        from datetime import datetime, timedelta
-        import pytz
-        
-        msk_tz = pytz.timezone('Europe/Moscow')
-        now = datetime.now(msk_tz)  # aware datetime
-        
-        # Парсим время мероприятия
-        event_hour, event_min = map(int, event_time.split(':'))
-        
-        # СОЗДАЁМ AWARE DATETIME ПРАВИЛЬНО
-        # 1. Сначала создаем naive datetime
-        naive_event = datetime(now.year, now.month, now.day, event_hour, event_min)
-        # 2. Потом делаем его aware
-        event_datetime = msk_tz.localize(naive_event)
-        
-        # Если время мероприятия уже прошло - добавляем день
-        if event_datetime < now:  # теперь оба aware - ошибки не будет
-            event_datetime += timedelta(days=1)
-        
-        # Время таймаута (за 10 минут до начала)
-        timeout_datetime = event_datetime - timedelta(minutes=10)
-        timeout_seconds = max(0, (timeout_datetime - now).total_seconds())
-        
-        super().__init__(timeout=timeout_seconds)
-        
-        self.event_id = event_id
-        self.event_name = event_name
-        self.event_time = event_time
-        self.meeting_time = meeting_time
-        self.guild = guild
-        self.taken = False
-        self.messages = {}
-        self.reminder_channels = reminder_channels or []
-        self.timeout_occurred = False
-        
-        # Регистрируем этот экземпляр в общем словаре
-        if event_id not in EventReminderView._instances:
-            EventReminderView._instances[event_id] = []
-        EventReminderView._instances[event_id].append(self)
-        
-        file_logger.debug(f"Зарегистрирован экземпляр для event_id {event_id}. Всего: {len(EventReminderView._instances[event_id])}")
+    def __init__(self, session_id: int):
+        super().__init__(timeout=None)
+        self.session_id = session_id
     
-    def add_message(self, message, channel_id):
-        """Добавить сообщение из конкретного канала"""
-        self.messages[str(channel_id)] = message
-        file_logger.debug(f"Добавлено сообщение для канала {channel_id}")
-    
-    async def update_all_instances(self, user_id: str, user_name: str, group_code: str, meeting_place: str):
-        """Обновить ВСЕ экземпляры этого мероприятия во всех каналах"""
-        file_logger.debug(f"Обновление всех экземпляров для event_id {self.event_id}")
+    @discord.ui.button(label="📊 Статистика", style=discord.ButtonStyle.secondary, emoji="📊", row=0)
+    async def show_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Показать статистику сессии"""
+        session = events_manager.get_session(self.session_id)
+        if not session:
+            await interaction.response.send_message("❌ Сессия не найдена", ephemeral=True)
+            return
         
-        # Получаем роли для оповещений
-        announce_roles = CONFIG.get('announce_roles', [])
-        role_mentions = []
-        
-        # Получаем сервер
-        server_id = CONFIG.get('server_id')
-        if server_id:
-            guild = self.guild or (list(self.messages.values())[0].guild if self.messages else None)
-            if guild:
-                for role_id in announce_roles:
-                    try:
-                        role = guild.get_role(int(role_id))
-                        if role:
-                            role_mentions.append(role.mention)
-                    except:
-                        pass
-        
-        content = ' '.join(role_mentions) if role_mentions else None
+        participants = events_manager.get_participants(self.session_id)
         
         embed = discord.Embed(
-            title=f"✅ СБОР НА МЕРОПРИЯТИЕ: {self.event_name}",
-            description=f"Мероприятие проведёт: <@{user_id}>",
-            color=0x00ff00
+            title=f"📊 СТАТИСТИКА СЕССИИ #{self.session_id}",
+            color=0x00bfff,
+            timestamp=datetime.now()
         )
+        embed.add_field(name="👤 Организатор", value=f"<@{session['creator_id']}>", inline=True)
+        embed.add_field(name="⏰ Время начала", value=session['event_time'], inline=True)
+        embed.add_field(name="👥 Участников", value=f"**{len(participants)}**", inline=True)
         
-        embed.add_field(
-            name="⏱️ Сбор в",
-            value=f"**{self.meeting_time}** МСК",
-            inline=False
-        )
+        if participants:
+            embed.add_field(
+                name="📋 Список участников",
+                value="\n".join([f"• <@{uid}>" for uid in participants[:20]]),
+                inline=False
+            )
         
-        embed.add_field(
-            name="📍 Место сбора",
-            value=meeting_place,
-            inline=True
-        )
-        
-        embed.add_field(
-            name="🔢 Код группы",
-            value=group_code,
-            inline=True
-        )
-        
-        embed.add_field(
-            name="Участие:",
-            value="Для участия зайди в игру, в войс и приедь на место сбора",
-            inline=False
-        )
-        
-        embed.set_footer(text=f"{CONFIG.get('family_name', 'Семья')} Management System by Nagga")
-        
-        # Обновляем ВСЕ экземпляры этого мероприятия
-        if self.event_id in EventReminderView._instances:
-            for instance in EventReminderView._instances[self.event_id]:
-                instance.taken = True
-                for child in instance.children:
-                    child.disabled = True
-                
-                # Обновляем все сообщения этого экземпляра
-                for channel_id, message in instance.messages.items():
-                    try:
-                        await message.edit(content=content, embed=embed, view=instance)
-                        file_logger.debug(f"Обновлено сообщение в канале {channel_id} (экземпляр {id(instance)})")
-                    except Exception as e:
-                        file_logger.error(f"Ошибка обновления сообщения в канале {channel_id}: {e}")
-        
-        file_logger.info(f"✅ Все экземпляры для event_id {self.event_id} обновлены")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
     
-    @discord.ui.button(label="🎮 ВЗЯТЬ МП", style=discord.ButtonStyle.success, emoji="🎮")
-    async def take_event(self, interaction: discord.Interaction, button: discord.ui.Button):
-        file_logger.debug("="*50)
-        file_logger.debug("take_event CALLED")
-        
-        if self.timeout_occurred:
-            await interaction.response.send_message("⏰ Время на взятие МП истекло!", ephemeral=True)
+    @discord.ui.button(label="⏹️ ЗАВЕРШИТЬ", style=discord.ButtonStyle.danger, emoji="⏹️", row=0)
+    async def end_session(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Завершить сессию досрочно"""
+        session = events_manager.get_session(self.session_id)
+        if not session:
+            await interaction.response.send_message("❌ Сессия не найдена", ephemeral=True)
             return
         
-        if self.taken:
-            await interaction.response.send_message("❌ Уже взято", ephemeral=True)
+        # Сохраняем участников
+        participants = events_manager.get_participants(self.session_id)
+        db.finalize_event_participants(self.session_id, participants)
+        
+        events_manager.end_session(self.session_id)
+        
+        # Отключаем кнопки
+        for child in self.children:
+            child.disabled = True
+        await interaction.message.edit(view=self)
+        
+        await events_manager.log_action(
+            self.session_id,
+            f"⏹️ Сессия завершена досрочно модератором {interaction.user.mention}. Участников: {len(participants)}"
+        )
+        
+        await interaction.response.send_message("✅ Сессия завершена", ephemeral=True)
+
+
+class EventsParticipantView(PermanentView):
+    """Публичные кнопки для участников"""
+    
+    def __init__(self, session_id: int):
+        super().__init__()
+        self.session_id = session_id
+        self.message = None
+    
+    def set_message(self, message):
+        self.message = message
+    
+    async def update_participants_list(self, interaction: discord.Interaction):
+        """Обновить текстовый список участников"""
+        participants = events_manager.get_participants(self.session_id)
+        
+        session = events_manager.get_session(self.session_id)
+        if not session:
             return
         
-        today = datetime.now(MSK_TZ).date().isoformat()
+        content = f"@everyone **🎯 МЕРОПРИЯТИЕ!**\n\n"
+        content += f"👤 Организатор: <@{session['creator_id']}>\n"
+        content += f"⏰ Начало: {session['event_time']} МСК\n"
+        if session.get('additional_info'):
+            content += f"📝 {session['additional_info']}\n"
+        content += f"\n**Участники ({len(participants)}):**\n"
         
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT taken_by FROM event_schedule 
-                WHERE event_id = ? AND scheduled_date = ?
-            ''', (self.event_id, today))
-            result = cursor.fetchone()
-            
-            if result and result[0]:
-                self.taken = True
-                button.disabled = True
-                
-                # Обновляем ВСЕ экземпляры
-                await self.update_all_instances(
-                    result[0],
-                    "Пользователь",
-                    "Будет указано",
-                    "Будет указано"
-                )
-                
-                await interaction.response.send_message(f"❌ Уже взял <@{result[0]}>", ephemeral=True)
-                return
+        if participants:
+            for uid in participants:
+                content += f"└ <@{uid}>\n"
+        else:
+            content += "└ *Пока никого нет*"
         
-        from admin.modals import TakeEventModal
-        modal = TakeEventModal(
-            self.event_id, 
-            self.event_name, 
-            self.event_time, 
-            self.meeting_time,
-            self  # Передаем view для обратного вызова
+        # Обновляем сообщение
+        if self.message:
+            await self.message.edit(content=content)
+    
+    @discord.ui.button(label="✅ ПРИСОЕДИНИТЬСЯ", style=discord.ButtonStyle.success, emoji="✅", row=0)
+    async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Присоединиться к мероприятию"""
+        session = events_manager.get_session(self.session_id)
+        if not session or session['status'] != 'active':
+            await interaction.response.send_message("❌ Мероприятие уже завершено", ephemeral=True)
+            return
+        
+        success = events_manager.add_participant(
+            self.session_id,
+            str(interaction.user.id),
+            interaction.user.display_name
         )
-        await interaction.response.send_modal(modal)
+        
+        if success:
+            await interaction.response.send_message("✅ Вы присоединились к мероприятию!", ephemeral=True)
+            await self.update_participants_list(interaction)
+        else:
+            await interaction.response.send_message("❌ Вы уже в списке участников", ephemeral=True)
     
-    async def update_taken_status(self, user_id: str, user_name: str, group_code: str, meeting_place: str):
-        """Обновить статус после взятия МП во всех каналах"""
-        await self.update_all_instances(user_id, user_name, group_code, meeting_place)
-    
-    async def on_timeout(self):
-        """Когда время вышло (за 10 минут до начала)"""
-        self.timeout_occurred = True
-        if not self.taken and self.messages:
-            for child in self.children:
-                child.disabled = True
-            
-            embed = discord.Embed(
-                title=f"⏰ ВРЕМЯ ВЫШЛО: {self.event_name}",
-                description=f"Мероприятие в **{self.event_time}** не состоялось - никто не взял его вовремя.",
-                color=0xff0000
-            )
-            
-            embed.add_field(
-                name="⏰ Время начала",
-                value=f"**{self.event_time}** МСК",
-                inline=True
-            )
-            
-            embed.add_field(
-                name="⏱️ Сбор был в",
-                value=f"**{self.meeting_time}** МСК",
-                inline=True
-            )
-            
-            embed.set_footer(text=f"{CONFIG.get('family_name', 'Семья')} Management System")
-            
-            for channel_id, message in self.messages.items():
-                try:
-                    await message.edit(embed=embed, view=self)
-                except Exception as e:
-                    file_logger.error(f"Ошибка обновления сообщения в канале {channel_id}: {e}")
-
-
-class EventInfoView(BaseMenuView):
-    """Кнопка информации о мероприятии в !info"""
-    def __init__(self, user_id: str, guild, previous_view=None, previous_embed=None):
-        super().__init__(user_id, guild, previous_view, previous_embed)
-        self.add_item(self.create_today_button())
-    
-    def create_today_button(self):
-        btn = discord.ui.Button(label="📅 Мероприятия сегодня", style=discord.ButtonStyle.primary, emoji="📅")
-        async def callback(interaction: discord.Interaction):
-            self.clear_items()
-            self.add_back_button()
-            await self.show_today_events(interaction)
-        btn.callback = callback
-        return btn
-    
-    async def show_today_events(self, interaction: discord.Interaction):
-        try:
-            now = datetime.now(MSK_TZ)
-            today = now.date()
-            weekday = today.weekday()
-            current_time_str = now.strftime("%H:%M")
-            
-            events = db.get_events(enabled_only=True, weekday=weekday)
-            
-            if not events:
-                await interaction.response.edit_message(
-                    content="📅 На сегодня мероприятий нет",
-                    embed=None,
-                    view=self
-                )
-                return
-            
-            visible_events = []
-            for event in events:
-                event_time = event['event_time']
-                event_hour, event_min = map(int, event_time.split(':'))
-                
-                event_datetime = MSK_TZ.localize(datetime(
-                    today.year, today.month, today.day,
-                    event_hour, event_min
-                ))
-                
-                with db.get_connection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        SELECT taken_by FROM event_schedule 
-                        WHERE event_id = ? AND scheduled_date = ?
-                    ''', (event['id'], today.isoformat()))
-                    result = cursor.fetchone()
-                    taken_by = result[0] if result else None
-                
-                if now < event_datetime:
-                    visible_events.append(event)
-                elif taken_by and now <= event_datetime + timedelta(hours=1):
-                    visible_events.append(event)
-            
-            if not visible_events:
-                await interaction.response.edit_message(
-                    content="📅 На сегодня нет актуальных мероприятий",
-                    embed=None,
-                    view=self
-                )
-                return
-            
-            visible_events.sort(key=lambda x: x['event_time'])
-            
-            embed = discord.Embed(
-                title=f"📅 АКТУАЛЬНЫЕ МЕРОПРИЯТИЯ ({today.strftime('%d.%m.%Y')})",
-                description=f"⏰ Текущее время: **{current_time_str}** МСК",
-                color=0x7289da
-            )
-            
-            for event in visible_events:
-                event_time = event['event_time']
-                event_hour, event_min = map(int, event_time.split(':'))
-                event_datetime = MSK_TZ.localize(datetime(
-                    today.year, today.month, today.day,
-                    event_hour, event_min
-                ))
-                
-                reminder_datetime = event_datetime - timedelta(hours=1)
-                reminder_time = reminder_datetime.strftime("%H:%M")
-                
-                with db.get_connection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        SELECT taken_by, group_code, meeting_place, reminder_sent 
-                        FROM event_schedule 
-                        WHERE event_id = ? AND scheduled_date = ?
-                    ''', (event['id'], today.isoformat()))
-                    result = cursor.fetchone()
-                
-                if result and result[0]:
-                    if now > event_datetime:
-                        status = f"🔴 **Проводит:** <@{result[0]}>\n📍 {result[2]}\n🔢 {result[1]}"
-                    else:
-                        status = f"✅ **Проводит:** <@{result[0]}>\n📍 {result[2]}\n🔢 {result[1]}"
-                else:
-                    if now >= reminder_datetime:
-                        status = "⏳ **Ожидаем информацию от HIGH состава**"
-                    else:
-                        minutes_to = int((event_datetime - now).total_seconds() / 60)
-                        status = f"🕒 **Начнётся через {minutes_to} мин**"
-                
-                embed.add_field(
-                    name=f"{event_time} — {event['name']}",
-                    value=status,
-                    inline=False
-                )
-            
-            await interaction.response.edit_message(embed=embed, view=self)
-            
-        except Exception as e:
-            file_logger.error(f"Ошибка в show_today_events: {e}")
-            await interaction.response.edit_message(
-                content=f"❌ Ошибка при загрузке мероприятий",
-                embed=None,
-                view=self
-            )
+    @discord.ui.button(label="❌ ОТСОЕДИНИТЬСЯ", style=discord.ButtonStyle.danger, emoji="❌", row=0)
+    async def leave(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Отсоединиться от мероприятия"""
+        session = events_manager.get_session(self.session_id)
+        if not session or session['status'] != 'active':
+            await interaction.response.send_message("❌ Мероприятие уже завершено", ephemeral=True)
+            return
+        
+        success = events_manager.remove_participant(self.session_id, str(interaction.user.id))
+        
+        if success:
+            await interaction.response.send_message("✅ Вы отсоединились от мероприятия", ephemeral=True)
+            await self.update_participants_list(interaction)
+        else:
+            await interaction.response.send_message("❌ Вы не были в списке участников", ephemeral=True)

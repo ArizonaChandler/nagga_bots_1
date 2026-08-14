@@ -35,13 +35,13 @@ MODULES = {
         "initialize_method": "setup",
         "toggleable": True
     },
-    "events": {
-        "name": "🔔 Мероприятия",
-        "description": "Автоматические напоминания о мероприятиях",
+    "event_scheduler": {  # ← ПЕРЕИМЕНОВАНО
+        "name": "📅 Планировщик мероприятий",
+        "description": "Автоматические напоминания о мероприятиях по расписанию",
         "enabled": False,
         "channels": ["alarm_channels", "announce_channels"],
-        "settings_channels": ["events_settings_channel"],
-        "initializer": "events.scheduler",
+        "settings_channels": ["event_scheduler_settings_channel"],
+        "initializer": "event_scheduler.initializer",
         "initialize_method": "setup",
         "toggleable": True
     },
@@ -130,8 +130,8 @@ MODULES = {
         "enabled": False,
         "channels": ["stats_channel"],
         "settings_channels": ["stats_settings_channel"],
-        "initializer": "stats.manager",
-        "initialize_method": "initialize",
+        "initializer": "stats.initializer",
+        "initialize_method": "setup",
         "toggleable": True
     },
     "temp_voice": {
@@ -161,6 +161,16 @@ MODULES = {
         "channels": ["embed_builder_channel"],
         "settings_channels": ["embed_builder_settings_channel"],
         "initializer": "embed_builder.initializer",
+        "initialize_method": "setup",
+        "toggleable": True
+    },
+    "events": {
+        "name": "🎯 Мероприятия",
+        "description": "Ручное создание МП, сбор участников, статистика",
+        "enabled": False,
+        "channels": ["events_moderation_channel", "events_participant_channel", "events_log_channel"],
+        "settings_channels": ["events_settings_channel"],
+        "initializer": "events.initializer",
         "initialize_method": "setup",
         "toggleable": True
     },
@@ -234,9 +244,9 @@ class ModuleManager:
                     await setup_apps(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
-            elif module_key == 'events':
-                from events.scheduler import setup as setup_events
-                await setup_events(self.bot)
+            elif module_key == 'event_scheduler':  # ← ПЕРЕИМЕНОВАНО
+                from event_scheduler.initializer import setup as setup_event_scheduler
+                await setup_event_scheduler(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
             elif module_key == 'afk':
@@ -272,6 +282,11 @@ class ModuleManager:
             elif module_key == 'stats':
                 from stats.initializer import setup as setup_stats
                 await setup_stats(self.bot)
+                print(f"✅ [MODULE] {module['name']} инициализирован")
+
+            elif module_key == 'events':
+                from events.initializer import setup as setup_events
+                await setup_events(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
             
             elif module_key == 'economy':
@@ -322,7 +337,7 @@ class ModuleManager:
                 from action_logs.initializer import setup as setup_action_logs
                 await setup_action_logs(self.bot)
                 print(f"✅ [MODULE] {module['name']} инициализирован")
-
+            
             elif module_key == 'embed_builder':
                 from embed_builder.initializer import setup as setup_embed_builder
                 await setup_embed_builder(self.bot)
@@ -383,8 +398,8 @@ class ModuleManager:
                     await apps_initializer.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
-            elif module_key == 'events':
-                from events.scheduler import stop_scheduler
+            elif module_key == 'event_scheduler':  # ← ПЕРЕИМЕНОВАНО
+                from event_scheduler.scheduler import stop_scheduler
                 await stop_scheduler()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
@@ -425,9 +440,9 @@ class ModuleManager:
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
             elif module_key == 'stats':
-                from stats.manager import stats_manager
-                if hasattr(stats_manager, 'stop'):
-                    await stats_manager.stop()
+                from stats.initializer import initializer as stats_initializer
+                if stats_initializer and hasattr(stats_initializer, 'stop'):
+                    await stats_initializer.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
             elif module_key == 'economy':
@@ -447,11 +462,17 @@ class ModuleManager:
                 if action_logs_initializer and hasattr(action_logs_initializer, 'stop'):
                     await action_logs_initializer.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
-
+            
             elif module_key == 'embed_builder':
                 from embed_builder.initializer import initializer as embed_builder_initializer
                 if embed_builder_initializer and hasattr(embed_builder_initializer, 'stop'):
                     await embed_builder_initializer.stop()
+                print(f"✅ [MODULE] {module['name']} остановлен")
+
+            elif module_key == 'events':
+                from events.initializer import initializer as events_initializer
+                if events_initializer and hasattr(events_initializer, 'stop'):
+                    await events_initializer.stop()
                 print(f"✅ [MODULE] {module['name']} остановлен")
             
             else:
@@ -528,7 +549,7 @@ class ModuleManager:
             "capt": ["РЕГИСТРАЦИЯ НА CAPT", "CAPT"],
             "mcl": ["РЕГИСТРАЦИЯ НА MCL", "MCL", "ВЗМ"],
             "applications": ["ПОДАЧА ЗАЯВОК", "ЗАЯВКИ В СЕМЬЮ", "ЗАЯВКА"],
-            "events": ["МЕРОПРИЯТИЯ", "МП", "НАПОМИНАНИЕ"],
+            "event_scheduler": ["МЕРОПРИЯТИЯ", "МП", "НАПОМИНАНИЕ", "ПЛАНИРОВЩИК"],
             "afk": ["AFK", "СИСТЕМА AFK"],
             "tier": ["TIER", "СИСТЕМА TIER", "ЗАЯВКИ НА TIER"],
             "vacation": ["ОТПУСК", "СИСТЕМА ОТПУСКОВ"],
@@ -539,6 +560,7 @@ class ModuleManager:
             "stats": ["СТАТИСТИКА", "БЕКАП"],
             "temp_voice": ["ВРЕМЕННЫЕ КОМНАТЫ", "ГОЛОСОВЫЕ КОМНАТЫ"],
             "action_logs": ["ЛОГИ ДЕЙСТВИЙ", "ACTION LOGS"],
+            "embed_builder": ["СОЗДАНИЕ EMBED", "EMBED"],
         }
         
         titles = module_titles.get(module_key, [])
