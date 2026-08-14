@@ -8,7 +8,7 @@ from events.manager import events_manager
 from events.settings_view import EventsSettingsView
 from events.modals import CreateEventModal
 from events.stats import EventStats
-from events.views import EventsParticipantView
+from events.views import EventsParticipantView, EventsModerationView  # ← добавлен импорт
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,6 @@ class EventsInitializer:
         if self.settings_channel_id == 'null' or self.settings_channel_id is None:
             self.settings_channel_id = None
         
-        # Только канал сбора участников (основной)
         if self.participant_channel_id:
             await self._init_participant_channel()
         

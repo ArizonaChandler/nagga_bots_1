@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from core.database import db
 from events.manager import events_manager
-from events.views import EventsModerationView, EventsParticipantView
+from events.views import EventsParticipantView  # ← EventsModerationView не нужен в модалке
 
 
 class CreateEventModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МЕРОПРИЯТИЯ"):
@@ -77,7 +77,6 @@ class CreateEventModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МЕРОП
             additional_info=self.additional_info.value
         )
         
-        # Отправляем ТОЛЬКО в канал сбора участников
         await self._send_to_participants(interaction, session_id, collect_minutes)
         
         await interaction.followup.send(
@@ -98,7 +97,6 @@ class CreateEventModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МЕРОП
         if not channel:
             return
         
-        # Формируем сообщение в новом формате
         content = (
             f"@everyone\n"
             f"**ВНИМАНИЕ, СБОР!**\n\n"
@@ -109,18 +107,11 @@ class CreateEventModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МЕРОП
         if self.additional_info.value:
             content += f"📝 {self.additional_info.value}\n"
         
-        # Кнопки для участников
         view = EventsParticipantView(session_id, collect_minutes)
         sent_message = await channel.send(content=content, view=view)
         view.set_message(sent_message)
         
-        # Сохраняем ID сообщения
         db.update_event_session_message(session_id, str(sent_message.id))
         
-        # Запускаем таймер с обновлением времени
-        await events_manager.start_collect_timer(
-            session_id,
-            collect_minutes,
-            str(channel.id),
-            str(sent_message.id)
-        )
+        # Запускаем таймер обновления времени
+        await view.start_timer()
