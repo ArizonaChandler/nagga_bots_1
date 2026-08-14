@@ -2993,7 +2993,7 @@ class Database:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT es.*, ep.joined_at
+                SELECT es.id as session_id, es.event_time, es.event_name, ep.joined_at
                 FROM event_participants ep
                 JOIN event_sessions es ON ep.session_id = es.id
                 WHERE ep.user_id = ? AND ep.joined_at >= datetime('now', ?)

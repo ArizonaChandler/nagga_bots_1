@@ -3,6 +3,7 @@ import discord
 import asyncio
 from datetime import datetime
 from core.database import db
+from core.utils import is_admin
 from events.base import PermanentView
 from events.manager import events_manager
 
@@ -61,13 +62,15 @@ class EventsParticipantView(PermanentView):
     
     async def start_timer(self):
         """Запускает обновление времени каждую минуту"""
+        if self.update_task and not self.update_task.done():
+            return
+        
         async def timer_loop():
             while self.remaining_minutes > 0:
                 await asyncio.sleep(60)
                 self.remaining_minutes -= 1
                 await self.update_message()
             
-            # Время вышло - отключаем кнопки
             await self.disable_buttons()
         
         self.update_task = asyncio.create_task(timer_loop())
@@ -127,6 +130,29 @@ class EventsParticipantView(PermanentView):
                 f"⏰ Сбор завершён. Участников: {len(participants)}"
             )
     
+    async def end_session_early(self, interaction: discord.Interaction):
+        """Досрочное завершение сбора (для создателя и админов)"""
+        session = events_manager.get_session(self.session_id)
+        if not session or session['status'] != 'active':
+            await interaction.response.send_message("❌ Сессия уже завершена", ephemeral=True)
+            return
+        
+        participants = events_manager.get_participants(self.session_id)
+        db.finalize_event_participants(self.session_id, participants)
+        events_manager.end_session(self.session_id)
+        
+        # Отключаем кнопки
+        for child in self.message.components[0].children:
+            child.disabled = True
+        await self.message.edit(view=self.message.components[0])
+        
+        await events_manager.log_action(
+            self.session_id,
+            f"⏹️ Сбор досрочно завершён {interaction.user.mention}. Участников: {len(participants)}"
+        )
+        
+        await interaction.response.send_message("✅ Сбор досрочно завершён", ephemeral=True)
+    
     @discord.ui.button(label="✅ ПРИСОЕДИНИТЬСЯ", style=discord.ButtonStyle.success, emoji="✅", row=0)
     async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
         session = events_manager.get_session(self.session_id)
@@ -160,3 +186,24 @@ class EventsParticipantView(PermanentView):
             await self.update_message()
         else:
             await interaction.response.send_message("❌ Вы не были в списке участников", ephemeral=True)
+    
+    @discord.ui.button(label="⏹️ ЗАВЕРШИТЬ СБОР", style=discord.ButtonStyle.danger, emoji="⏹️", row=1)
+    async def end_early(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Кнопка завершения сбора (только для создателя и админов)"""
+        session = events_manager.get_session(self.session_id)
+        if not session:
+            await interaction.response.send_message("❌ Сессия не найдена", ephemeral=True)
+            return
+        
+        # Проверяем права: создатель или админ
+        is_creator = str(interaction.user.id) == session.get('creator_id')
+        is_admin_user = await is_admin(str(interaction.user.id))
+        
+        if not is_creator and not is_admin_user:
+            await interaction.response.send_message(
+                "❌ Только организатор сбора или администратор могут завершить сбор досрочно!",
+                ephemeral=True
+            )
+            return
+        
+        await self.end_session_early(interaction)

@@ -362,7 +362,10 @@ class UserStatsModal(discord.ui.Modal, title="👤 СТАТИСТИКА ПОЛЬ
         try:
             uid = self.user_id.value
             
+            # Получаем количество организованных МП
             org_stats = db.get_event_organizer_stats_by_user(uid, 30)
+            
+            # Получаем список участий
             part_stats = db.get_user_event_participations(uid, 30)
             
             embed = discord.Embed(
@@ -372,34 +375,35 @@ class UserStatsModal(discord.ui.Modal, title="👤 СТАТИСТИКА ПОЛЬ
                 timestamp=datetime.now()
             )
             
-            if org_stats:
-                embed.add_field(
-                    name="📋 Организовал МП (30 дней)",
-                    value=f"**{org_stats}** МП",
-                    inline=True
-                )
-            else:
-                embed.add_field(name="📋 Организовал МП", value="0", inline=True)
+            embed.add_field(
+                name="📋 Организовал МП (30 дней)",
+                value=f"**{org_stats or 0}** МП",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="✅ Участвовал в МП (30 дней)",
+                value=f"**{len(part_stats) if part_stats else 0}** МП",
+                inline=True
+            )
             
             if part_stats:
-                embed.add_field(
-                    name="✅ Участвовал в МП (30 дней)",
-                    value=f"**{len(part_stats)}** МП",
-                    inline=True
-                )
-                
                 text = ""
                 for stat in part_stats[:5]:
-                    text += f"• {stat['event_time']} — ID: {stat['session_id']}\n"
+                    # Используем session_id, если есть, иначе пропускаем
+                    session_id = stat.get('session_id', '—')
+                    event_time = stat.get('event_time', '—')
+                    text += f"• {event_time} — ID: {session_id}\n"
                 if len(part_stats) > 5:
                     text += f"*и ещё {len(part_stats) - 5}*"
                 embed.add_field(name="📝 Участия", value=text or "Нет данных", inline=False)
-            else:
-                embed.add_field(name="✅ Участвовал в МП", value="0", inline=True)
             
             await interaction.response.send_message(embed=embed, ephemeral=True)
             
         except Exception as e:
+            print(f"❌ Ошибка в UserStatsModal: {e}")
+            import traceback
+            traceback.print_exc()
             await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
 
