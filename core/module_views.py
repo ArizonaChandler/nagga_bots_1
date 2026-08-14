@@ -19,26 +19,37 @@ class ModulesControlPanel(AdminOnlyView):
         row = 0
         col = 0
         
+        # Собираем все toggleable модули
+        toggleable_modules = []
         for module_key, module in MODULES.items():
-            if not module.get("toggleable", True):
-                continue
+            if module.get("toggleable", True):
+                toggleable_modules.append((module_key, module))
+        
+        # Определяем количество кнопок в ряду
+        # Максимум 5 рядов, поэтому при 2 кнопках в ряду = 10 модулей
+        # При 3 кнопках в ряду = 15 модулей
+        buttons_per_row = 3
+        max_rows = 4  # 0, 1, 2, 3 (4 ряда, 5й оставляем для других кнопок)
+        
+        for idx, (module_key, module) in enumerate(toggleable_modules):
+            # Если превысили максимум рядов — выходим
+            if row >= max_rows:
+                break
             
             status = "🟢 ВКЛЮЧЁН" if module["enabled"] else "🔴 ВЫКЛЮЧЕН"
             btn = discord.ui.Button(
                 label=f"{module['name']} ({status})",
                 style=discord.ButtonStyle.success if module["enabled"] else discord.ButtonStyle.secondary,
-                row=row,  # ← row может быть 0,1,2,3
+                row=row,
                 custom_id=f"module_toggle_{module_key}"
             )
             btn.callback = self._create_callback(module_key)
             self.add_item(btn)
             
             col += 1
-            if col >= 2:  # ← 2 кнопки в ряду (было 3, уменьшаем)
+            if col >= buttons_per_row:
                 col = 0
                 row += 1
-                if row >= 4:  # ← максимум 4 ряда (0,1,2,3)
-                    break  # ← если больше 4 рядов — обрезаем
 
     def _create_callback(self, module_key: str):
         async def callback(interaction: discord.Interaction):
