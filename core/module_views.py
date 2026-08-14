@@ -2,7 +2,7 @@
 import discord
 from core.admin_views import AdminOnlyView
 from core.utils import is_super_admin
-from core.module_manager import MODULES  # ← ПРЯМОЙ ИМПОРТ
+from core.module_manager import MODULES
 
 
 class ModulesControlPanel(AdminOnlyView):
@@ -19,14 +19,12 @@ class ModulesControlPanel(AdminOnlyView):
     def _add_buttons(self):
         self.clear_items()
         
-        # Используем прямой импорт MODULES
         toggleable_modules = []
         for module_key, module in MODULES.items():
             if module.get("toggleable", True):
                 toggleable_modules.append((module_key, module))
         
         if not toggleable_modules:
-            # Если нет модулей — показываем сообщение
             empty_btn = discord.ui.Button(
                 label="❌ Нет доступных модулей",
                 style=discord.ButtonStyle.secondary,
@@ -99,11 +97,13 @@ class ModulesControlPanel(AdminOnlyView):
                 self.add_item(next_btn)
 
     async def prev_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Переключить на предыдущую страницу"""
         self.page -= 1
         self._add_buttons()
         await interaction.response.edit_message(view=self)
 
     async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Переключить на следующую страницу"""
         self.page += 1
         self._add_buttons()
         await interaction.response.edit_message(view=self)
