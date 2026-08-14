@@ -2,6 +2,7 @@
 import discord
 from core.admin_views import AdminOnlyView
 from core.utils import is_super_admin
+from core.module_manager import MODULES  # ← ПРЯМОЙ ИМПОРТ
 
 
 class ModulesControlPanel(AdminOnlyView):
@@ -18,18 +19,26 @@ class ModulesControlPanel(AdminOnlyView):
     def _add_buttons(self):
         self.clear_items()
         
-        # Получаем модули из module_manager
-        modules = self.module_manager.MODULES if hasattr(self.module_manager, 'MODULES') else {}
-        
-        # Собираем все toggleable модули
+        # Используем прямой импорт MODULES
         toggleable_modules = []
-        for module_key, module in modules.items():
+        for module_key, module in MODULES.items():
             if module.get("toggleable", True):
                 toggleable_modules.append((module_key, module))
         
+        if not toggleable_modules:
+            # Если нет модулей — показываем сообщение
+            empty_btn = discord.ui.Button(
+                label="❌ Нет доступных модулей",
+                style=discord.ButtonStyle.secondary,
+                row=0,
+                disabled=True,
+                custom_id="modules_empty"
+            )
+            self.add_item(empty_btn)
+            return
+        
         total_pages = (len(toggleable_modules) + self.items_per_page - 1) // self.items_per_page
         
-        # Текущая страница
         start = self.page * self.items_per_page
         end = min(start + self.items_per_page, len(toggleable_modules))
         current_modules = toggleable_modules[start:end]
@@ -56,9 +65,9 @@ class ModulesControlPanel(AdminOnlyView):
                 col = 0
                 row += 1
         
-        # Кнопки пагинации (если больше одной страницы)
+        # Кнопки пагинации
         if total_pages > 1:
-            nav_row = 4  # последний ряд
+            nav_row = 4
             
             if self.page > 0:
                 prev_btn = discord.ui.Button(
@@ -70,7 +79,6 @@ class ModulesControlPanel(AdminOnlyView):
                 prev_btn.callback = self.prev_page
                 self.add_item(prev_btn)
             
-            # Индикатор страницы
             page_btn = discord.ui.Button(
                 label=f"📄 {self.page + 1}/{total_pages}",
                 style=discord.ButtonStyle.secondary,
@@ -110,8 +118,7 @@ class ModulesControlPanel(AdminOnlyView):
                 await interaction.response.send_message("❌ Система управления модулями не инициализирована!", ephemeral=True)
                 return
             
-            modules = self.module_manager.MODULES if hasattr(self.module_manager, 'MODULES') else {}
-            module = modules.get(module_key)
+            module = MODULES.get(module_key)
             if not module:
                 await interaction.response.send_message("❌ Модуль не найден!", ephemeral=True)
                 return
@@ -128,6 +135,7 @@ class ModulesControlPanel(AdminOnlyView):
             
             if success:
                 try:
+                    self.page = 0
                     self._add_buttons()
                     await interaction.message.edit(view=self)
                 except:
