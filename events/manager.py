@@ -34,7 +34,6 @@ class EventsManager:
                        channel_id: str, message_id: str, event_time: str,
                        event_name: str = None, meeting_place: str = None,
                        additional_info: str = None) -> int:
-        """Создать сессию мероприятия (без шаблона)"""
         session_id = db.create_event_session(
             creator_id=creator_id,
             collect_time=collect_time,
@@ -92,35 +91,14 @@ class EventsManager:
     
     async def start_collect_timer(self, session_id: int, collect_time: int,
                                    participant_channel_id: str, message_id: str):
+        """Запускает таймер сбора (таймер уже в view)"""
+        # Сохраняем сессию в активные
+        session = self.get_session(session_id)
+        if session:
+            self.active_sessions[session_id] = session
         
-        async def timer_task():
-            await asyncio.sleep(collect_time * 60)
-            
-            session = self.get_session(session_id)
-            if not session or session['status'] != 'active':
-                return
-            
-            channel = self.bot.get_channel(int(participant_channel_id))
-            if channel:
-                try:
-                    msg = await channel.fetch_message(int(message_id))
-                    for child in msg.components[0].children:
-                        child.disabled = True
-                    await msg.edit(view=msg.components[0])
-                except:
-                    pass
-            
-            participants = self.get_participants(session_id)
-            db.finalize_event_participants(session_id, participants)
-            self.end_session(session_id)
-            
-            await self.log_action(
-                session_id,
-                f"⏰ Сбор завершён. Участников: {len(participants)}"
-            )
-        
-        task = asyncio.create_task(timer_task())
-        self.session_tasks[session_id] = task
+        # Таймер управляется из EventsParticipantView
+        pass
     
     async def log_action(self, session_id: int, message: str):
         settings = self.get_settings()

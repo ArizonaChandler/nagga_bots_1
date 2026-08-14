@@ -77,7 +77,7 @@ class CreateEventModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МЕРОП
             additional_info=self.additional_info.value
         )
         
-        await self._send_to_moderation(interaction, session_id, collect_minutes)
+        # Отправляем ТОЛЬКО в канал сбора участников
         await self._send_to_participants(interaction, session_id, collect_minutes)
         
         await interaction.followup.send(
@@ -87,33 +87,6 @@ class CreateEventModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МЕРОП
             f"⏱️ Время на сбор: {collect_minutes} минут",
             ephemeral=True
         )
-    
-    async def _send_to_moderation(self, interaction, session_id: int, collect_minutes: int):
-        settings = events_manager.get_settings()
-        channel_id = settings.get('events_moderation_channel')
-        if not channel_id:
-            return
-        
-        channel = interaction.client.get_channel(int(channel_id))
-        if not channel:
-            return
-        
-        embed = discord.Embed(
-            title="🎯 НОВОЕ МЕРОПРИЯТИЕ",
-            color=0x00bfff,
-            timestamp=datetime.now()
-        )
-        embed.add_field(name="🆔 ID сессии", value=f"`{session_id}`", inline=True)
-        embed.add_field(name="📌 Название", value=self.event_name.value, inline=True)
-        embed.add_field(name="👤 Организатор", value=interaction.user.mention, inline=True)
-        embed.add_field(name="⏰ Сбор в", value=self.meeting_time.value, inline=True)
-        embed.add_field(name="📍 Место сбора", value=self.meeting_place.value, inline=True)
-        embed.add_field(name="⏱️ Время на сбор", value=f"{collect_minutes} мин", inline=True)
-        if self.additional_info.value:
-            embed.add_field(name="📝 Дополнительно", value=self.additional_info.value, inline=False)
-        
-        view = EventsModerationView(session_id)
-        await channel.send(embed=embed, view=view)
     
     async def _send_to_participants(self, interaction, session_id: int, collect_minutes: int):
         settings = events_manager.get_settings()
@@ -125,22 +98,26 @@ class CreateEventModal(discord.ui.Modal, title="🎯 СОЗДАНИЕ МЕРОП
         if not channel:
             return
         
-        content = f"@everyone **🎯 МЕРОПРИЯТИЕ!**\n\n"
-        content += f"📌 **{self.event_name.value}**\n"
-        content += f"👤 Организатор: {interaction.user.mention}\n"
-        content += f"⏰ Сбор в: {self.meeting_time.value} МСК\n"
-        content += f"📍 Место: {self.meeting_place.value}\n"
-        content += f"⏱️ Сбор длится: {collect_minutes} минут\n"
+        # Формируем сообщение в новом формате
+        content = (
+            f"@everyone\n"
+            f"**ВНИМАНИЕ, СБОР!**\n\n"
+            f"Собирает: {interaction.user.mention} на **{self.event_name.value}**\n"
+            f"📍 Место сбора: {self.meeting_place.value}\n"
+            f"⏱️ Осталось времени: **{collect_minutes} мин.**\n"
+        )
         if self.additional_info.value:
             content += f"📝 {self.additional_info.value}\n"
-        content += f"\n**Участники:**\n"
-        content += "└ *Пока никого нет*"
         
-        view = EventsParticipantView(session_id)
+        # Кнопки для участников
+        view = EventsParticipantView(session_id, collect_minutes)
         sent_message = await channel.send(content=content, view=view)
+        view.set_message(sent_message)
         
+        # Сохраняем ID сообщения
         db.update_event_session_message(session_id, str(sent_message.id))
         
+        # Запускаем таймер с обновлением времени
         await events_manager.start_collect_timer(
             session_id,
             collect_minutes,

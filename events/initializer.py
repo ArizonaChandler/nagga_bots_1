@@ -33,9 +33,7 @@ class EventsInitializer:
         if self.settings_channel_id == 'null' or self.settings_channel_id is None:
             self.settings_channel_id = None
         
-        if self.moderation_channel_id:
-            await self._init_moderation_channel()
-        
+        # Только канал сбора участников (основной)
         if self.participant_channel_id:
             await self._init_participant_channel()
         
@@ -50,39 +48,6 @@ class EventsInitializer:
         
         logger.info("✅ Инициализация системы мероприятий завершена")
         print("🎯 [EVENTS] Инициализация завершена")
-    
-    async def _init_moderation_channel(self):
-        try:
-            channel = self.bot.get_channel(int(self.moderation_channel_id))
-            if not channel:
-                logger.error(f"❌ Канал модерации {self.moderation_channel_id} не найден")
-                return
-        except (ValueError, TypeError):
-            logger.error(f"❌ Неверный ID канала модерации: {self.moderation_channel_id}")
-            return
-        
-        embed = discord.Embed(
-            title="🎯 **ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ**",
-            description="Создание и управление мероприятиями\n\n"
-                        f"━━━━━━━━━━━━━━━━━━━━━\n"
-                        f"Нажмите кнопку «➕ СОЗДАТЬ МП» чтобы начать",
-            color=0x00bfff
-        )
-        
-        view = ModerationMainView()
-        
-        found = False
-        async for msg in channel.history(limit=50):
-            if msg.author == self.bot.user and msg.embeds:
-                if msg.embeds and "ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ" in msg.embeds[0].title:
-                    await msg.edit(embed=embed, view=view)
-                    found = True
-                    print(f"🎯 [EVENTS] Обновлена панель модерации в #{channel.name}")
-                    break
-        
-        if not found:
-            await channel.send(embed=embed, view=view)
-            print(f"🎯 [EVENTS] Создана панель модерации в #{channel.name}")
     
     async def _init_participant_channel(self):
         try:
@@ -154,6 +119,7 @@ class EventsInitializer:
         for session in sessions:
             session_id = session['id']
             participants = db.get_event_participants(session_id)
+            collect_time = session.get('collect_time', 20)
             
             events_manager.active_sessions[session_id] = session
             events_manager.participants[session_id] = [p['user_id'] for p in participants]
@@ -162,10 +128,11 @@ class EventsInitializer:
                 try:
                     msg = await channel.fetch_message(int(session['message_id']))
                     
-                    view = EventsParticipantView(session_id)
+                    view = EventsParticipantView(session_id, collect_time)
                     view.set_message(msg)
+                    view.remaining_minutes = collect_time
                     
-                    content = self._build_participants_content(session, participants)
+                    content = self._build_participants_content(session, participants, collect_time)
                     await msg.edit(content=content, view=view)
                     
                     print(f"🎯 [EVENTS] Восстановлена сессия #{session_id}, участников: {len(participants)}")
@@ -174,23 +141,28 @@ class EventsInitializer:
                 except Exception as e:
                     print(f"⚠️ [EVENTS] Ошибка восстановления #{session_id}: {e}")
     
-    def _build_participants_content(self, session: dict, participants: list) -> str:
+    def _build_participants_content(self, session: dict, participants: list, collect_time: int) -> str:
         event_name = session.get('event_name', 'Мероприятие')
         meeting_place = session.get('meeting_place', 'Не указано')
         
-        content = f"@everyone **🎯 МЕРОПРИЯТИЕ!**\n\n"
-        content += f"📌 **{event_name}**\n"
-        content += f"👤 Организатор: <@{session['creator_id']}>\n"
-        content += f"⏰ Сбор в: {session['event_time']} МСК\n"
-        content += f"📍 Место: {meeting_place}\n"
+        content = (
+            f"@everyone\n"
+            f"**ВНИМАНИЕ, СБОР!**\n\n"
+            f"Собирает: <@{session['creator_id']}> на **{event_name}**\n"
+            f"📍 Место сбора: {meeting_place}\n"
+            f"⏱️ Осталось времени: **{collect_time} мин.**\n"
+        )
         if session.get('additional_info'):
             content += f"📝 {session['additional_info']}\n"
-        content += f"\n**Участники ({len(participants)}):**\n"
+        
         if participants:
+            content += f"\n**Участники ({len(participants)}):**\n"
             for p in participants:
                 content += f"└ <@{p['user_id']}>\n"
         else:
+            content += f"\n**Участники (0):**\n"
             content += "└ *Пока никого нет*"
+        
         return content
     
     async def stop(self):
@@ -198,200 +170,6 @@ class EventsInitializer:
             await self.stats.stop()
         await events_manager.stop()
         print("🎯 [EVENTS] Система остановлена")
-
-
-class ModerationMainView(discord.ui.View):
-    """Главное меню модерации (без шаблонов)"""
-    
-    def __init__(self):
-        super().__init__(timeout=None)
-    
-    @discord.ui.button(
-        label="СОЗДАТЬ МП",
-        style=discord.ButtonStyle.success,
-        emoji="➕",
-        row=0,
-        custom_id="events_create"
-    )
-    async def create_event(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(CreateEventModal())
-    
-    @discord.ui.button(
-        label="СТАТИСТИКА",
-        style=discord.ButtonStyle.secondary,
-        emoji="📊",
-        row=1,
-        custom_id="events_stats"
-    )
-    async def show_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = discord.Embed(
-            title="📊 СТАТИСТИКА МЕРОПРИЯТИЙ",
-            color=0x00bfff,
-            timestamp=datetime.now()
-        )
-        
-        org_stats = db.get_event_organizer_stats(7)
-        if org_stats:
-            text = ""
-            for i, stat in enumerate(org_stats[:5], 1):
-                text += f"{i}. <@{stat['user_id']}> — **{stat['count']}** МП\n"
-            embed.add_field(name="🏆 Топ организаторов (7 дней)", value=text, inline=False)
-        else:
-            embed.add_field(name="🏆 Топ организаторов", value="Нет данных", inline=False)
-        
-        total_sessions = len(db.get_active_event_sessions()) + len(db.get_all_event_sessions())
-        embed.add_field(name="📋 Всего сессий", value=f"**{total_sessions}**", inline=True)
-        
-        view = StatsMenuView()
-        await interaction.response.edit_message(embed=embed, view=view)
-    
-    @discord.ui.button(
-        label="СТАТИСТИКА ПОЛЬЗОВАТЕЛЯ",
-        style=discord.ButtonStyle.primary,
-        emoji="👤",
-        row=1,
-        custom_id="events_user_stats"
-    )
-    async def user_stats(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(UserStatsModal())
-
-
-class StatsMenuView(discord.ui.View):
-    
-    def __init__(self):
-        super().__init__(timeout=None)
-    
-    @discord.ui.button(
-        label="Топ организаторов (все время)",
-        style=discord.ButtonStyle.secondary,
-        emoji="📊",
-        row=0,
-        custom_id="stats_all_time"
-    )
-    async def all_time_orgs(self, interaction: discord.Interaction, button: discord.ui.Button):
-        stats = db.get_event_organizer_stats(9999)
-        
-        embed = discord.Embed(
-            title="🏆 ТОП ОРГАНИЗАТОРОВ (ВСЕ ВРЕМЯ)",
-            color=0xffd700,
-            timestamp=datetime.now()
-        )
-        
-        if stats:
-            text = ""
-            medals = ["🥇", "🥈", "🥉"]
-            for i, stat in enumerate(stats[:10], 1):
-                medal = medals[i-1] if i <= 3 else f"{i}."
-                text += f"{medal} <@{stat['user_id']}> — **{stat['count']}** МП\n"
-            embed.description = text
-        else:
-            embed.description = "Нет данных"
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-    
-    @discord.ui.button(
-        label="Все сессии",
-        style=discord.ButtonStyle.secondary,
-        emoji="📋",
-        row=1,
-        custom_id="stats_all_sessions"
-    )
-    async def all_sessions(self, interaction: discord.Interaction, button: discord.ui.Button):
-        sessions = db.get_all_event_sessions()
-        
-        if not sessions:
-            await interaction.response.send_message("📭 Нет завершённых сессий", ephemeral=True)
-            return
-        
-        embed = discord.Embed(
-            title="📋 ВСЕ СЕССИИ МЕРОПРИЯТИЙ",
-            color=0x7289da,
-            timestamp=datetime.now()
-        )
-        
-        for session in sessions[:10]:
-            participants = db.get_event_participants(session['id'])
-            event_name = session.get('event_name', 'Мероприятие')
-            embed.add_field(
-                name=f"📌 {event_name} | {session['event_time']}",
-                value=f"👤 Организатор: <@{session['creator_id']}>\n👥 Участников: {len(participants)}",
-                inline=False
-            )
-        
-        if len(sessions) > 10:
-            embed.set_footer(text=f"Показано 10 из {len(sessions)} сессий")
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-    
-    @discord.ui.button(
-        label="Назад",
-        style=discord.ButtonStyle.secondary,
-        emoji="◀",
-        row=2,
-        custom_id="stats_back"
-    )
-    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = discord.Embed(
-            title="🎯 **ПАНЕЛЬ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ**",
-            description="Создание и управление мероприятиями\n\n"
-                        f"━━━━━━━━━━━━━━━━━━━━━\n"
-                        f"Нажмите кнопку «➕ СОЗДАТЬ МП» чтобы начать",
-            color=0x00bfff
-        )
-        await interaction.response.edit_message(embed=embed, view=ModerationMainView())
-
-
-class UserStatsModal(discord.ui.Modal, title="👤 СТАТИСТИКА ПОЛЬЗОВАТЕЛЯ"):
-    user_id = discord.ui.TextInput(
-        label="ID пользователя",
-        placeholder="Введите ID пользователя",
-        max_length=20,
-        required=True
-    )
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        try:
-            uid = self.user_id.value
-            
-            org_stats = db.get_event_organizer_stats_by_user(uid, 30)
-            part_stats = db.get_user_event_participations(uid, 30)
-            
-            embed = discord.Embed(
-                title=f"👤 СТАТИСТИКА ПОЛЬЗОВАТЕЛЯ",
-                description=f"<@{uid}>",
-                color=0x00bfff,
-                timestamp=datetime.now()
-            )
-            
-            if org_stats:
-                embed.add_field(
-                    name="📋 Организовал МП (30 дней)",
-                    value=f"**{org_stats}** МП",
-                    inline=True
-                )
-            else:
-                embed.add_field(name="📋 Организовал МП", value="0", inline=True)
-            
-            if part_stats:
-                embed.add_field(
-                    name="✅ Участвовал в МП (30 дней)",
-                    value=f"**{len(part_stats)}** МП",
-                    inline=True
-                )
-                
-                text = ""
-                for stat in part_stats[:5]:
-                    text += f"• {stat['event_time']} — ID: {stat['session_id']}\n"
-                if len(part_stats) > 5:
-                    text += f"*и ещё {len(part_stats) - 5}*"
-                embed.add_field(name="📝 Участия", value=text or "Нет данных", inline=False)
-            else:
-                embed.add_field(name="✅ Участвовал в МП", value="0", inline=True)
-            
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            
-        except Exception as e:
-            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
 
 initializer = None
