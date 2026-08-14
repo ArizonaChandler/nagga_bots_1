@@ -225,7 +225,6 @@ class ModerationMainView(discord.ui.View):
             description="Создание и удаление шаблонов для мероприятий",
             color=0x00bfff
         )
-        # Отправляем НОВОЕ сообщение (не редактируем)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
     
     @discord.ui.button(
@@ -373,9 +372,7 @@ class TemplateManagementView(discord.ui.View):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
             return
         
-        # 🔥 ПРЯМО ОТПРАВЛЯЕМ МОДАЛКУ
-        from event_scheduler.modals import AddEventSettingsModal
-        await interaction.response.send_modal(AddEventSettingsModal())
+        await interaction.response.send_modal(CreateTemplateModal())
     
     @discord.ui.button(
         label="Список шаблонов",
@@ -452,6 +449,122 @@ class CreateEventWithTemplateModal(discord.ui.Modal, title="🎯 СОЗДАНИ�
         modal = CreateEventModal(self.templates)
         modal.selected_template_id = self.selected_template_id
         await interaction.followup.send_modal(modal)
+
+
+class CreateTemplateModal(discord.ui.Modal, title="➕ СОЗДАТЬ ШАБЛОН"):
+    """Модалка для создания шаблона мероприятия (для администраторов)"""
+    
+    event_name = discord.ui.TextInput(
+        label="Название мероприятия",
+        placeholder="Например: Arena перед каптами",
+        max_length=100,
+        required=True
+    )
+    
+    weekdays = discord.ui.TextInput(
+        label="Дни недели (0-6 через запятую)",
+        placeholder="0,2,4,6",
+        max_length=20,
+        required=True
+    )
+    
+    event_times = discord.ui.TextInput(
+        label="Время (ЧЧ:ММ через запятую)",
+        placeholder="14:20, 19:30",
+        max_length=50,
+        required=True
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы", ephemeral=True)
+            return
+        
+        try:
+            # Парсим дни
+            days_input = self.weekdays.value.replace(' ', '')
+            weekdays = []
+            
+            if '-' in days_input and ',' not in days_input:
+                parts = days_input.split('-')
+                if len(parts) == 2:
+                    start = int(parts[0])
+                    end = int(parts[1])
+                    weekdays = list(range(start, end + 1))
+                else:
+                    await interaction.response.send_message("❌ Неверный формат диапазона", ephemeral=True)
+                    return
+            else:
+                for d in days_input.split(','):
+                    try:
+                        day = int(d)
+                        if 0 <= day <= 6:
+                            weekdays.append(day)
+                        else:
+                            await interaction.response.send_message(f"❌ День {day} должен быть от 0 до 6", ephemeral=True)
+                            return
+                    except ValueError:
+                        await interaction.response.send_message(f"❌ Неверный день: {d}", ephemeral=True)
+                        return
+            
+            weekdays = sorted(set(weekdays))
+            
+            if not weekdays:
+                await interaction.response.send_message("❌ Не указаны дни недели", ephemeral=True)
+                return
+            
+            # Парсим время
+            times = []
+            for t in self.event_times.value.replace(' ', '').split(','):
+                try:
+                    datetime.strptime(t, "%H:%M")
+                    times.append(t)
+                except ValueError:
+                    await interaction.response.send_message(f"❌ Неверный формат времени: {t}", ephemeral=True)
+                    return
+            
+            times = sorted(set(times))
+            
+            if not times:
+                await interaction.response.send_message("❌ Не указано время", ephemeral=True)
+                return
+            
+            # Создаём шаблоны
+            created = 0
+            days_names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+            
+            for day in weekdays:
+                for time in times:
+                    db.add_event(
+                        name=self.event_name.value,
+                        weekday=day,
+                        event_time=time,
+                        created_by=str(interaction.user.id)
+                    )
+                    created += 1
+            
+            db.generate_schedule(days_ahead=14)
+            
+            days_str = ', '.join([days_names[d] for d in weekdays])
+            times_str = ', '.join(times)
+            
+            embed = discord.Embed(
+                title="✅ Шаблоны созданы",
+                description=f"Создано **{created}** шаблонов",
+                color=0x00ff00,
+                timestamp=datetime.now()
+            )
+            embed.add_field(name="📌 Название", value=self.event_name.value, inline=True)
+            embed.add_field(name="📅 Дни", value=days_str, inline=True)
+            embed.add_field(name="⏰ Времена", value=times_str, inline=False)
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            
+        except Exception as e:
+            print(f"❌ Ошибка создания шаблона: {e}")
+            import traceback
+            traceback.print_exc()
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
 
 
 class UserStatsModal(discord.ui.Modal, title="👤 СТАТИСТИКА ПОЛЬЗОВАТЕЛЯ"):
