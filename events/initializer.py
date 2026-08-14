@@ -31,6 +31,10 @@ class EventsInitializer:
         self.log_channel_id = db.get_setting('events_log_channel')
         self.settings_channel_id = db.get_setting('events_settings_channel')
         
+        # 🔥 Очищаем от 'null'
+        if self.settings_channel_id == 'null' or self.settings_channel_id is None:
+            self.settings_channel_id = None
+        
         if self.moderation_channel_id:
             await self._init_moderation_channel()
         
@@ -71,7 +75,6 @@ class EventsInitializer:
         
         view = ModerationMainView(templates)
         
-        # 🔥 ИЩЕМ СУЩЕСТВУЮЩЕЕ СООБЩЕНИЕ
         found = False
         async for msg in channel.history(limit=50):
             if msg.author == self.bot.user and msg.embeds:
@@ -95,13 +98,12 @@ class EventsInitializer:
             logger.error(f"❌ Неверный ID канала сбора: {self.participant_channel_id}")
             return
         
-        # 🔥 НЕ УДАЛЯЕМ, а ищем и обновляем существующее сообщение
-        # Если сообщение есть — оставляем, если нет — ничего не делаем
-        # (сообщения создаются при создании МП)
         print(f"🎯 [EVENTS] Канал сбора участников готов: #{channel.name}")
     
     async def _init_settings_channel(self):
         try:
+            if not self.settings_channel_id:
+                return
             channel = self.bot.get_channel(int(self.settings_channel_id))
             if not channel:
                 logger.error(f"❌ Канал настроек {self.settings_channel_id} не найден")
@@ -118,7 +120,6 @@ class EventsInitializer:
         
         view = EventsSettingsView()
         
-        # 🔥 ИЩЕМ СУЩЕСТВУЮЩЕЕ СООБЩЕНИЕ
         found = False
         async for msg in channel.history(limit=50):
             if msg.author == self.bot.user and msg.embeds:
@@ -203,6 +204,7 @@ class ModerationMainView(discord.ui.View):
                 ephemeral=True
             )
             return
+        
         await interaction.response.send_modal(CreateEventWithTemplateModal(self.templates))
     
     @discord.ui.button(
@@ -370,8 +372,10 @@ class TemplateManagementView(discord.ui.View):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
             return
         
+        await interaction.response.defer(ephemeral=True)
+        
         from event_scheduler.modals import AddEventSettingsModal
-        await interaction.response.send_modal(AddEventSettingsModal())
+        await interaction.followup.send_modal(AddEventSettingsModal())
     
     @discord.ui.button(
         label="Список шаблонов",
@@ -462,10 +466,7 @@ class UserStatsModal(discord.ui.Modal, title="👤 СТАТИСТИКА ПОЛЬ
         try:
             uid = self.user_id.value
             
-            # Статистика организатора
             org_stats = db.get_event_organizer_stats_by_user(uid, 30)
-            
-            # Статистика участника
             part_stats = db.get_user_event_participations(uid, 30)
             
             embed = discord.Embed(
