@@ -372,10 +372,8 @@ class TemplateManagementView(discord.ui.View):
             await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
             return
         
-        await interaction.response.defer(ephemeral=True)
-        
         from event_scheduler.modals import AddEventSettingsModal
-        await interaction.followup.send_modal(AddEventSettingsModal())
+        await interaction.response.send_modal(AddEventSettingsModal())
     
     @discord.ui.button(
         label="Список шаблонов",
