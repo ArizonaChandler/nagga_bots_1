@@ -224,7 +224,20 @@ class ApplicationsRolesView(AdminOnlyView):
         member_btn.callback = self.set_member_role
         self.add_item(member_btn)
         
-        back_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary, row=1, custom_id="apps_back")
+        # 🔥 Управление reward-ролями
+        add_reward_btn = discord.ui.Button(label="➕ Добавить reward-роль", style=discord.ButtonStyle.success, row=1, custom_id="apps_add_reward")
+        add_reward_btn.callback = self.add_reward_role
+        self.add_item(add_reward_btn)
+        
+        remove_reward_btn = discord.ui.Button(label="🗑️ Удалить reward-роль", style=discord.ButtonStyle.danger, row=1, custom_id="apps_remove_reward")
+        remove_reward_btn.callback = self.remove_reward_role
+        self.add_item(remove_reward_btn)
+        
+        list_reward_btn = discord.ui.Button(label="📋 Список reward-ролей", style=discord.ButtonStyle.secondary, row=2, custom_id="apps_list_reward")
+        list_reward_btn.callback = self.list_reward_roles
+        self.add_item(list_reward_btn)
+        
+        back_btn = discord.ui.Button(label="◀ Назад", style=discord.ButtonStyle.secondary, row=2, custom_id="apps_back")
         back_btn.callback = self.back
         self.add_item(back_btn)
     
@@ -233,6 +246,45 @@ class ApplicationsRolesView(AdminOnlyView):
     
     async def set_member_role(self, interaction: discord.Interaction):
         await interaction.response.send_modal(SetRoleModal("applications_member_role", "роль участника"))
+    
+    async def add_reward_role(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        await interaction.response.send_modal(AddRewardRoleModal())
+    
+    async def remove_reward_role(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        await interaction.response.send_modal(RemoveRewardRoleModal())
+    
+    async def list_reward_roles(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        
+        roles = db.get_reward_roles()
+        guild = interaction.guild
+        
+        embed = discord.Embed(title="📋 **REWARD-РОЛИ**", color=0x7289da)
+        
+        if not roles:
+            member_role_id = CONFIG.get('applications_member_role')
+            embed.description = "❌ Reward-роли не настроены.\n"
+            if member_role_id and str(member_role_id).lower() != 'null':
+                role = guild.get_role(int(member_role_id))
+                embed.description += f"\nℹ️ Как fallback используется **applications_member_role**: {role.mention if role else f'`{member_role_id}`'}"
+            else:
+                embed.description += "\n⚠️ Fallback `applications_member_role` тоже не настроен — при принятии заявки роль не будет выдана."
+        else:
+            lines = []
+            for rid in roles:
+                role = guild.get_role(int(rid))
+                lines.append(f"• {role.mention if role else f'`{rid}` (не найдена)'}")
+            embed.description = "\n".join(lines)
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
     
     async def back(self, interaction: discord.Interaction):
         embed = discord.Embed(title="⚙️ **НАСТРОЙКИ ЗАЯВОК**", description="Настройка системы заявок в семью", color=0x00ff00)
@@ -660,3 +712,65 @@ class SetWelcomeMessageModal(discord.ui.Modal, title="👋 ПРИВЕТСТВЕ�
         save_config(str(interaction.user.id))
         
         await interaction.response.send_message("✅ Приветственное сообщение сохранено!", ephemeral=True)
+
+class AddRewardRoleModal(discord.ui.Modal, title="➕ ДОБАВИТЬ REWARD-РОЛЬ"):
+    role_id = discord.ui.TextInput(
+        label="ID роли",
+        placeholder="123456789012345678",
+        max_length=20,
+        required=True
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        
+        try:
+            role = interaction.guild.get_role(int(self.role_id.value))
+            if not role:
+                await interaction.response.send_message("❌ Роль не найдена на сервере", ephemeral=True)
+                return
+            
+            existing = db.get_reward_roles()
+            if self.role_id.value in existing:
+                await interaction.response.send_message(f"⚠️ Роль {role.mention} уже в списке reward-ролей", ephemeral=True)
+                return
+            
+            db.add_reward_role(self.role_id.value, str(interaction.user.id))
+            await interaction.response.send_message(f"✅ Reward-роль добавлена: {role.mention}", ephemeral=True)
+            
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)
+
+
+class RemoveRewardRoleModal(discord.ui.Modal, title="🗑️ УДАЛИТЬ REWARD-РОЛЬ"):
+    role_id = discord.ui.TextInput(
+        label="ID роли",
+        placeholder="123456789012345678",
+        max_length=20,
+        required=True
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        if not await is_admin(str(interaction.user.id)):
+            await interaction.response.send_message("❌ Только администраторы!", ephemeral=True)
+            return
+        
+        try:
+            role_id = self.role_id.value.strip()
+            existing = db.get_reward_roles()
+            
+            if role_id not in existing:
+                await interaction.response.send_message(f"⚠️ Роли с ID `{role_id}` нет в списке reward-ролей", ephemeral=True)
+                return
+            
+            db.remove_reward_role(role_id)
+            role = interaction.guild.get_role(int(role_id))
+            await interaction.response.send_message(
+                f"✅ Reward-роль удалена: {role.mention if role else f'`{role_id}`'}",
+                ephemeral=True
+            )
+            
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ошибка: {e}", ephemeral=True)

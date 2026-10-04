@@ -144,17 +144,44 @@ class ApplicationModerationView(discord.ui.View):
 
         # Выдаём ВСЕ настроенные роли
         reward_roles = db.get_reward_roles()
+        
+        # 🔥 FALLBACK: если таблица reward_roles пуста — берём applications_member_role из CONFIG
+        if not reward_roles:
+            member_role_id = CONFIG.get('applications_member_role')
+            if member_role_id and str(member_role_id).lower() != 'null':
+                reward_roles = [str(member_role_id)]
+                print(f"ℹ️ [APPLICATIONS] reward_roles пуст, используем applications_member_role={member_role_id}")
+        
+        print(f"🔍 [APPLICATIONS] Роли для выдачи: {reward_roles}")
+        
         member = None
+        issued_roles = []
+        failed_roles = []
+        
         if reward_roles and guild:
             member = guild.get_member(int(app['user_id']))
-            if member:
+            if not member:
+                print(f"❌ [APPLICATIONS] Пользователь {app['user_id']} не найден на сервере")
+            else:
                 for role_id in reward_roles:
                     role = guild.get_role(int(role_id))
                     if role:
-                        await member.add_roles(role)
-                        print(f"✅ Выдана роль {role.name}")
+                        try:
+                            await member.add_roles(role)
+                            issued_roles.append(role.name)
+                            print(f"✅ [APPLICATIONS] Выдана роль {role.name} (ID: {role.id})")
+                        except discord.Forbidden:
+                            failed_roles.append(role.name)
+                            print(f"❌ [APPLICATIONS] Нет прав выдать роль {role.name} (проверь иерархию ролей)")
+                        except Exception as e:
+                            failed_roles.append(role.name)
+                            print(f"❌ [APPLICATIONS] Ошибка выдачи роли {role.name}: {e}")
                     else:
-                        print(f"❌ Роль с ID {role_id} не найдена")
+                        failed_roles.append(f"ID:{role_id}")
+                        print(f"❌ [APPLICATIONS] Роль с ID {role_id} не найдена на сервере")
+        
+        if not reward_roles:
+            print(f"⚠️ [APPLICATIONS] Ни одной роли для выдачи не настроено")
 
         # Получаем данные из answers
         answers = app.get('answers')
